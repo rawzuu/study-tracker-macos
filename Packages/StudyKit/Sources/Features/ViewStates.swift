@@ -104,13 +104,6 @@ public struct DashboardState: Sendable {
         public let day: String
     }
 
-    public struct TopicRow: Identifiable, Hashable, Sendable {
-        public let id: String
-        public let name: String
-        public let subject: SubjectInfo
-        public let overdueDays: Int
-    }
-
     public let title: String
     public let isoWeek: Int
     public let todaySec: Int
@@ -124,7 +117,6 @@ public struct DashboardState: Sendable {
     public let weekDays: [DayBar]
     public let weekRows: [SubjectProgress]
     public let todayPlan: [PlanRow]
-    public let dueTopics: [TopicRow]
     public let exams: [ExamRow]
     public let recent: [SessionRow]
     /// Žádné předměty ani sezení – nová instalace bez připojených dat.
@@ -165,12 +157,6 @@ public struct DashboardState: Sendable {
             .filter { clock.startOfDay($0.start) == today }
             .sorted { $0.start < $1.start }
             .map { PlanRow(id: $0.id, time: Format.time($0.start, clock: clock), subject: subjects[$0.subjectId], title: $0.title, durationMin: $0.durationMin, done: $0.done) }
-
-        let dayEnd = clock.addDays(today, 1)
-        dueTopics = doc.records(Topic.self)
-            .filter { $0.isDue(before: dayEnd) }
-            .sorted { ($0.nextReviewAt ?? 0) < ($1.nextReviewAt ?? 0) }
-            .map { TopicRow(id: $0.id, name: $0.name, subject: subjects[$0.subjectId], overdueDays: $0.overdueDays(now: now, clock: clock)) }
 
         exams = doc.alive(Exam.self)
             .compactMap { e in clock.parseDayKey(e.date).map { (e, $0) } }

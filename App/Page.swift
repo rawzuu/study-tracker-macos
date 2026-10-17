@@ -1,6 +1,7 @@
-/// Stránky aplikace – stejné jako navigace webu (`PAGES` v `src/App.tsx`).
+/// Stránky aplikace – navigace webu (`PAGES` v `src/App.tsx`) bez Opakování,
+/// které na Macu není (rozhodnutí uživatele 17. 10. 2026, viz docs/PLAN.md).
 enum Page: String, CaseIterable, Identifiable, Hashable {
-    case prehled, casovac, planovac, opakovani
+    case prehled, casovac, planovac
     case statistiky, report, reflexe, historie, uspechy
     case predmety, nastaveni
 
@@ -11,7 +12,6 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .prehled: "Přehled"
         case .casovac: "Časovač"
         case .planovac: "Kalendář"
-        case .opakovani: "Opakování"
         case .statistiky: "Statistiky"
         case .report: "Měsíční report"
         case .reflexe: "Reflexe"
@@ -24,7 +24,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
 
     var group: Group {
         switch self {
-        case .prehled, .casovac, .planovac, .opakovani: .learning
+        case .prehled, .casovac, .planovac: .learning
         case .statistiky, .report, .reflexe, .historie, .uspechy: .overview
         case .predmety, .nastaveni: .setup
         }
@@ -36,7 +36,6 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .prehled, .historie, .predmety: "M1"
         case .casovac: "M2"
         case .planovac: "M3"
-        case .opakovani: "M4"
         case .statistiky, .report, .reflexe, .uspechy: "M5"
         case .nastaveni: "M6"
         }

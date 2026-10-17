@@ -102,16 +102,4 @@ struct TimeAndStatsTests {
         #expect(Stats.bySubject(list) == ["a": 900, "b": 1200])
         #expect(Stats.totalSec(Stats.inRange(list, from: at(2026, 10, 5, 0), to: at(2026, 10, 6, 0))) == 1800)
     }
-
-    @Test("Témata k zopakování")
-    func dueTopics() {
-        let now = at(2026, 10, 17, 12)
-        let dayEnd = clock.addDays(clock.startOfDay(now), 1)
-        let due = Topic(raw: ["id": "t1", "nextReviewAt": .number(Double(at(2026, 10, 15)))])
-        let later = Topic(raw: ["id": "t2", "nextReviewAt": .number(Double(at(2026, 10, 18, 1)))])
-        let mastered = Topic(raw: ["id": "t3", "nextReviewAt": .number(Double(at(2026, 10, 1))), "mastered": true])
-        #expect(due.isDue(before: dayEnd) && !later.isDue(before: dayEnd) && !mastered.isDue(before: dayEnd))
-        #expect(due.overdueDays(now: now, clock: clock) == 2)
-        #expect(later.overdueDays(now: now, clock: clock) == -1)
-    }
 }

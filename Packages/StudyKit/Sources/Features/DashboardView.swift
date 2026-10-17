@@ -3,7 +3,7 @@ import DesignSystem
 import Engine
 import SwiftUI
 
-/// Přehled – zatím jen pro čtení (M1): dnešek, týden po předmětech, plán, opakování, zkoušky, poslední sezení.
+/// Přehled – zatím jen pro čtení (M1): dnešek, týden po předmětech, plán, zkoušky, poslední sezení.
 public struct DashboardView: View {
     @Environment(AppStore.self) private var store
     let openPage: (String) -> Void
@@ -44,7 +44,6 @@ public struct DashboardView: View {
         }
         FlowRow {
             PlanSection(rows: s.todayPlan).frame(minWidth: 320, maxWidth: .infinity)
-            DueSection(rows: s.dueTopics).frame(minWidth: 320, maxWidth: .infinity)
             ExamsSection(rows: s.exams).frame(minWidth: 320, maxWidth: .infinity)
         }
         RecentSection(rows: s.recent, openHistory: { openPage("historie") })
@@ -105,10 +104,6 @@ private struct TodaySection: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("dash.streak")
-            HStack(spacing: 4) {
-                Text("K zopakování")
-                Text("\(state.dueTopics.count)").foregroundStyle(Palette.text).monospacedDigit()
-            }
             if let delta = state.weekDelta {
                 Text("\(delta >= 0 ? "+" : "−")\(Int((abs(delta) * 100).rounded())) % proti minulému týdnu")
                     .foregroundStyle(delta >= 0 ? Palette.success : Palette.warn)
@@ -265,36 +260,6 @@ private struct PlanSection: View {
                             if b.done { Image(systemName: "checkmark").foregroundStyle(Palette.success).accessibilityLabel("Hotovo") }
                         }
                         .opacity(b.done ? 0.5 : 1)
-                        .accessibilityElement(children: .combine)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct DueSection: View {
-    let rows: [DashboardState.TopicRow]
-
-    var body: some View {
-        PageSection("K zopakování", accessory: { if !rows.isEmpty { Text("\(rows.count)") } }) {
-            if rows.isEmpty {
-                EmptyNote("Dnes nic k opakování", systemImage: "checkmark") { Text("Témata z časovače se sem vrátí ve správný čas.") }
-            } else {
-                VStack(spacing: 0) {
-                    let shown = Array(rows.prefix(6))
-                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, t in
-                        ListRow(divider: i < shown.count - 1) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(t.name).lineLimit(1)
-                                HStack(spacing: 6) {
-                                    SubjectTag(name: t.subject.name, color: t.subject.color)
-                                    if t.overdueDays > 0 { Text("+\(t.overdueDays) d").foregroundStyle(Palette.danger).monospacedDigit() }
-                                }
-                                .font(Typo.small).foregroundStyle(Palette.text3)
-                            }
-                            Spacer(minLength: 0)
-                        }
                         .accessibilityElement(children: .combine)
                     }
                 }

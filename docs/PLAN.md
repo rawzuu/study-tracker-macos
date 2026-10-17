@@ -11,6 +11,7 @@ Schváleno 17. 10. 2026. Cíl: plnohodnotná nativní aplikace se **stejnými fu
 | Distribuce | zatím jen pro autora – podpis certifikátem Apple Development, bez notarizace |
 | Úložiště | GRDB (ne SwiftData) – zachová původní JSON každého záznamu |
 | Nativní novinky | menu bar, Apple Kalendář (EventKit), Zkratky/Siri, widgety – **až po paritě a po schválení** |
+| Opakování | **na Macu není** (rozhodnutí 17. 10. 2026): žádná stránka Opakování, žádné „K zopakování“, žádné FSRS, Co teď? ani ranní plán nenavrhují opakování a Mac negeneruje bloky opakování ke zkoušce ani po přednášce. Data témat zůstávají v `data.json` beze změny pro web. |
 
 ## Backend a data
 
@@ -29,14 +30,14 @@ Rizika, která řeší architektura:
 | Oblast | Web (v2.6.7) | Mac |
 |---|---|---|
 | Přehled | měřidlo dneška, Co teď?, týden po předmětech s cíli, ranní výzva, Anki panel, varování k tokenu | SwiftUI |
-| Časovač | 6 režimů + vlastní, série s pauzami, auto-start, ukončení čekající série, soustředění, vyrušení, vybavení, více témat → FSRS | časové značky; notifikace naplánované na konec bloku |
+| Časovač | 6 režimů + vlastní, série s pauzami, auto-start, ukončení čekající série, soustředění, vyrušení, vybavení, více témat → FSRS | časové značky; notifikace naplánované na konec bloku; téma jen jako text sezení (bez FSRS) |
 | Šum, zvonky, upozornění | hnědý/růžový/bílý šum, zvonky, notifikace | AVAudioEngine, UserNotifications |
 | Odkaz pro Zkratky | `#/casovac?start=1&predmet=…&tema=…` | `studytracker://casovac?…` |
 | Kalendář | týden/měsíc, odučeno vs. plán, živý blok, filtry, přetahování a změna délky po 5 min, Hotovo zapíše čas, auto-odškrtnutí | SwiftUI Canvas |
-| Zkoušky a rozvrh | rozložené opakování ke zkoušce, import rozvrhu .ics (náhled změn, skryté řady, odpadlé termíny, opakování po přednášce) | port 1:1 |
+| Zkoušky a rozvrh | rozložené opakování ke zkoušce, import rozvrhu .ics (náhled změn, skryté řady, odpadlé termíny, opakování po přednášce) | zkoušky a rozvrh 1:1, bez generovaných bloků opakování |
 | Export kalendáře | .ics, odebíraný kalendář přes gist | stejné API |
-| Opakování | FSRS-6, 4 hodnocení, historie opakování, hlídání zkoušky | port ts-fsrs ověřený paritními testy |
-| Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port 1:1 |
+| Opakování | FSRS-6, 4 hodnocení, historie opakování, hlídání zkoušky | **vynecháno** |
+| Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port bez signálu opakování |
 | Statistiky | heatmapy, trend, den × hodina, soustředění, série | Swift Charts |
 | Report, reflexe | postřehy, návrhy úprav (kalibrace), tisk/PDF, týdenní reflexe | systémový tisk do PDF |
 | Úspěchy | 119 úspěchů, stabilní id, medaile, trvalé záznamy | stejná id |
@@ -58,7 +59,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M1 | Klíčenka, GRDB, SyncEngine **jen čtení**, Přehled/Historie/Předměty jen pro čtení | data na Macu; po kontrole záloha `zaloha-pred-macos` a zapnutí zápisu |
 | M2 | Časovač, Přehled, šum, zvonky, notifikace, URL odkaz | každodenní používání |
 | M3 | Kalendář, zkoušky, rozvrh .ics, export a odebíraný kalendář | |
-| M4 | Opakování FSRS-6, Co teď?, ranní plán | |
+| M4 | Co teď?, ranní plán (bez opakování) | |
 | M5 | Statistiky, report a kalibrace, reflexe, úspěchy | |
 | M6 | Nastavení, koš, export/import, Anki, onboarding | parita |
 | M7 | profilování v Instruments, optimalizace, výkonnostní testy | v1.0.0 |

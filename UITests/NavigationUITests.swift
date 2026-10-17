@@ -21,6 +21,8 @@ final class NavigationUITests: XCTestCase {
         // Přehled má jako nadpis dnešní datum („Sobota 17. října“).
         XCTAssertFalse(text(of: title).isEmpty)
         attachScreenshot(app, "Přehled")
+        // Opakování na Macu není (rozhodnutí uživatele).
+        XCTAssertFalse(app.staticTexts["nav.opakovani"].exists)
 
         app.staticTexts["nav.historie"].click()
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Historie")

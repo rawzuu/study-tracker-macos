@@ -72,14 +72,12 @@ struct ViewStateTests {
         #expect(!s.isEmpty)
     }
 
-    @Test("Přehled: plán, opakování, zkoušky, poslední sezení")
+    @Test("Přehled: plán, zkoušky, poslední sezení")
     func dashboardLists() {
         let s = DashboardState(document: sampleDocument(), now: now, clock: clock)
         #expect(s.todayPlan.map(\.id) == ["p1", "p2"])
         #expect(s.todayPlan.map(\.time) == ["09:00", "17:00"])
         #expect(s.todayPlan[0].done)
-        #expect(s.dueTopics.map(\.name) == ["Lebka", "Srdce"])
-        #expect(s.dueTopics[0].overdueDays == 2)
         #expect(s.exams.map(\.name) == ["Zápočet"])
         #expect(s.exams[0].daysLeft == 3)
         #expect(s.exams[0].day == "út 20. 10.")

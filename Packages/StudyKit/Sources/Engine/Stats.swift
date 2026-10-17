@@ -63,17 +63,3 @@ public enum Stats {
         return Double(rated.reduce(0, +)) / Double(rated.count)
     }
 }
-
-extension Topic {
-    /// Téma je na řadě před koncem dne `dayEnd` (`isDue` na webu).
-    public func isDue(before dayEnd: Int) -> Bool {
-        !isDeleted && !mastered && (nextReviewAt.map { $0 < dayEnd } ?? false)
-    }
-
-    /// Kolik dní je po termínu (záporné = do termínu).
-    public func overdueDays(now: Int, clock: StudyClock) -> Int {
-        guard let next = nextReviewAt else { return 0 }
-        // `Math.round` v JS zaokrouhluje polovinu nahoru (i u záporných čísel).
-        return Int((Double(clock.startOfDay(now) - clock.startOfDay(next)) / Double(StudyClock.day) + 0.5).rounded(.down))
-    }
-}
