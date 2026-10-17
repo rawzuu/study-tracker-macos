@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **M0 – kostra a datové jádro.** Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **M1 – data a synchronizace (zatím jen čtení).** Mac načítá data z GitHubu a ukazuje Přehled, Historii a Předměty; zápis se zapne po ověření, že data sedí s webem. Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -14,15 +14,31 @@ Packages/StudyKit/      Swift Package s moduly aplikace
     JSON/               JSON se zachováním pořadí klíčů, zápis shodný s JSON.stringify
     Model/              typované pohledy na záznamy (Session, Topic, Settings…)
     Data/               schéma, migrace, slučování (merge), stabilní zápis (serialize)
-  Tests/CoreTests/      unit a paritní testy, Fixtures/ = kontrolní data z webu
+  Sources/Engine/       výpočty bez UI: kalendář v místním čase, souhrny, série, české formáty
+  Sources/Networking/   GitHub Contents API (URLSession), chyby a hlášky jako na webu
+  Sources/Persistence/  lokální kopie dat (GRDB/SQLite, WAL, zálohy) a token v Klíčence
+  Sources/Sync/         SyncEngine (actor): stáhnout → sloučit → nahrát se sha, režim jen čtení
+  Sources/AppModel/     AppStore (@Observable), AppEnvironment (DI), připojení zálohy
+  Sources/DesignSystem/ barvy a prvky vzhledu „Deník“
+  Sources/Features/     obrazovky (SwiftUI) a jejich stavy (čisté funkce s testy)
+  Tests/                testy každého modulu, CoreTests/Fixtures = kontrolní data z webu
 Tools/parity/           generátor kontrolních dat ze skutečného kódu webové aplikace
 Config/                 xcconfig (podpis)
 project.yml             definice projektu pro XcodeGen
 ```
 
-Další moduly přibývají s milníky: `Engine` (algoritmy – FSRS-6, Co teď?, ranní plán, statistiky, úspěchy), `Networking` (GitHub, AnkiConnect), `Persistence` (GRDB, Klíčenka), `Sync` (actor pro synchronizaci), `DesignSystem` a jednotlivé `Features`.
+Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persistence` → `Sync` → `AppModel` → `Features` (+ `DesignSystem`) → aplikace. V dalších milnících přibudou do `Engine` algoritmy (FSRS-6, Co teď?, ranní plán, statistiky, úspěchy) a do `Networking` AnkiConnect.
 
-**Tok dat:** View → `@Observable @MainActor` ViewModel → `AppStore` (drží neměnný `AppDocument`) → actory `Persistence` a `Sync` → GitHub Contents API → `data.json` v soukromém repu. Závislosti se předávají jako protokoly, testy je nahrazují falešnými implementacemi.
+**Tok dat:** View ← stav obrazovky (čistá funkce z `AppDocument`) ← `AppStore` (`@Observable @MainActor`, drží neměnný `AppDocument`) ⇄ `SyncEngine` (actor) → `LocalStore` (SQLite na Macu) a GitHub Contents API → `data.json` v soukromém repu. Závislosti se předávají přes `AppEnvironment` a protokoly (`RemoteDataFile`, `SecretStore`, `BackupService`), testy je nahrazují podvrženými implementacemi.
+
+### Synchronizace
+
+Stejný postup jako `syncNow()` na webu: stáhnout se `sha` → normalizovat → sloučit po záznamech (novější `updatedAt` vyhrává) → nahrát se `sha`, při konfliktu 409/422 znovu (nejvýš 4×). Spouští se po startu, při aktivaci okna, každých 5 minut jen při aktivní aplikaci, 3 s po změně, po návratu sítě a před ukončením. Commity z Macu mají zprávu `Sync dat (Mac) · …`.
+
+- **Jen čtení:** dokud uživatel neověří, že data sedí s webem, Mac nic nezapisuje.
+- Data z novější verze schématu ani nečitelný soubor se nikdy nepřepíšou.
+- Čerstvá instalace převezme data z GitHubu celá (výchozí nastavení Macu nepřebije nastavení z jiného zařízení).
+- Lokální změny se při chybě neztratí – zůstanou v SQLite a odešlou se příště.
 
 ### Proč vlastní JSON místo Codable
 
@@ -51,7 +67,8 @@ open StudyTracker.xcodeproj
 Testy:
 
 ```bash
-swift test --package-path Packages/StudyKit                       # jádro (Swift Testing)
+swift test --package-path Packages/StudyKit                       # moduly (Swift Testing)
+ST_KEYCHAIN_TESTS=1 swift test --package-path Packages/StudyKit   # + test skutečné Klíčenky
 xcodebuild test -project StudyTracker.xcodeproj -scheme StudyTracker -destination 'platform=macOS'
 ```
 
@@ -63,12 +80,17 @@ npm ci --prefix Tools/parity
 WEB_DIR=$PWD/../study-tracker-web npm run generate --prefix Tools/parity
 ```
 
+## Připojení dat
+
+V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained token jen pro Mac (repo `study-tracker-data`, *Contents: Read and write*) a vlož ho. GitHub jméno se zjistí z tokenu, token se uloží do Klíčenky macOS.
+
 ## Bezpečnost dat
 
 - Testy nikdy nesahají na skutečné datové repo ani na skutečnou Anki (port 8765); kontrolní data jsou syntetická.
 - Kontrola na skutečných datech běží jen lokálně (`ST_REAL_DATA`, `ST_REAL_EXPECTED`), data do repa nepatří.
-- Token bude uložený v Klíčence. Před prvním zápisem z Macu se datové repo zálohuje tagem.
+- Token je v Klíčence (jen pro tuto aplikaci, bez iCloudu) a nikdy se neobjeví ve výpisu ani v logu. Před prvním zápisem z Macu se datové repo zálohuje tagem.
+- Aplikace běží v sandboxu, ze sítě smí jen odchozí spojení. UI testy (`-uiTesting`) běží s ukázkovými daty v paměti – nesahají na skutečná data, Klíčenku ani síť.
 
 ## Technologie
 
-Swift 6 (strict concurrency), SwiftUI, Observation, async/await a actory, Swift Testing + XCTest/XCUITest. Jediná plánovaná závislost: GRDB. Bez webového obalu (Electron/WebView), jen Apple Silicon.
+Swift 6 (strict concurrency), SwiftUI, Observation, async/await a actory, Swift Testing + XCTest/XCUITest. Jediná závislost: GRDB 7.11.1 (přesně připnutá). Bez webového obalu (Electron/WebView), jen Apple Silicon.
