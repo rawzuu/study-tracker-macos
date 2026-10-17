@@ -3,8 +3,8 @@ import Engine
 /// Co ukazuje kruh časovače (`TimerRing` na webu): dílky po minutách, stupnice, čas uprostřed.
 /// Odpočet = délka fáze, stopky a Flowtime = jedna hodina dokola.
 public struct TimerRingModel: Equatable {
-    public enum Tone: Equatable { case work, rest, paused, idle }
-    public enum Segment: Equatable { case off, lit, now }
+    public enum Tone: Equatable, Sendable { case work, rest, paused, idle }
+    public enum Segment: Equatable, Sendable { case off, lit, now }
 
     public let phaseLabel: String
     public let time: String

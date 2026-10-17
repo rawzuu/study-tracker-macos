@@ -304,13 +304,15 @@ struct TimerFace: View {
     }
 }
 
-/// Kreslený kruh (`.ring` na webu, viewBox 200 × 200).
-struct TimerRing: View {
-    let model: TimerRingModel
-    let size: CGFloat
+/// Dílky a stupnice kruhu (`.seg`, `.ring-label` na webu, viewBox 200 × 200).
+private struct RingDial: View, Equatable {
+    nonisolated let segments: [TimerRingModel.Segment]
+    nonisolated let labels: [Int]
+    nonisolated let fractions: [Double]
+    nonisolated let tone: TimerRingModel.Tone
 
     private var activeColor: Color {
-        switch model.tone {
+        switch tone {
         case .work, .idle: Palette.accent
         case .rest: Palette.breakColor
         case .paused: Palette.text3
@@ -318,34 +320,43 @@ struct TimerRing: View {
     }
 
     var body: some View {
-        ZStack {
-            Canvas { context, canvas in
-                let scale = canvas.width / 200
-                let center = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
-                let n = model.segments.count
-                let step = 360 / Double(n)
-                let gap = min(1.6, step * 0.22)
-                for (i, segment) in model.segments.enumerated() {
-                    let from = -90 + Double(i) * step + gap / 2
-                    let to = -90 + Double(i + 1) * step - gap / 2
-                    var path = Path()
-                    path.addArc(center: center, radius: 80 * scale, startAngle: .degrees(from), endAngle: .degrees(to), clockwise: false)
-                    let color: Color = switch segment {
-                    case .off: Palette.lineStrong
-                    case .lit: activeColor
-                    case .now: activeColor.opacity(0.45)
-                    }
-                    context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 9 * scale, lineCap: .butt))
+        Canvas { context, canvas in
+            let scale = canvas.width / 200
+            let center = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
+            let n = segments.count
+            let step = 360 / Double(n)
+            let gap = min(1.6, step * 0.22)
+            for (i, segment) in segments.enumerated() {
+                let from = -90 + Double(i) * step + gap / 2
+                let to = -90 + Double(i + 1) * step - gap / 2
+                var path = Path()
+                path.addArc(center: center, radius: 80 * scale, startAngle: .degrees(from), endAngle: .degrees(to), clockwise: false)
+                let color: Color = switch segment {
+                case .off: Palette.lineStrong
+                case .lit: activeColor
+                case .now: activeColor.opacity(0.45)
                 }
-                for label in model.labels {
-                    let a = (-90 + label.fraction * 360) * .pi / 180
-                    let point = CGPoint(x: center.x + 94 * scale * cos(a), y: center.y + 94 * scale * sin(a))
-                    context.draw(
-                        Text("\(label.minute)").font(.system(size: 7.5 * scale)).monospacedDigit().foregroundStyle(Palette.text3),
-                        at: point
-                    )
-                }
+                context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 9 * scale, lineCap: .butt))
             }
+            for (minute, fraction) in zip(labels, fractions) {
+                let a = (-90 + fraction * 360) * .pi / 180
+                let point = CGPoint(x: center.x + 94 * scale * cos(a), y: center.y + 94 * scale * sin(a))
+                context.draw(Text("\(minute)").font(.system(size: 7.5 * scale)).monospacedDigit().foregroundStyle(Palette.text3), at: point)
+            }
+        }
+    }
+}
+
+/// Kreslený kruh (`.ring` na webu): ciferník a čas uprostřed.
+struct TimerRing: View {
+    let model: TimerRingModel
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            // Ciferník se mění nejvýš jednou za (půl)minutu – každou sekundu se překreslí jen čas uprostřed.
+            RingDial(segments: model.segments, labels: model.labels.map(\.minute), fractions: model.labels.map(\.fraction), tone: model.tone)
+                .equatable()
             VStack(spacing: size * 0.03) {
                 Text(model.phaseLabel)
                     .font(.system(size: max(14, min(28, size * 0.047)), design: .serif).italic())
