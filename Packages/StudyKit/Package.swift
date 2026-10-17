@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .library(name: "Core", targets: ["Core"]),
+        .library(name: "Engine", targets: ["Engine"]),
         .library(name: "Networking", targets: ["Networking"]),
         .library(name: "Persistence", targets: ["Persistence"]),
         .library(name: "Sync", targets: ["Sync"]),
@@ -17,6 +18,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "Core"),
+        .target(name: "Engine", dependencies: ["Core"]),
         .target(name: "Networking"),
         .target(
             name: "Persistence",
@@ -28,6 +30,7 @@ let package = Package(
             dependencies: ["Core"],
             resources: [.copy("Fixtures")]
         ),
+        .testTarget(name: "EngineTests", dependencies: ["Engine"]),
         .testTarget(name: "NetworkingTests", dependencies: ["Networking"]),
         .testTarget(
             name: "PersistenceTests",
