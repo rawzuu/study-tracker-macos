@@ -6,11 +6,12 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
-    @State private var page: Page? = .prehled
+    @Environment(Navigator.self) private var navigator
 
     var body: some View {
+        @Bindable var navigator = navigator
         NavigationSplitView {
-            List(selection: $page) {
+            List(selection: $navigator.page) {
                 ForEach(Page.Group.allCases, id: \.self) { group in
                     SwiftUI.Section(group.rawValue) {
                         ForEach(visiblePages.filter { $0.group == group }) { page in
@@ -30,6 +31,8 @@ struct RootView: View {
         }
         .preferredColorScheme(colorScheme)
         .tint(Palette.accent)
+        // Šum a notifikace podle nastavení – i když se změní synchronizací z webu.
+        .onChange(of: store.document.settings) { timer.syncEffects() }
         // Po bloku – ať je uživatel na kterékoli stránce.
         .sheet(isPresented: Binding(get: { timer.pendingRating != nil }, set: { if !$0 { timer.skipRating() } })) {
             if let id = timer.pendingRating { AfterBlockSheet(sessionId: id) }
@@ -75,7 +78,7 @@ struct RootView: View {
         case .failed(let message):
             FailureView(message: message)
         case .ready:
-            switch page ?? .prehled {
+            switch navigator.page ?? .prehled {
             case .prehled: DashboardView(openPage: open)
             case .casovac: TimerView()
             case .historie: HistoryView()
@@ -87,7 +90,7 @@ struct RootView: View {
     }
 
     private func open(_ id: String) {
-        page = Page(rawValue: id) ?? page
+        navigator.page = Page(rawValue: id) ?? navigator.page
     }
 }
 

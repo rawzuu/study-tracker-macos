@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **v0.2.0 – M1 hotový, M2 rozpracovaný.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii a Předměty, umí upravovat předměty a má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) – hotové bloky ukládá jako sezení. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.2.0 – M1 hotový, M2 rozpracovaný.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii a Předměty, umí upravovat předměty a má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi – hotové bloky ukládá jako sezení. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -84,6 +84,18 @@ git clone https://github.com/rawzuu/study-tracker ../study-tracker-web && npm ci
 npm ci --prefix Tools/parity
 WEB_DIR=$PWD/../study-tracker-web npm run generate --prefix Tools/parity
 ```
+
+## Spuštění bloku ze Zkratek
+
+Stejně jako odkaz na webu – třeba jako akce „Otevřít URL“ ve Zkratkách, přes Siri nebo Spotlight:
+
+```
+studytracker://casovac?start=1                       poslední použitý předmět
+studytracker://casovac?start=1&predmet=Matematika    předmět podle názvu (stačí začátek, bez diakritiky)
+studytracker://casovac?start=1&predmet=mat&tema=Derivace
+```
+
+Běžící blok odkaz nikdy nepřeruší; mezi bloky nejdřív ukončí čekající sérii.
 
 ## Připojení dat
 

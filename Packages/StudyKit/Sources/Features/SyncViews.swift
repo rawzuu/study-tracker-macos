@@ -290,6 +290,7 @@ public struct SettingsPage: View {
             VStack(alignment: .leading, spacing: 36) {
                 PageHeader("Nastavení", subtitle: "Ostatní nastavení přibude v milníku M6.")
                 SyncSettingsView()
+                TimerSoundSettings()
             }
             .padding(.horizontal, 48)
             .padding(.vertical, 36)

@@ -18,8 +18,8 @@ public final class TimerStore {
     /// Krátké oznámení pro uživatele (např. že se krátký blok neuložil).
     public var notice: String?
 
-    /// Zvonky a notifikace při přirozeném konci fáze.
-    @ObservationIgnored public var onEvent: (TimerEvent) -> Void = { _ in }
+    /// Šum, zvonky a notifikace (v testech `nil`).
+    @ObservationIgnored public let effects: (any TimerEffects)?
 
     @ObservationIgnored private let app: AppStore
     @ObservationIgnored private let defaults: UserDefaults
@@ -27,11 +27,14 @@ public final class TimerStore {
     @ObservationIgnored private var wake: Task<Void, Never>?
     /// Uložený stav chyběl → režim se po načtení dat převezme z nastavení (`defaultMode`).
     @ObservationIgnored private var pristine: Bool
+    /// Odkaz, který přišel dřív, než se načetla data (spuštění aplikace odkazem).
+    @ObservationIgnored private var pendingLink: TimerLink?
 
     static let stateKey = "st.timer"
 
-    public init(app: AppStore, now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }) {
+    public init(app: AppStore, effects: (any TimerEffects)? = nil, now: @escaping () -> Int = { Int(Date().timeIntervalSince1970 * 1000) }) {
         self.app = app
+        self.effects = effects
         self.defaults = app.defaults
         self.now = now
         let saved = defaults.data(forKey: Self.stateKey).flatMap { try? JSONDecoder().decode(TimerState.self, from: $0) }
@@ -75,6 +78,37 @@ public final class TimerStore {
     /// Dožene, co mělo mezitím proběhnout (po startu aplikace, aktivaci okna, probuzení Macu).
     public func refresh() {
         mutate { s, t, mode, rules in s.advance(now: t, mode: mode, rules: rules) }
+        if app.phase == .ready, let link = pendingLink {
+            pendingLink = nil
+            open(link)
+        }
+    }
+
+    /// Odkaz `studytracker://casovac?start=1…`: spustí blok jako na webu. Běžící blok nepřeruší.
+    public func open(_ link: TimerLink) {
+        guard app.phase == .ready else {
+            pendingLink = link
+            return
+        }
+        let doc = app.document
+        let presets = doc.records(TimerPreset.self)
+        mutate { s, t, _, _ in
+            s.open(link, in: doc, now: t, presets: presets)
+            return []
+        }
+    }
+
+    /// Nastavení šumu se změnilo (i synchronizací z webu) – šum se přizpůsobí hned.
+    public func syncEffects() {
+        guard app.phase == .ready else { return }
+        let t = now()
+        updateEffects(at: t)
+    }
+
+    /// Ukázka šumu na 5 s; během bloku hraje šum sám.
+    public func previewNoise() {
+        let s = app.document.settings
+        effects?.previewNoise(s.noiseType, volume: s.noiseVolume)
     }
 
     // MARK: - Hodnocení po bloku
@@ -113,6 +147,12 @@ public final class TimerStore {
         }
         handle(events, at: t)
         schedule(from: t)
+        updateEffects(at: t)
+    }
+
+    private func updateEffects(at t: Int) {
+        let phaseEnd = state.status == .running ? state.nextDeadline(now: t, rules: rules) : nil
+        effects?.update(state: state, phaseEnd: phaseEnd, settings: app.document.settings, now: t)
     }
 
     private func mode(for s: TimerState) -> TimerMode {
@@ -131,7 +171,7 @@ public final class TimerStore {
             case .workEnded, .breakEnded:
                 break
             }
-            onEvent(event)
+            effects?.handle(event, settings: app.document.settings)
         }
     }
 

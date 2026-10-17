@@ -171,6 +171,12 @@ public final class AppStore {
     /// Okamžik pro razítka `updatedAt` (ms).
     public var nowMs: Int { Int(Date().timeIntervalSince1970 * 1000) }
 
+    /// Úprava synchronizovaného nastavení (`setSettings` na webu).
+    public func updateSettings(_ change: (inout Settings) -> Void) {
+        let now = nowMs
+        update { $0.updateSettings(now: now, change) }
+    }
+
     /// Vloží nebo upraví záznam (razítka `createdAt`/`updatedAt` jako na webu).
     public func upsert<R: EntityRecord>(_ item: R) {
         let now = nowMs

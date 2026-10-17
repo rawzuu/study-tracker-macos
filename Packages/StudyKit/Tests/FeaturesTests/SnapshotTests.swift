@@ -11,13 +11,14 @@ import Testing
 /// `ST_SNAPSHOT_DIR=/cesta swift test --filter Náhledy`. Ovládací prvky AppKitu (výběr, textové pole)
 /// se v náhledu nevykreslí; slouží ke kontrole rozvržení, kruhu a barev.
 @MainActor
-@Suite("Náhledy", .enabled(if: ProcessInfo.processInfo.environment["ST_SNAPSHOT_DIR"] != nil))
+@Suite("Náhledy", .serialized, .enabled(if: ProcessInfo.processInfo.environment["ST_SNAPSHOT_DIR"] != nil))
 struct SnapshotTests {
     @Test("Časovač: v klidu, běží, pauza", arguments: ["idle", "running", "break", "paused"])
     func timer(_ variant: String) async throws {
         let now = Int(Date().timeIntervalSince1970 * 1000)
         let app = AppStore(environment: .uiTesting(now: now))
         await app.start()
+        app.updateSettings { $0.noiseType = .brown }
         // Blok začal před 9:25 – kruh běžícího časovače počítá s opravdovým „teď“.
         var t = now - 9 * 60_000 - 25_000
         let timer = TimerStore(app: app) { t }

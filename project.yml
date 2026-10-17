@@ -44,6 +44,10 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.education
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        # studytracker://casovac?start=1&predmet=…&tema=… – spuštění bloku ze Zkratek, Siri nebo Spotlightu
+        CFBundleURLTypes:
+          - CFBundleURLName: cz.rawzuu.studytracker.link
+            CFBundleURLSchemes: [studytracker]
     entitlements:
       path: App/StudyTracker.entitlements
       properties:

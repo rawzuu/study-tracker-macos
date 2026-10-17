@@ -63,6 +63,7 @@ public struct TimerView: View {
                     VStack(alignment: .leading, spacing: 32) {
                         studyingSection
                         modeSection
+                        NoiseSection()
                     }
                     .frame(width: 380)
                 }
@@ -232,8 +233,7 @@ public struct TimerView: View {
                 Text("změníš po ukončení")
             } else if settings.defaultMode != state.modeId {
                 Button("Nastavit jako výchozí") {
-                    let now = store.nowMs
-                    store.update { $0.updateSettings(now: now) { $0.defaultMode = state.modeId } }
+                    store.updateSettings { $0.defaultMode = state.modeId }
                 }
                 .buttonStyle(.denik(.ghost, size: .small))
                 .disabled(store.sync.mode == .readOnly)

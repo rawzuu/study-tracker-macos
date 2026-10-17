@@ -1,5 +1,7 @@
 import AppKit
+import OSLog
 import AppModel
+import Engine
 import Features
 import SwiftUI
 
@@ -12,6 +14,7 @@ struct StudyTrackerApp: App {
             RootView()
                 .environment(delegate.store)
                 .environment(delegate.timer)
+                .environment(delegate.navigator)
                 .frame(minWidth: 900, minHeight: 600)
                 .task {
                     await delegate.store.start()
@@ -20,6 +23,8 @@ struct StudyTrackerApp: App {
                 }
         }
         .defaultSize(width: 1440, height: 920)
+        // Odkazy studytracker://… nezakládají nová okna – vyřídí je AppDelegate ve stávajícím.
+        .handlesExternalEvents(matching: [])
         .windowToolbarStyle(.unified)
         .commands {
             SidebarCommands()
@@ -44,8 +49,12 @@ struct StudyTrackerApp: App {
 /// se data uloží a neodeslané změny odešlou.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let store = AppStore(environment: ProcessInfo.processInfo.arguments.contains("-uiTesting") ? .uiTesting() : .live())
-    lazy var timer = TimerStore(app: store)
+    private static let uiTesting = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+    private static let log = Logger(subsystem: "cz.rawzuu.studytracker", category: "odkaz")
+    let store = AppStore(environment: uiTesting ? .uiTesting() : .live())
+    // UI testy běží potichu – bez šumu, zvonků a notifikací.
+    lazy var timer = TimerStore(app: store, effects: Self.uiTesting ? nil : LiveTimerEffects())
+    let navigator = Navigator()
     private var wakeObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -55,6 +64,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.timer.refresh() }
         }
+    }
+
+    /// `studytracker://casovac…` – otevře časovač a s `start=1` rovnou spustí blok.
+    /// Odkazy vyřizuje delegát, takže SwiftUI kvůli nim neotevírá nové okno.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where TimerLink.isTimerPage(url) {
+            navigator.page = .casovac
+            guard let link = TimerLink(url: url) else { continue }
+            let before = timer.state.status
+            timer.open(link)
+            // Bez názvů předmětů a témat – jen co se stalo.
+            Self.log.notice("Odkaz na časovač: \(before.rawValue, privacy: .public) → \(self.timer.state.status.rawValue, privacy: .public)")
+        }
+        NSApp.activate()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -80,4 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateLater
     }
+}
+
+/// Která stránka je otevřená – sdílené, aby ji mohl přepnout i odkaz.
+@MainActor
+@Observable
+final class Navigator {
+    var page: Page? = .prehled
 }

@@ -148,6 +148,23 @@ final class NavigationUITests: XCTestCase {
         attachScreenshot(app, "Historie po bloku")
     }
 
+    /// Spuštění aplikace odkazem ze Zkratek. (XCUITest otevírá odkaz v nové instanci aplikace,
+    /// takže tu jde o studený start; že běžící blok odkaz nepřeruší, hlídají unit testy.)
+    @MainActor
+    func testLinkStartsBlock() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        // Stejný odkaz jako na webu: předmět podle začátku názvu bez diakritiky, téma předvyplněné.
+        app.open(URL(string: "studytracker://casovac?start=1&predmet=fyziol&tema=Ledviny+a+mo%C4%8D")!)
+        XCTAssertTrue(app.buttons["timer.pause"].waitForExistence(timeout: 5))
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
+        let studying = text(of: app.staticTexts["timer.studying"])
+        XCTAssertTrue(studying.contains("Fyziologie") && studying.contains("Ledviny a moč"), studying)
+        XCTAssertEqual(app.windows.count, 1, "odkaz neotevře další okno")
+        attachScreenshot(app, "Odkaz spustil blok")
+        app.buttons["timer.stop"].click()
+    }
+
     @MainActor
     func testLaunchPerformance() {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
