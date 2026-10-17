@@ -1,0 +1,14 @@
+[
+ {
+  "text": "{\"schemaVersion\":2}",
+  "error": "tooNew"
+ },
+ {
+  "text": "{\"schemaVersion\":7,\"subjects\":[]}",
+  "error": "tooNew"
+ },
+ {
+  "text": "{\"schemaVersion\":0}",
+  "error": "missingMigration"
+ }
+]
