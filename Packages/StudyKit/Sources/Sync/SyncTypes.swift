@@ -50,6 +50,13 @@ public struct SyncState: Sendable, Hashable {
     /// Na Macu jsou změny, které ještě nejsou na GitHubu.
     public var dirty: Bool
     public var lastSyncedAt: Date?
+
+    public init(status: SyncStatus, mode: SyncMode, dirty: Bool, lastSyncedAt: Date?) {
+        self.status = status
+        self.mode = mode
+        self.dirty = dirty
+        self.lastSyncedAt = lastSyncedAt
+    }
 }
 
 public enum SyncUpdate: Sendable {

@@ -2,6 +2,7 @@
 import PackageDescription
 
 // Moduly aplikace. Core nemá žádné závislosti – drží datový model sdílený s webem.
+// Core → Engine (výpočty) · Networking (GitHub) · Persistence (Mac) → Sync → AppModel → Features (+ DesignSystem)
 // Jediná externí závislost je GRDB (lokální úložiště), připnutá na přesnou verzi.
 let package = Package(
     name: "StudyKit",
@@ -12,6 +13,9 @@ let package = Package(
         .library(name: "Networking", targets: ["Networking"]),
         .library(name: "Persistence", targets: ["Persistence"]),
         .library(name: "Sync", targets: ["Sync"]),
+        .library(name: "AppModel", targets: ["AppModel"]),
+        .library(name: "DesignSystem", targets: ["DesignSystem"]),
+        .library(name: "Features", targets: ["Features"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
@@ -25,6 +29,9 @@ let package = Package(
             dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")]
         ),
         .target(name: "Sync", dependencies: ["Core", "Networking", "Persistence"]),
+        .target(name: "AppModel", dependencies: ["Core", "Engine", "Networking", "Persistence", "Sync"]),
+        .target(name: "DesignSystem"),
+        .target(name: "Features", dependencies: ["Core", "Engine", "Networking", "Sync", "AppModel", "DesignSystem"]),
         .testTarget(
             name: "CoreTests",
             dependencies: ["Core"],
@@ -37,5 +44,7 @@ let package = Package(
             dependencies: ["Persistence", .product(name: "GRDB", package: "GRDB.swift")]
         ),
         .testTarget(name: "SyncTests", dependencies: ["Sync"]),
+        .testTarget(name: "AppModelTests", dependencies: ["AppModel", "Core", "Engine", "Networking", "Persistence", "Sync"]),
+        .testTarget(name: "FeaturesTests", dependencies: ["Features", "Core", "Engine"]),
     ]
 )

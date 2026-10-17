@@ -31,7 +31,11 @@ targets:
     sources: [App]
     dependencies:
       - package: StudyKit
-        product: Core
+        product: AppModel
+      - package: StudyKit
+        product: DesignSystem
+      - package: StudyKit
+        product: Features
     info:
       path: App/Info.plist
       properties:
@@ -44,10 +48,13 @@ targets:
       path: App/StudyTracker.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        # Jen odchozí spojení (api.github.com); žádný server, žádné soubory mimo kontejner.
+        com.apple.security.network.client: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker
         ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
   StudyTrackerUITests:
     type: bundle.ui-testing
     platform: macOS
