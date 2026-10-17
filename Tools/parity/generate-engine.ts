@@ -23,6 +23,7 @@ if (Intl.DateTimeFormat().resolvedOptions().timeZone !== 'Europe/Prague') {
 const load = (p: string) => import(pathToFileURL(join(WEB, p)).href);
 const T = await load('src/lib/time.ts');
 const S = await load('src/lib/stats.ts');
+const TT = await load('src/lib/timetable.ts');
 const webVersion = JSON.parse(readFileSync(join(WEB, 'package.json'), 'utf8')).version as string;
 
 // ---------- deterministická náhoda (stejný generátor jako generate.ts, jiný seed) ----------
@@ -186,9 +187,24 @@ function stats() {
   write('stats.json', out, true);
 }
 
+// ---------- 4. normalizace názvů (`norm` – hledání předmětu podle názvu v odkazu) ----------
+function names() {
+  const parts = ['Matematika', 'Anatomie', 'Fyziologie', 'Žluťoučký kůň', 'ĚŠČŘŽÝÁÍÉ', 'Biochemie II', 'Právo – úvod', 'naïve', 'İstanbul', 'Straße',
+    '日本語', '😀', '  ', '-', '/', '_', '12', 'Ö', 'Ångström', 'ﬁ', 'Ǆ', 'e\u0301', 'Ḱ', 'Ⅻ', '½', 'Ⓐ', 'ǅ'];
+  const out: { s: string; norm: string }[] = [];
+  for (let i = 0; i < 300; i++) {
+    let s = '';
+    for (let k = int(1, 4); k > 0; k--) s += pick(parts) + pick(['', ' ', '  ', '.', ', ', '\t']);
+    if (chance(0.3)) s = s.toUpperCase();
+    out.push({ s, norm: TT.norm(s) });
+  }
+  write('names.json', out);
+}
+
 mkdirSync(OUT, { recursive: true });
 calendar();
 formats();
 stats();
+names();
 write('meta.json', { webVersion, timeZone: 'Europe/Prague', note: 'Vygenerováno z kódu webové aplikace (Tools/parity/generate-engine.ts). Neupravovat ručně.' });
 console.log(`Kontrolní data Engine z webu v${webVersion} → ${OUT}`);

@@ -126,6 +126,14 @@ struct EngineParityTests {
         for c in f.plurals { #expect(Format.plural(c.n, "den", "dny", "dní") == c.text, "plural \(c.n)") }
     }
 
+    @Test("Normalizace názvů pro hledání předmětu")
+    func names() throws {
+        struct NameCase: Decodable { let s: String; let norm: String }
+        for c in try Fixture.load("names", as: [NameCase].self) {
+            #expect(normalizedName(c.s) == c.norm, "\(c.s)")
+        }
+    }
+
     @Test("Souhrny: interval, po dnech, po předmětech, série a soustředění")
     func stats() throws {
         let cases = try Fixture.load("stats", as: [StatsCase].self)
