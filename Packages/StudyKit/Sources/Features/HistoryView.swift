@@ -77,5 +77,6 @@ private struct SessionLine: View {
             Text(row.duration).fontWeight(.semibold).monospacedDigit().frame(minWidth: 70, alignment: .trailing)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("session.\(row.id)")
     }
 }

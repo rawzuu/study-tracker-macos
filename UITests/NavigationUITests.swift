@@ -134,11 +134,17 @@ final class NavigationUITests: XCTestCase {
         app.buttons["rating.save"].click()
         XCTAssertTrue(recall.waitForNonExistence(timeout: 3))
         attachScreenshot(app, "Pauza")
+        // Pauza (3 s) doběhne a časovač čeká na další blok – sérii ukončit, ať kruh netiká.
+        let end = app.buttons["timer.end"]
+        XCTAssertTrue(end.waitForExistence(timeout: 10))
+        end.click()
+        XCTAssertTrue(end.waitForNonExistence(timeout: 2))
 
         app.staticTexts["nav.historie"].click()
         let saved = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "Ledviny UI", "Ledviny UI")).firstMatch
-        XCTAssertTrue(saved.waitForExistence(timeout: 3), "sezení z časovače je v historii")
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "session.timer-")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 5), "sezení z časovače je v historii")
+        XCTAssertTrue(text(of: saved).contains("Ledviny UI"), text(of: saved))
         attachScreenshot(app, "Historie po bloku")
     }
 
