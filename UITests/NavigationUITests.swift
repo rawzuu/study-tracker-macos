@@ -13,10 +13,10 @@ final class NavigationUITests: XCTestCase {
 
         let title = app.staticTexts["page.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
-        XCTAssertEqual(title.label, "Přehled")
+        XCTAssertEqual(text(of: title), "Přehled")
 
         app.staticTexts["nav.planovac"].click()
-        XCTAssertEqual(app.staticTexts["page.title"].label, "Kalendář")
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Kalendář")
     }
 
     @MainActor
@@ -24,5 +24,10 @@ final class NavigationUITests: XCTestCase {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }
+    }
+
+    /// Na macOS nese text popisku SwiftUI `value`, ne `label`.
+    @MainActor private func text(of element: XCUIElement) -> String {
+        (element.value as? String).flatMap { $0.isEmpty ? nil : $0 } ?? element.label
     }
 }

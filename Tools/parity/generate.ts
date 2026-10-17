@@ -72,10 +72,12 @@ function numbers() {
     const x = buf.getFloat64(0);
     if (Number.isFinite(x)) xs.push(x);
   }
+  // Desetinná čísla skládáme z textu: převod textu na číslo je přesný v každé verzi Node,
+  // kdežto `10 ** -n` se mezi verzemi V8 liší v posledním bitu.
+  const digits = (n: number) => String(int(1, 9)) + Array.from({ length: n }, () => int(0, 9)).join('');
   for (let i = 0; i < 800; i++) {
-    const mag = int(-12, 25);
-    xs.push(Math.round(rnd() * 10 ** int(1, 17)) / 10 ** int(0, 17) * (chance(0.2) ? -1 : 1) * 10 ** (mag - 6));
-    xs.push(Math.round(rnd() * 10 ** int(0, 6)) / 10 ** int(0, 3));
+    xs.push(Number(`${chance(0.2) ? '-' : ''}${digits(int(0, 16))}e${int(-30, 25)}`));
+    xs.push(Number(`${digits(int(0, 6))}e-${int(0, 3)}`));
   }
   write('numbers.json', xs.map((x) => ({ bits: bitsOf(x), js: JSON.stringify(x) })));
 }
