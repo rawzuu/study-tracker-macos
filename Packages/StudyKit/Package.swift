@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "Core", targets: ["Core"]),
         .library(name: "Networking", targets: ["Networking"]),
         .library(name: "Persistence", targets: ["Persistence"]),
+        .library(name: "Sync", targets: ["Sync"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
@@ -21,6 +22,7 @@ let package = Package(
             name: "Persistence",
             dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")]
         ),
+        .target(name: "Sync", dependencies: ["Core", "Networking", "Persistence"]),
         .testTarget(
             name: "CoreTests",
             dependencies: ["Core"],
@@ -31,5 +33,6 @@ let package = Package(
             name: "PersistenceTests",
             dependencies: ["Persistence", .product(name: "GRDB", package: "GRDB.swift")]
         ),
+        .testTarget(name: "SyncTests", dependencies: ["Sync"]),
     ]
 )
