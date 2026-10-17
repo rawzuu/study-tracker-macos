@@ -10,21 +10,16 @@ struct StudyTrackerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        WindowGroup("Study Tracker", id: "main") {
+        // Jedno hlavní okno (jako jedna stránka na webu): odkaz studytracker://… ani znovuotevření
+        // nezaloží další. Okno vznikne i při spuštění aplikace odkazem.
+        Window("Study Tracker", id: "main") {
             RootView()
                 .environment(delegate.store)
                 .environment(delegate.timer)
                 .environment(delegate.navigator)
                 .frame(minWidth: 900, minHeight: 600)
-                .task {
-                    await delegate.store.start()
-                    // Blok, který doběhl, zatímco aplikace neběžela, se uloží až teď.
-                    delegate.timer.refresh()
-                }
         }
         .defaultSize(width: 1440, height: 920)
-        // Odkazy studytracker://… nezakládají nová okna – vyřídí je AppDelegate ve stávajícím.
-        .handlesExternalEvents(matching: [])
         .windowToolbarStyle(.unified)
         .commands {
             SidebarCommands()
@@ -58,6 +53,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var wakeObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Data se načítají hned po spuštění, nezávisle na okně (i když aplikaci spustí odkaz).
+        Task {
+            await store.start()
+            // Blok, který doběhl, zatímco aplikace neběžela, se uloží až teď; čekající odkaz se spustí.
+            timer.refresh()
+        }
         // Po probuzení Macu dohnat konec bloku nebo pauzy, který proběhl ve spánku.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -67,7 +68,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// `studytracker://casovac…` – otevře časovač a s `start=1` rovnou spustí blok.
-    /// Odkazy vyřizuje delegát, takže SwiftUI kvůli nim neotevírá nové okno.
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where TimerLink.isTimerPage(url) {
             navigator.page = .casovac
