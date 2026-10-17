@@ -39,7 +39,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Study Tracker
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.education
@@ -53,8 +53,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker
+        APP_DISPLAY_NAME: Study Tracker
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        # Vývojové sestavení (Xcode ⌘R, UI testy) má vlastní identifikátor, a tedy vlastní data,
+        # nastavení i Klíčenku – nikdy nesáhne na data nainstalované aplikace a nekoliduje s ní.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.dev
+          APP_DISPLAY_NAME: Study Tracker (vývoj)
   StudyTrackerUITests:
     type: bundle.ui-testing
     platform: macOS

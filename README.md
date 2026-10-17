@@ -65,12 +65,16 @@ xcodegen generate
 open StudyTracker.xcodeproj
 ```
 
+Vývojové sestavení (Debug – Xcode ⌘R, UI testy) má identifikátor `cz.rawzuu.studytracker.dev` a jméno „Study Tracker (vývoj)“: vlastní data, nastavení i položku v Klíčence. Nikdy tak nesáhne na data nainstalované aplikace (Release, `cz.rawzuu.studytracker`) a může běžet vedle ní.
+
 Testy:
 
 ```bash
 swift test --package-path Packages/StudyKit                       # moduly (Swift Testing)
 ST_KEYCHAIN_TESTS=1 swift test --package-path Packages/StudyKit   # + test skutečné Klíčenky
 xcodebuild test -project StudyTracker.xcodeproj -scheme StudyTracker -destination 'platform=macOS'
+TEST_RUNNER_ST_NO_SCREENSHOTS=1 xcodebuild test …                 # bez snímků (např. při vypnutém displeji)
+ST_SNAPSHOT_DIR=/tmp/nahledy swift test --package-path Packages/StudyKit --filter Náhledy   # náhledy obrazovek do PNG
 ```
 
 Obnovení kontrolních dat (po změně webu):

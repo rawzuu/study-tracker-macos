@@ -23,7 +23,8 @@ public struct KeychainError: Error, Sendable, Hashable, LocalizedError {
 public struct KeychainStore: SecretStore {
     public let service: String
 
-    public init(service: String = "cz.rawzuu.studytracker") {
+    /// Služba podle identifikátoru aplikace: vývojové sestavení (`….dev`) nikdy nevidí token ostré aplikace.
+    public init(service: String = Bundle.main.bundleIdentifier ?? "cz.rawzuu.studytracker") {
         self.service = service
     }
 
