@@ -21,6 +21,14 @@ public struct BackupConfig: Codable, Sendable, Hashable {
     }
 }
 
+extension RepoLocation {
+    /// Stejný soubor? Jméno a repo na GitHubu nerozlišují velikost písmen.
+    func sameFile(as other: RepoLocation) -> Bool {
+        owner.lowercased() == other.owner.lowercased() && repo.lowercased() == other.repo.lowercased()
+            && branch == other.branch && path == other.path
+    }
+}
+
 /// Přístup ke GitHubu pro připojení zálohy – v aplikaci skutečné API, v testech podvrh.
 public protocol BackupService: Sendable {
     /// GitHub jméno majitele tokenu.
@@ -45,6 +53,7 @@ struct ConfigStore {
     let defaults: UserDefaults
     private static let backupKey = "st.github"
     private static let modeKey = "st.syncMode"
+    private static let dataLocationKey = "st.dataLocation"
 
     var backup: BackupConfig? {
         get { defaults.data(forKey: Self.backupKey).flatMap { try? JSONDecoder().decode(BackupConfig.self, from: $0) } }
@@ -57,9 +66,21 @@ struct ConfigStore {
         }
     }
 
-    /// Dokud uživatel neověří, že data na Macu sedí s webem, Mac jen čte (#9).
+    /// Zápis z Macu je zapnutý (od v0.2.0, po ověření dat); „jen čtení“ jde zapnout v Nastavení.
     var syncMode: SyncMode {
-        get { defaults.string(forKey: Self.modeKey) == "readWrite" ? .readWrite : .readOnly }
+        get { defaults.string(forKey: Self.modeKey) == "readOnly" ? .readOnly : .readWrite }
         nonmutating set { defaults.set(newValue == .readWrite ? "readWrite" : "readOnly", forKey: Self.modeKey) }
+    }
+
+    /// Repo, ke kterému patří data na Macu (zůstává i po odpojení).
+    var dataLocation: RepoLocation? {
+        get { defaults.data(forKey: Self.dataLocationKey).flatMap { try? JSONDecoder().decode(RepoLocation.self, from: $0) } }
+        nonmutating set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: Self.dataLocationKey)
+            } else {
+                defaults.removeObject(forKey: Self.dataLocationKey)
+            }
+        }
     }
 }

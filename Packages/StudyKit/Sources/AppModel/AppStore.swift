@@ -56,6 +56,8 @@ public final class AppStore {
                 try await store.save(StoredDocument(document: seed, dirty: false, remoteSha: nil))
             }
             backup = config.backup
+            // Instalace z doby před v0.2.0: data patří k připojenému repu.
+            if config.dataLocation == nil, let backup { config.dataLocation = backup.location }
             let engine = try await SyncEngine.open(store: store, remote: currentRemote(), mode: config.syncMode, timing: environment.timing)
             self.engine = engine
             document = await engine.document
@@ -132,9 +134,12 @@ public final class AppStore {
             throw .keychain(error.localizedDescription)
         }
         let config = BackupConfig(location: location, expires: expires?.isEmpty == true ? nil : expires)
+        // Jiné repo než to, ke kterému patří data na Macu → začít od jeho dat (stará se zálohují na Macu).
+        let otherRepo = self.config.dataLocation.map { !$0.sameFile(as: location) } ?? false
         self.config.backup = config
+        self.config.dataLocation = location
         backup = config
-        await engine?.configure(remote: environment.backupService.remote(token: token, location: location), mode: self.config.syncMode)
+        await engine?.configure(remote: environment.backupService.remote(token: token, location: location), mode: self.config.syncMode, resetLocal: otherRepo)
     }
 
     /// Odpojí zálohu. Data na GitHubu i na Macu zůstanou, jen se přestanou synchronizovat.
@@ -153,6 +158,21 @@ public final class AppStore {
     }
 
     public var syncMode: SyncMode { sync.mode }
+
+    /// Přepne „jen čtení“ (Mac nic nezapisuje) a zpět.
+    public func setSyncMode(_ mode: SyncMode) async {
+        config.syncMode = mode
+        await engine?.configure(remote: currentRemote(), mode: mode)
+    }
+
+    /// Okamžik pro razítka `updatedAt` (ms).
+    public var nowMs: Int { Int(Date().timeIntervalSince1970 * 1000) }
+
+    /// Vloží nebo upraví záznam (razítka `createdAt`/`updatedAt` jako na webu).
+    public func upsert<R: EntityRecord>(_ item: R) {
+        let now = nowMs
+        update { $0.upsert(item, now: now) }
+    }
 
     // MARK: - Interní
 

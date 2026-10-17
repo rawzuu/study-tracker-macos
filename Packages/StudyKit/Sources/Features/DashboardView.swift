@@ -349,8 +349,7 @@ private struct ConnectPrompt: View {
                     .foregroundStyle(Palette.text2)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Připojit GitHub", action: openSettings)
-                    .buttonStyle(.borderedProminent)
-                    .tint(Palette.accent)
+                    .buttonStyle(.primary)
                     .accessibilityIdentifier("dash.connect")
             }
             .frame(maxWidth: 560, alignment: .leading)

@@ -356,6 +356,25 @@ struct SyncEngineTests {
         #expect(names(try await store.load()?.document) == ["s1": "A", "s2": "B"])
     }
 
+    @Test("Přepojení na jiné repo: stará data se nesloučí do nového, zůstanou v záloze na Macu")
+    func switchRepo() async throws {
+        let first = FakeGitHub(document: doc(("a1", "Repo A", 1_000)))
+        let (engine, store) = try await makeEngine(first)
+        await engine.syncNow()
+        await engine.localDidChange(adding(await engine.document, "a2", "Neodesláno", at: 2_000))
+
+        let second = FakeGitHub(document: doc(("b1", "Repo B", 1_500)))
+        await engine.configure(remote: second, mode: .readWrite, resetLocal: true)
+        await engine.settle()
+
+        #expect(names(await engine.document) == ["b1": "Repo B"])
+        #expect(await second.commits.isEmpty)
+        let snapshots = try await store.snapshots()
+        #expect(snapshots.first?.reason == "před přepojením na jiné repo")
+        let saved = try #require(try await store.snapshotDocument(id: snapshots[0].id))
+        #expect(names(saved) == ["a1": "Repo A", "a2": "Neodesláno"])
+    }
+
     @Test("Změny z GitHubu přijdou aplikaci přes updates")
     func updatesStream() async throws {
         let remote = FakeGitHub(document: doc(("s1", "A", 1_000)))

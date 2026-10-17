@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **M1 – data a synchronizace (zatím jen čtení).** Mac načítá data z GitHubu a ukazuje Přehled, Historii a Předměty; zápis se zapne po ověření, že data sedí s webem. Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.2.0 – M1 hotový.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii a Předměty a umí upravovat předměty. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -35,7 +35,8 @@ Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persis
 
 Stejný postup jako `syncNow()` na webu: stáhnout se `sha` → normalizovat → sloučit po záznamech (novější `updatedAt` vyhrává) → nahrát se `sha`, při konfliktu 409/422 znovu (nejvýš 4×). Spouští se po startu, při aktivaci okna, každých 5 minut jen při aktivní aplikaci, 3 s po změně, po návratu sítě a před ukončením. Commity z Macu mají zprávu `Sync dat (Mac) · …`.
 
-- **Jen čtení:** dokud uživatel neověří, že data sedí s webem, Mac nic nezapisuje.
+- **Jen čtení:** přepínač v Nastavení – Mac pak nic nezapisuje a úpravy jsou vypnuté.
+- **Jiné repo:** při připojení jiného repa se data na Macu nesloučí do nového – uloží se do zálohy na Macu a začne se od dat nového repa.
 - Data z novější verze schématu ani nečitelný soubor se nikdy nepřepíšou.
 - Čerstvá instalace převezme data z GitHubu celá (výchozí nastavení Macu nepřebije nastavení z jiného zařízení).
 - Lokální změny se při chybě neztratí – zůstanou v SQLite a odešlou se příště.

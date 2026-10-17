@@ -101,7 +101,7 @@ struct AppStoreTests {
         #expect(!store.isConnected)
     }
 
-    @Test("Připojení: jméno z tokenu, token v Klíčence, data z GitHubu, nic se nezapíše")
+    @Test("Připojení: jméno z tokenu, token v Klíčence, data z GitHubu, bez zbytečného commitu")
     func connect() async throws {
         let remote = FakeRemote(document: remoteDocument())
         let secrets = InMemorySecretStore()
@@ -113,7 +113,8 @@ struct AppStoreTests {
         #expect(store.backup == BackupConfig(location: RepoLocation(owner: "rawzuu"), expires: "2027-10-17"))
         #expect(remote.lastLocation.withLock { $0 } == RepoLocation(owner: "rawzuu"))
         #expect(await eventually { store.document.alive(Subject.self).map(\.name) == ["Anatomie"] })
-        #expect(store.sync.mode == .readOnly)
+        #expect(store.sync.mode == .readWrite)
+        // Stejná data jako na GitHubu → žádný commit.
         #expect(remote.pushes.withLock { $0 } == 0)
     }
 
@@ -180,6 +181,47 @@ struct AppStoreTests {
         #expect(store.backup == nil)
         #expect(await eventually { store.sync.status == .off })
         #expect(store.document.alive(Subject.self).count == 1)
+    }
+
+    @Test("Zápis: úprava z Macu se odešle, v režimu jen čtení ne")
+    func writes() async throws {
+        let remote = FakeRemote(document: remoteDocument())
+        let store = try makeStore(backup: FakeBackup(remote: remote))
+        await store.start()
+        try await store.connect(token: "t", location: RepoLocation(owner: ""))
+        #expect(await eventually { !store.document.alive(Subject.self).isEmpty })
+        #expect(store.sync.mode == .readWrite)
+
+        var s = store.document.alive(Subject.self)[0]
+        s.weeklyGoalMin = 120
+        store.upsert(s)
+        #expect(await eventually { remote.pushes.withLock { $0 } == 1 })
+        #expect(remote.text.withLock { $0 }?.contains("\"weeklyGoalMin\": 120") == true)
+
+        await store.setSyncMode(.readOnly)
+        s.weeklyGoalMin = 30
+        store.upsert(s)
+        try await Task.sleep(for: .milliseconds(80))
+        await store.syncNow()
+        #expect(remote.pushes.withLock { $0 } == 1)
+        #expect(store.sync.mode == .readOnly)
+    }
+
+    @Test("Připojení k jinému repu nesloučí data z předchozího")
+    func otherRepo() async throws {
+        let remote = FakeRemote(document: remoteDocument())
+        let store = try makeStore(backup: FakeBackup(remote: remote))
+        await store.start()
+        try await store.connect(token: "t", location: RepoLocation(owner: ""))
+        #expect(await eventually { !store.document.alive(Subject.self).isEmpty })
+        await store.disconnect()
+
+        var other = AppDocument.empty
+        other.upsert(Subject(raw: ["id": "x", "name": "Jiné repo"]), now: 5)
+        remote.text.withLock { $0 = Merge.serialize(other) }
+        try await store.connect(token: "t", location: RepoLocation(owner: "rawzuu", repo: "jine-repo"))
+        #expect(await eventually { store.document.alive(Subject.self).map(\.name) == ["Jiné repo"] })
+        #expect(remote.pushes.withLock { $0 } == 0)
     }
 
     @Test("Platnost tokenu: zbývající dny")

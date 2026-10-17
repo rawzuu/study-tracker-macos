@@ -80,6 +80,23 @@ final class NavigationUITests: XCTestCase {
     }
 
     @MainActor
+    func testCreateSubject() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.predmety"].click()
+        app.buttons["subjects.new"].click()
+        let name = app.textFields["subject.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 2))
+        name.typeText("Anatomie")
+        XCTAssertFalse(app.buttons["subject.save"].isEnabled, "stejný název už existuje")
+        name.typeText(" II")
+        XCTAssertTrue(app.buttons["subject.save"].isEnabled)
+        attachScreenshot(app, "Nový předmět")
+        app.buttons["subject.save"].click()
+        XCTAssertTrue(app.staticTexts["Anatomie II"].waitForExistence(timeout: 2))
+    }
+
+    @MainActor
     func testLaunchPerformance() {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             let app = XCUIApplication()

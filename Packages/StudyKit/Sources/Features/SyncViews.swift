@@ -132,13 +132,21 @@ public struct SyncSettingsView: View {
 
     private func connected(_ backup: BackupConfig) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Data se načítají z **\(backup.location.owner)/\(backup.location.repo)** → `\(backup.location.path)` (větev \(backup.location.branch)). Každá změna na GitHubu je commit, takže je vidět celá historie.")
+            Text("Data se ukládají do **\(backup.location.owner)/\(backup.location.repo)** → `\(backup.location.path)` (větev \(backup.location.branch)). Každá změna je commit, takže je vidět celá historie.")
                 .foregroundStyle(Palette.text2)
                 .fixedSize(horizontal: false, vertical: true)
-            if store.sync.mode == .readOnly {
-                Banner("Režim jen pro čtení: Mac data z GitHubu jen načítá a nic nezapisuje. Zápis se zapne, až ověříš, že data sedí s webem.", systemImage: "lock")
-                    .accessibilityIdentifier("settings.readOnly")
+            Toggle(isOn: Binding(
+                get: { store.sync.mode == .readOnly },
+                set: { readOnly in Task { await store.setSyncMode(readOnly ? .readOnly : .readWrite) } }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Jen čtení")
+                    Text("Mac data z GitHubu jen načítá a nic nezapisuje; úpravy na Macu jsou vypnuté.")
+                        .font(Typo.small).foregroundStyle(Palette.text3)
+                }
             }
+            .toggleStyle(.switch)
+            .accessibilityIdentifier("settings.readOnly")
             expiryRow(backup)
             HStack(spacing: 10) {
                 Button {
@@ -224,8 +232,7 @@ public struct SyncSettingsView: View {
             Button(action: connect) {
                 Label(connecting ? "Ověřuji…" : "Připojit a synchronizovat", systemImage: "icloud.and.arrow.down")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Palette.accent)
+            .buttonStyle(.primary)
             .disabled(connecting || token.trimmingCharacters(in: .whitespaces).isEmpty || location.repo.isEmpty || location.branch.isEmpty || location.path.isEmpty)
             .keyboardShortcut(.defaultAction)
             .accessibilityIdentifier("settings.connect")

@@ -87,10 +87,28 @@ public actor SyncEngine {
     // MARK: - Ovládání
 
     /// Nový token / repo / režim. `nil` = synchronizace vypnutá (data zůstanou na Macu).
-    public func configure(remote: (any RemoteDataFile)?, mode: SyncMode) async {
+    ///
+    /// `resetLocal`: data na Macu patří k jinému repu – uloží se do zálohy na Macu a začne se
+    /// od dat nového repa, aby se do něj nesloučila cizí data.
+    public func configure(remote: (any RemoteDataFile)?, mode: SyncMode, resetLocal: Bool = false) async {
         generation += 1
         debounceTask?.cancel()
         debounceTask = nil
+        if resetLocal {
+            do {
+                try await store.snapshot(document, reason: "před přepojením na jiné repo")
+            } catch {
+                // Bez zálohy se lokální data nezahodí.
+                setStatus(.failed(.storage(error.localizedDescription), at: now()))
+                return
+            }
+            document = .empty
+            remoteSha = nil
+            adoptRemote = true
+            state.dirty = false
+            continuation.yield(.document(document))
+            await persistNow()
+        }
         self.remote = remote
         state.mode = mode
         state.status = remote == nil ? .off : .idle
