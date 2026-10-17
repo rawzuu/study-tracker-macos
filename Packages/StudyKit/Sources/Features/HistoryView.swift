@@ -1,13 +1,15 @@
 import AppModel
+import Core
 import DesignSystem
 import Engine
 import SwiftUI
 
-/// Historie sezení po dnech (jen pro čtení v M1). Filtr podle předmětu, starší dny se načítají postupně.
+/// Historie sezení po dnech: filtr podle předmětu, ruční zápis a úpravy. Starší dny se načítají postupně.
 public struct HistoryView: View {
     @Environment(AppStore.self) private var store
     @State private var subjectId: String?
     @State private var limit = 30
+    @State private var editing: EditedSession?
 
     public init() {}
 
@@ -17,13 +19,20 @@ public struct HistoryView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 32) {
                 PageHeader("Historie") {
-                    Picker("Předmět", selection: $subjectId) {
-                        Text("Všechny předměty").tag(String?.none)
-                        ForEach(state.subjects, id: \.id) { s in Text(s.name).tag(Optional(s.id)) }
+                    HStack(spacing: 8) {
+                        Picker("Předmět", selection: $subjectId) {
+                            Text("Všechny předměty").tag(String?.none)
+                            ForEach(state.subjects, id: \.id) { s in Text(s.name).tag(Optional(s.id)) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 220)
+                        .accessibilityIdentifier("history.subject")
+                        Button { editing = EditedSession(draft: SessionDraft(now: now, clock: store.clock)) } label: {
+                            Label("Ruční zápis", systemImage: "plus")
+                        }
+                        .buttonStyle(.primary)
+                        .accessibilityIdentifier("history.add")
                     }
-                    .labelsHidden()
-                    .frame(width: 220)
-                    .accessibilityIdentifier("history.subject")
                 }
                 if state.groups.isEmpty {
                     EmptyNote("Žádná sezení", systemImage: "book")
@@ -32,7 +41,7 @@ public struct HistoryView: View {
                         PageSection(group.title, accessory: { Chip(group.total) }) {
                             VStack(spacing: 0) {
                                 ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, s in
-                                    SessionLine(row: s, divider: i < group.rows.count - 1)
+                                    SessionLine(row: s, divider: i < group.rows.count - 1) { edit(s.id) }
                                 }
                             }
                         }
@@ -51,12 +60,25 @@ public struct HistoryView: View {
         }
         .pageBackground()
         .navigationTitle("Historie")
+        .sheet(item: $editing) { SessionEditor(draft: $0.draft) }
     }
+
+    private func edit(_ id: String) {
+        guard let session = store.document.record(Session.self, id: id) else { return }
+        editing = EditedSession(draft: SessionDraft(editing: session, clock: store.clock))
+    }
+}
+
+/// Otevřený formulář sezení (každé otevření má vlastní id).
+private struct EditedSession: Identifiable {
+    let id = UUID()
+    let draft: SessionDraft
 }
 
 private struct SessionLine: View {
     let row: SessionRow
     let divider: Bool
+    let edit: () -> Void
 
     var body: some View {
         ListRow(divider: divider) {
@@ -75,8 +97,13 @@ private struct SessionLine: View {
                 Chip("\(focus)/5").help(Format.focusLabels[min(5, max(1, focus))])
             }
             Text(row.duration).fontWeight(.semibold).monospacedDigit().frame(minWidth: 70, alignment: .trailing)
+            Button(action: edit) { Image(systemName: "pencil") }
+                .buttonStyle(.denik(.ghost, size: .small))
+                .help("Upravit")
+                .accessibilityLabel("Upravit")
         }
         .accessibilityElement(children: .combine)
+        .accessibilityAction(named: "Upravit", edit)
         .accessibilityIdentifier("session.\(row.id)")
     }
 }

@@ -90,6 +90,27 @@ public struct ListRow<Content: View>: View {
     }
 }
 
+/// Pole formuláře s popiskem nad sebou a nápovědou pod sebou (`<Field>` na webu).
+public struct FormField<Content: View>: View {
+    let label: String
+    let hint: String?
+    let content: Content
+
+    public init(_ label: String, hint: String? = nil, @ViewBuilder content: () -> Content) {
+        self.label = label
+        self.hint = hint
+        self.content = content()
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).foregroundStyle(Palette.text2)
+            content
+            if let hint { Text(hint).font(Typo.small).foregroundStyle(Palette.text3).fixedSize(horizontal: false, vertical: true) }
+        }
+    }
+}
+
 /// Malý štítek (`.chip`).
 public struct Chip: View {
     public enum Tone { case neutral, accent, ok, warn, bad }
@@ -251,5 +272,85 @@ extension View {
     /// Pozadí stránky ve vzhledu Deník.
     public func pageBackground() -> some View {
         background(Palette.bg)
+    }
+}
+
+/// Víceřádkové textové pole ve vzhledu Deník, s nápovědou, dokud je prázdné.
+public struct TextArea: View {
+    @Binding var text: String
+    let placeholder: String
+    let minHeight: CGFloat
+
+    public init(_ placeholder: String = "", text: Binding<String>, minHeight: CGFloat = 64) {
+        self.placeholder = placeholder
+        self._text = text
+        self.minHeight = minHeight
+    }
+
+    public var body: some View {
+        TextEditor(text: $text)
+            .font(Typo.body)
+            .scrollContentBackground(.hidden)
+            .padding(6)
+            .frame(minHeight: minHeight)
+            .background(Palette.panel2, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .topLeading) {
+                if text.isEmpty && !placeholder.isEmpty {
+                    Text(placeholder).foregroundStyle(Palette.text3).padding(11).allowsHitTesting(false)
+                }
+            }
+    }
+}
+
+/// Okno formuláře (`<Modal>` na webu): nadpis, obsah a řada tlačítek dole.
+public struct EditorSheet<Content: View, Footer: View>: View {
+    let title: String
+    let width: CGFloat
+    let content: Content
+    let footer: Footer
+
+    public init(_ title: String, width: CGFloat = 480, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.title = title
+        self.width = width
+        self.content = content()
+        self.footer = footer()
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title).font(Typo.sectionTitle).accessibilityAddTraits(.isHeader)
+            content
+            HStack(spacing: 8) { footer }.padding(.top, 6)
+        }
+        .padding(24)
+        .frame(width: width)
+    }
+}
+
+/// Celé číslo s políčkem a šipkami (minuty, délka bloku). Hodnota mimo rozsah se vrátí na okraj.
+public struct NumberField: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    let step: Int
+
+    public init(value: Binding<Int>, in range: ClosedRange<Int>, step: Int = 1) {
+        self._value = value
+        self.range = range
+        self.step = step
+    }
+
+    public var body: some View {
+        HStack(spacing: 4) {
+            TextField("", value: $value, format: .number.grouping(.never))
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 70)
+                .labelsHidden()
+            Stepper("", value: $value, in: range, step: step).labelsHidden()
+        }
+        .onChange(of: value) { _, v in
+            let clamped = min(range.upperBound, max(range.lowerBound, v))
+            if clamped != v { value = clamped }
+        }
     }
 }

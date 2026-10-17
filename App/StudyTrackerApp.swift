@@ -17,6 +17,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.store)
                 .environment(delegate.timer)
                 .environment(delegate.navigator)
+                .environment(delegate.toasts)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -50,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // UI testy běží potichu – bez šumu, zvonků a notifikací.
     lazy var timer = TimerStore(app: store, effects: Self.uiTesting ? nil : LiveTimerEffects())
     let navigator = Navigator()
+    let toasts = Toasts()
     private var wakeObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {

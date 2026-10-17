@@ -164,6 +164,72 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["timer.start"].isEnabled)
     }
 
+    /// Nový blok v kalendáři a „Hotovo“, které k bloku zapíše odučený čas.
+    @MainActor
+    func testCalendarAddsBlockAndLogsTime() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.planovac"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Kalendář")
+        XCTAssertTrue(app.descendants(matching: .any)["calendar.week"].exists)
+
+        app.buttons["calendar.addBlock"].click()
+        let save = app.buttons["block.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 2))
+        XCTAssertFalse(save.isEnabled, "bez předmětu nejde uložit")
+        app.popUpButtons["block.subject"].click()
+        app.menuItems["Biochemie"].click()
+        let title = app.textFields["block.title"]
+        title.click()
+        title.typeText("UI blok")
+        attachScreenshot(app, "Nový blok")
+        save.click()
+        XCTAssertTrue(save.waitForNonExistence(timeout: 2))
+
+        let block = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "cal.block.", "UI blok")).firstMatch
+        XCTAssertTrue(block.waitForExistence(timeout: 3), "blok je v kalendáři")
+        attachScreenshot(app, "Kalendář s blokem")
+
+        // Hotovo u bloku bez zapsaného času nabídne zápis odučeného.
+        block.click()
+        app.buttons["block.done"].click()
+        let logSave = app.buttons["session.save"]
+        XCTAssertTrue(logSave.waitForExistence(timeout: 2))
+        XCTAssertEqual(app.textFields["session.topic"].value as? String, "UI blok")
+        logSave.click()
+        let logged = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "cal.session.", "UI blok")).firstMatch
+        XCTAssertTrue(logged.waitForExistence(timeout: 3), "odučený čas je v kalendáři")
+    }
+
+    /// Nová zkouška se objeví v seznamu s odpočtem; smazanou vrátí „Vrátit“ v hlášce.
+    @MainActor
+    func testExamAddDeleteUndo() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.planovac"].click()
+        app.buttons["calendar.addExam"].click()
+        app.popUpButtons["exam.subject"].click()
+        app.menuItems["Latina"].click()
+        let name = app.textFields["exam.name"]
+        name.click()
+        name.typeText("UI zkouška")
+        app.buttons["exam.save"].click()
+
+        let row = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "exam.", "UI zkouška")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 3), "zkouška je v seznamu")
+        XCTAssertTrue(row.label.contains("za 14 dní"), row.label)
+
+        row.click()
+        app.buttons["exam.delete"].click()
+        app.buttons["exam.confirmDelete"].firstMatch.click()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 3), "smazaná zkouška zmizí")
+        app.buttons["toast.undo"].click()
+        XCTAssertTrue(row.waitForExistence(timeout: 3), "Vrátit zkoušku obnoví")
+    }
+
     /// Spuštění aplikace odkazem ze Zkratek, když aplikace neběží (studený start). Že běžící blok
     /// odkaz nepřeruší, hlídají unit testy – XCUITest by odkaz do běžící aplikace otevřel v nové instanci.
     @MainActor

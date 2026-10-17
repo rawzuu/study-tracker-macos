@@ -82,4 +82,59 @@ struct PlannerTests {
         #expect(JS.sort([3, 1, 2], by: { $0 - $1 }) == [1, 2, 3])
         #expect(JS.sort(Array((0..<100).reversed()), by: { $0 - $1 }) == Array(0..<100))
     }
+
+    @Test("Nové sezení odškrtne svůj blok i bloky, se kterými se kryje; úprava plán nemění")
+    func saveSession() {
+        func plan(_ id: String, _ subject: String, _ start: Int, done: Bool = false) -> PlanBlock {
+            PlanBlock(raw: ["id": .string(id), "subjectId": .string(subject), "title": "", "start": .number(Double(start)), "durationMin": 60, "done": .bool(done), "note": ""])
+        }
+        var doc = AppDocument.empty
+        doc.upsert([plan("vlastní", "a", at(19, 15)), plan("kryje", "a", at(19, 9)), plan("jiný", "b", at(19, 9)), plan("hotový", "a", at(19, 9, 30), done: true)], now: 1)
+        let session = Session(raw: ["id": "s", "subjectId": "a", "start": .number(Double(at(19, 9))), "end": .number(Double(at(19, 10))), "durationSec": 3600])
+        var edited = doc
+        edited.saveSession(session, isNew: false, planBlockId: "vlastní", now: 5)
+        #expect(edited.alive(PlanBlock.self).filter(\.done).map(\.id) == ["hotový"])
+
+        doc.saveSession(session, isNew: true, planBlockId: "vlastní", now: 5)
+        #expect(doc.alive(PlanBlock.self).filter(\.done).map(\.id).sorted() == ["hotový", "kryje", "vlastní"])
+        #expect(doc.record(PlanBlock.self, id: "hotový")?.updatedAt == 1) // už hotový se znovu nezapisuje
+        #expect(doc.record(Session.self, id: "s")?.createdAt == 5)
+    }
+
+    @Test("Smazaná zkouška vezme s sebou budoucí nedokončené bloky a „Vrátit“ je vrátí spolu")
+    func removeExam() {
+        let now = at(19, 12)
+        func plan(_ id: String, _ start: Int, done: Bool = false, exam: String? = "e") -> PlanBlock {
+            var raw: JSONObject = ["id": .string(id), "subjectId": "a", "title": "", "start": .number(Double(start)), "durationMin": 45, "done": .bool(done), "note": ""]
+            if let exam { raw["examId"] = .string(exam) }
+            return PlanBlock(raw: raw)
+        }
+        var doc = AppDocument.empty
+        doc.upsert(Exam(raw: ["id": "e", "subjectId": "a", "name": "Zápočet", "date": "2026-11-02", "time": "", "note": ""]), now: 1)
+        doc.upsert([plan("zítra", at(20, 17)), plan("včera", at(18, 17)), plan("hotový", at(21, 17), done: true), plan("ruční", at(21, 17), exam: nil)], now: 1)
+        #expect(doc.upcomingBlocks(ofExam: "e", now: now).map(\.id) == ["zítra"])
+
+        doc.removeExam("e", now: now)
+        #expect(doc.alive(Exam.self).isEmpty)
+        #expect(doc.alive(PlanBlock.self).map(\.id) == ["včera", "hotový", "ruční"])
+        #expect(doc.record(PlanBlock.self, id: "zítra")?.deletedAt == now)
+
+        doc.restore(.exams, id: "e", now: now + 60_000)
+        #expect(doc.alive(Exam.self).count == 1)
+        #expect(doc.alive(PlanBlock.self).count == 4)
+        #expect(doc.record(PlanBlock.self, id: "zítra")?.raw["deletedAt"] == nil)
+    }
+
+    @Test("Odpočet do zkoušky a nadcházející zkoušky podle data")
+    func countdown() {
+        let now = at(19, 23, 30)
+        let exam = { (date: String) in Exam(raw: ["id": .string(date), "date": .string(date)]) }
+        #expect(ExamCountdown.daysLeft(exam("2026-10-19"), now: now, clock: clock) == 0)
+        #expect(ExamCountdown.daysLeft(exam("2026-10-26"), now: now, clock: clock) == 7) // přes změnu času
+        #expect(ExamCountdown.daysLeft(exam("nesmysl"), now: now, clock: clock) == nil)
+        #expect([0, 1, 3, 5].map { ExamCountdown.label(daysLeft: $0) } == ["dnes", "za 1 den", "za 3 dny", "za 5 dní"])
+        var doc = AppDocument.empty
+        doc.upsert(["2026-11-02", "2026-10-18", "2026-10-19", "2026-10-25"].map(exam), now: 1)
+        #expect(ExamCountdown.upcoming(doc, now: now, clock: clock).map(\.date) == ["2026-10-19", "2026-10-25", "2026-11-02"])
+    }
 }

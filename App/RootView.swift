@@ -7,6 +7,7 @@ struct RootView: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
     @Environment(Navigator.self) private var navigator
+    @Environment(Toasts.self) private var toasts
 
     var body: some View {
         @Bindable var navigator = navigator
@@ -38,21 +39,14 @@ struct RootView: View {
             if let id = timer.pendingRating { AfterBlockSheet(sessionId: id) }
         }
         .overlay(alignment: .bottom) {
-            if let notice = timer.notice {
-                Text(notice)
-                    .font(Typo.body)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Palette.panel3, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Palette.lineStrong))
-                    .padding(.bottom, 24)
-                    .transition(.opacity)
-                    .accessibilityIdentifier("toast")
-                    .task(id: notice) {
-                        try? await Task.sleep(for: .seconds(4))
-                        timer.notice = nil
-                    }
-            }
+            if let toast = toasts.current { ToastView(toast: toast).id(toast.id).transition(.opacity) }
+        }
+        .animation(.easeOut(duration: 0.15), value: toasts.current?.id)
+        // Hlášky časovače (krátký blok se neukládá) jdou stejnou cestou jako ostatní.
+        .onChange(of: timer.notice) { _, notice in
+            guard let notice else { return }
+            toasts.show(notice)
+            timer.notice = nil
         }
     }
 
@@ -81,6 +75,7 @@ struct RootView: View {
             switch navigator.page ?? .prehled {
             case .prehled: DashboardView(openPage: open)
             case .casovac: TimerView()
+            case .planovac: CalendarView(openPage: open)
             case .historie: HistoryView()
             case .predmety: SubjectsView()
             case .nastaveni: SettingsPage()
@@ -123,5 +118,34 @@ private struct PlaceholderPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .pageBackground()
         .navigationTitle(page.title)
+    }
+}
+
+/// Hláška dole v okně; s akcí „Vrátit“ zůstane déle, aby se dala stihnout.
+private struct ToastView: View {
+    @Environment(Toasts.self) private var toasts
+    let toast: Toasts.Toast
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text(toast.text).font(Typo.body)
+            if toast.undo != nil {
+                Button("Vrátit") { toasts.undo() }
+                    .buttonStyle(.denik(.ghost, size: .small))
+                    .accessibilityIdentifier("toast.undo")
+            }
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, toast.undo == nil ? 16 : 6)
+        .padding(.vertical, toast.undo == nil ? 10 : 4)
+        .background(Palette.panel3, in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.lineStrong))
+        .padding(.bottom, 24)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("toast")
+        .task {
+            try? await Task.sleep(for: .seconds(toast.undo == nil ? 4 : 6))
+            toasts.dismiss(toast.id)
+        }
     }
 }

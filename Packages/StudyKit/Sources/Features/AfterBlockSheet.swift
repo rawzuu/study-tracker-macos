@@ -40,17 +40,7 @@ public struct AfterBlockSheet: View {
             if settings.askRecall {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Co si pamatuješ? Bez koukání do materiálů.").fontWeight(.semibold)
-                    TextEditor(text: $recall)
-                        .font(Typo.body)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .frame(minHeight: 92)
-                        .background(Palette.panel2, in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(alignment: .topLeading) {
-                            if recall.isEmpty {
-                                Text("Napiš 2–3 hlavní myšlenky vlastními slovy…").foregroundStyle(Palette.text3).padding(11).allowsHitTesting(false)
-                            }
-                        }
+                    TextArea("Napiš 2–3 hlavní myšlenky vlastními slovy…", text: $recall, minHeight: 92)
                         .accessibilityIdentifier("rating.recall")
                 }
             }

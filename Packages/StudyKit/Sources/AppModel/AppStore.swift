@@ -179,8 +179,25 @@ public final class AppStore {
 
     /// Vloží nebo upraví záznam (razítka `createdAt`/`updatedAt` jako na webu).
     public func upsert<R: EntityRecord>(_ item: R) {
+        upsert([item])
+    }
+
+    /// Vloží nebo upraví několik záznamů najednou (`upsertMany` na webu).
+    public func upsert<R: EntityRecord>(_ items: [R]) {
         let now = nowMs
-        update { $0.upsert(item, now: now) }
+        update { $0.upsert(items, now: now) }
+    }
+
+    /// Měkké smazání – jde vrátit (`restore`) a smazání se dostane i na ostatní zařízení.
+    public func remove(_ key: CollectionKey, id: String) {
+        let now = nowMs
+        update { $0.remove(key, id: id, now: now) }
+    }
+
+    /// Vrátí smazanou položku i s tím, co se smazalo spolu s ní.
+    public func restore(_ key: CollectionKey, id: String) {
+        let now = nowMs
+        update { $0.restore(key, id: id, now: now) }
     }
 
     // MARK: - Interní

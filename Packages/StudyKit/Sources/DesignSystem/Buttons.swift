@@ -11,6 +11,8 @@ public struct DenikButtonStyle: ButtonStyle {
         case normal
         /// `.btn.ghost` – bez obrysu
         case ghost
+        /// `.btn.danger` – smazání
+        case danger
     }
 
     public enum Size: Sendable {
@@ -70,6 +72,7 @@ public struct DenikButtonStyle: ButtonStyle {
         case .rest: Color(red: 4 / 255, green: 20 / 255, blue: 11 / 255)
         case .normal: Palette.text
         case .ghost: hovering && isEnabled ? Palette.text : Palette.text2
+        case .danger: Palette.danger
         }
     }
 
@@ -80,6 +83,7 @@ public struct DenikButtonStyle: ButtonStyle {
         case .rest: Palette.breakColor.opacity(active ? 0.88 : 1)
         case .normal: active ? Palette.panel2 : .clear
         case .ghost: active ? Palette.panel3 : .clear
+        case .danger: active ? Palette.danger.opacity(0.1) : .clear
         }
     }
 
@@ -89,6 +93,7 @@ public struct DenikButtonStyle: ButtonStyle {
         case .rest: .clear
         case .normal: Palette.lineStrong
         case .ghost: .clear
+        case .danger: Palette.lineStrong
         }
     }
 }

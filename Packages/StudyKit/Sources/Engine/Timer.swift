@@ -342,21 +342,6 @@ extension TimerState {
 
 // MARK: - Uložení do dat
 
-/// Bloky plánu, které odpovídají odučenému sezení (`src/features/planner/match.ts`).
-public enum PlanMatch {
-    /// Sezení a blok se kryjí: aspoň 15 minut, u krátkého bloku aspoň jeho polovina.
-    public static func covers(_ b: PlanBlock, start: Int, end: Int) -> Bool {
-        let blockEnd = b.start + b.durationMin * StudyClock.minute
-        let overlap = min(end, blockEnd) - max(start, b.start)
-        return Double(overlap) >= min(Double(15 * StudyClock.minute), Double(b.durationMin * StudyClock.minute) / 2)
-    }
-
-    /// Neodškrtnuté bloky stejného předmětu, se kterými se sezení časově kryje.
-    public static func blocks(_ blocks: [PlanBlock], subjectId: String, start: Int, end: Int) -> [PlanBlock] {
-        blocks.filter { !$0.isDeleted && !$0.done && $0.subjectId == subjectId && covers($0, start: start, end: end) }
-    }
-}
-
 extension AppDocument {
     /// Uloží blok z časovače jako sezení a odškrtne blok plánu, ze kterého byl spuštěn,
     /// i všechny naplánované bloky, se kterými se kryje. Téma je jen text sezení – opakování na Macu není.
@@ -366,14 +351,6 @@ extension AppDocument {
             "start": .number(Double(s.start)), "end": .number(Double(s.end)), "durationSec": .number(Double(s.durationSec)),
             "mode": .string(s.mode), "interruptions": .number(Double(s.interruptions)), "note": "",
         ]), now: now)
-        let plan = records(PlanBlock.self)
-        let linked = plan.filter { $0.id == s.planBlockId && !$0.done }
-        let matched = PlanMatch.blocks(plan, subjectId: s.subjectId, start: s.start, end: s.end).filter { $0.id != s.planBlockId }
-        let done = (linked + matched).map { b -> PlanBlock in
-            var b = b
-            b.done = true
-            return b
-        }
-        if !done.isEmpty { upsert(done, now: now) }
+        markPlanDone(subjectId: s.subjectId, start: s.start, end: s.end, linked: s.planBlockId, now: now)
     }
 }

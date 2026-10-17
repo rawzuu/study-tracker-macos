@@ -28,6 +28,16 @@ public enum Palette {
         Color(nsColor: NSColor(hex: hex) ?? NSColor(rgb: 0x9AA3AD))
     }
 
+    /// Barva předmětu smíchaná s jinou barvou (`color-mix(in srgb, var(--c) …, …)` na webu);
+    /// `amount` = podíl druhé barvy.
+    public static func subject(_ hex: String, mixedWith other: UInt32, amount: Double) -> Color {
+        let base = NSColor(hex: hex) ?? NSColor(rgb: 0x9AA3AD)
+        return Color(nsColor: base.blended(withFraction: amount, of: NSColor(rgb: other)) ?? base)
+    }
+
+    /// Text světlého vzhledu – s ním se v kalendáři ztmavují názvy předmětů na světlém pozadí.
+    public static let lightText: UInt32 = 0x1D1B18
+
     private static func dynamic(dark: UInt32, light: UInt32, alpha: (Double, Double) = (1, 1)) -> Color {
         let d = NSColor(rgb: dark, alpha: alpha.0)
         let l = NSColor(rgb: light, alpha: alpha.1)

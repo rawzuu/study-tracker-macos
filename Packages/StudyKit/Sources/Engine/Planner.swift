@@ -56,6 +56,11 @@ public enum CalendarLayout {
     public struct Lane: Hashable, Sendable {
         public let lane: Int
         public let lanes: Int
+
+        public init(lane: Int, lanes: Int) {
+            self.lane = lane
+            self.lanes = lanes
+        }
     }
 
     /// Položka přes půlnoc se kreslí ve dvou dnech – jinak by přetekla pod mřížku a ráno by chyběla.
@@ -114,7 +119,20 @@ public enum CalendarLayout {
     }
 }
 
-extension PlanMatch {
+/// Bloky plánu, které odpovídají odučenému sezení (`src/features/planner/match.ts`).
+public enum PlanMatch {
+    /// Sezení a blok se kryjí: aspoň 15 minut, u krátkého bloku aspoň jeho polovina.
+    public static func covers(_ b: PlanBlock, start: Int, end: Int) -> Bool {
+        let blockEnd = b.start + b.durationMin * StudyClock.minute
+        let overlap = min(end, blockEnd) - max(start, b.start)
+        return Double(overlap) >= min(Double(15 * StudyClock.minute), Double(b.durationMin * StudyClock.minute) / 2)
+    }
+
+    /// Neodškrtnuté bloky stejného předmětu, se kterými se sezení časově kryje.
+    public static func blocks(_ blocks: [PlanBlock], subjectId: String, start: Int, end: Int) -> [PlanBlock] {
+        blocks.filter { !$0.isDeleted && !$0.done && $0.subjectId == subjectId && covers($0, start: start, end: end) }
+    }
+
     /// Je k bloku už zapsané sezení (třeba z časovače)? Pak „Hotovo“ nic nezapisuje znovu.
     public static func hasSession(_ sessions: [Session], for block: PlanBlock) -> Bool {
         sessions.contains { !$0.isDeleted && $0.subjectId == block.subjectId && covers(block, start: $0.start, end: $0.end) }
@@ -126,5 +144,28 @@ extension PlanMatch {
         if block.start >= now { return (now - block.durationMin * StudyClock.minute, block.durationMin) }
         let ran = Int(JS.round(Double(now - block.start) / Double(StudyClock.minute)))
         return (block.start, max(1, min(block.durationMin, ran)))
+    }
+}
+
+extension AppDocument {
+    /// Uloží ručně zapsané nebo upravené sezení (`SessionModal` na webu). Nové sezení odškrtne blok,
+    /// ze kterého se zapisuje („Hotovo“), i bloky, se kterými se časově kryje; úprava plán nemění.
+    public mutating func saveSession(_ s: Session, isNew: Bool, planBlockId: String? = nil, now: Int) {
+        upsert(s, now: now)
+        if isNew { markPlanDone(subjectId: s.subjectId, start: s.start, end: s.end, linked: planBlockId, now: now) }
+    }
+
+    /// Odškrtne blok, ze kterého se učilo, a neodškrtnuté bloky stejného předmětu, se kterými se odučený
+    /// čas kryje – nejdřív ten propojený, pak ostatní (pořadí zápisu jako na webu).
+    mutating func markPlanDone(subjectId: String, start: Int, end: Int, linked: String?, now: Int) {
+        let plan = records(PlanBlock.self)
+        let own = plan.filter { $0.id == linked && !$0.done }
+        let matched = PlanMatch.blocks(plan, subjectId: subjectId, start: start, end: end).filter { $0.id != linked }
+        let done = (own + matched).map { b -> PlanBlock in
+            var b = b
+            b.done = true
+            return b
+        }
+        if !done.isEmpty { upsert(done, now: now) }
     }
 }

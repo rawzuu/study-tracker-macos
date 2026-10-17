@@ -1,7 +1,7 @@
 /// Chování JavaScriptu tam, kde se Swift liší a na výsledku záleží (parita s webem).
-enum JS {
+public enum JS {
     /// `Math.round`: nejbližší celé číslo, poloviny nahoru (−2,5 → −2). `rounded()` by dalo −3.
-    static func round(_ x: Double) -> Double {
+    public static func round(_ x: Double) -> Double {
         let r = x.rounded(.down)
         return x - r >= 0.5 ? r + 1 : r
     }
@@ -13,7 +13,7 @@ enum JS {
     ///
     /// Delší pole se v kalendáři nevyskytují; pro ně je tu obyčejné stabilní řazení (pro konzistentní
     /// porovnání dává stejný výsledek jako V8).
-    static func sort<T>(_ items: [T], by compare: (T, T) -> Int) -> [T] {
+    public static func sort<T>(_ items: [T], by compare: (T, T) -> Int) -> [T] {
         var a = items
         let n = a.count
         guard n >= 2 else { return a }

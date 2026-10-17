@@ -50,6 +50,26 @@ public enum DemoData {
             "start": .number(Double(today + 20 * StudyClock.hour)), "durationMin": 45, "done": false, "note": "",
         ]), now: created)
 
+        // Kalendář: blok zítra, hotový blok včera (kryje se se sezením, ve „Vše“ ho nahradí) a blok přes půlnoc.
+        func block(_ id: String, _ subject: String, _ title: String, day: Int, minute: Int, duration: Int, done: Bool = false) -> PlanBlock {
+            PlanBlock(raw: [
+                "id": .string(id), "subjectId": .string(subject), "title": .string(title),
+                "start": .number(Double(clock.atMinutes(clock.addDays(today, day), minute))), "durationMin": .number(Double(duration)),
+                "done": .bool(done), "note": "",
+            ])
+        }
+        doc.upsert([
+            block("demo-plan-zitra", "demo-anat", "Horní končetina", day: 1, minute: 9 * 60, duration: 90),
+            block("demo-plan-vcera", "demo-bio", "", day: -1, minute: 11 * 60, duration: 45, done: true),
+            block("demo-plan-noc", "demo-lat", "Deklinace", day: 2, minute: 23 * 60, duration: 60),
+        ], now: created)
+        doc.upsert([
+            Exam(raw: ["id": "demo-exam-anat", "subjectId": "demo-anat", "name": "Zápočet z anatomie",
+                       "date": .string(clock.dayKey(clock.addDays(today, 4))), "time": "09:00", "note": ""]),
+            Exam(raw: ["id": "demo-exam-fyz", "subjectId": "demo-fyz", "name": "Zkouška z fyziologie",
+                       "date": .string(clock.dayKey(clock.addDays(today, 16))), "time": "", "note": ""]),
+        ], now: created)
+
         // Rychlý vlastní režim (3 s učení) a minimum 1 s, ať UI test projde celý blok bez čekání.
         doc.upsert(TimerPreset(raw: [
             "id": "demo-rychly", "name": "Rychlý test", "workMin": 0.05, "shortBreakMin": 0.05, "longBreakMin": 0.1, "roundsBeforeLong": 4,

@@ -49,6 +49,20 @@ struct SnapshotTests {
         try render(DashboardView(snapshotNow: now).environment(app).environment(timer), name: "dashboard", height: 1500)
     }
 
+    @Test("Kalendář: týden a měsíc", arguments: ["week", "month"])
+    func calendar(_ variant: String) async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        var t = now - 20 * 60_000
+        let timer = TimerStore(app: app) { t }
+        timer.configure(TimerSetup(subjectId: "demo-lat", topic: "Deklinace"))
+        timer.start()
+        t = now
+        try render(CalendarView(snapshotNow: now, mode: variant == "week" ? .week : .month).environment(app).environment(timer),
+                   name: "calendar-\(variant)", height: variant == "week" ? 1900 : 1500)
+    }
+
     private func render(_ view: some View, name: String, height: CGFloat = 920) throws {
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["ST_SNAPSHOT_DIR"]!)
         for (scheme, appearance) in [("dark", NSAppearance.Name.darkAqua), ("light", .aqua)] {
