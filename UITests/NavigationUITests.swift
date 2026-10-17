@@ -10,6 +10,8 @@ final class NavigationUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting"]
         app.launch()
+        // Na CI občas zůstane vpředu jiné okno – kliknutí by pak skončilo chybou „not foreground“.
+        app.activate()
         return app
     }
 
@@ -177,8 +179,7 @@ final class NavigationUITests: XCTestCase {
         let save = app.buttons["block.save"]
         XCTAssertTrue(save.waitForExistence(timeout: 2))
         XCTAssertFalse(save.isEnabled, "bez předmětu nejde uložit")
-        app.popUpButtons["block.subject"].click()
-        app.menuItems["Biochemie"].click()
+        choose("Biochemie", in: app.popUpButtons["block.subject"], app)
         let title = app.textFields["block.title"]
         title.click()
         title.typeText("UI blok")
@@ -210,8 +211,7 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
         app.staticTexts["nav.planovac"].click()
         app.buttons["calendar.addExam"].click()
-        app.popUpButtons["exam.subject"].click()
-        app.menuItems["Latina"].click()
+        choose("Latina", in: app.popUpButtons["exam.subject"], app)
         let name = app.textFields["exam.name"]
         name.click()
         name.typeText("UI zkouška")
@@ -226,8 +226,26 @@ final class NavigationUITests: XCTestCase {
         app.buttons["exam.delete"].click()
         app.buttons["exam.confirmDelete"].firstMatch.click()
         XCTAssertTrue(row.waitForNonExistence(timeout: 3), "smazaná zkouška zmizí")
-        app.buttons["toast.undo"].click()
+        clickUndo(app)
         XCTAssertTrue(row.waitForExistence(timeout: 3), "Vrátit zkoušku obnoví")
+    }
+
+    /// Hodina z rozvrhu: „Tento termín odpadá“ ji z kalendáře schová, „Vrátit“ ji vrátí.
+    @MainActor
+    func testLectureSkipAndUndo() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.planovac"].click()
+        let lecture = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "cal.lecture.Anatomie")).firstMatch
+        XCTAssertTrue(lecture.waitForExistence(timeout: 3), "přednáška z rozvrhu je v kalendáři")
+        let id = lecture.identifier
+        lecture.click()
+        app.buttons["lecture.skip"].click()
+        let same = app.descendants(matching: .any)[id]
+        XCTAssertTrue(same.waitForNonExistence(timeout: 3), "odpadlý termín zmizí")
+        clickUndo(app)
+        XCTAssertTrue(same.waitForExistence(timeout: 3), "Vrátit termín vrátí")
     }
 
     /// Spuštění aplikace odkazem ze Zkratek, když aplikace neběží (studený start). Že běžící blok
@@ -254,6 +272,27 @@ final class NavigationUITests: XCTestCase {
             app.launchArguments = ["-uiTesting"]
             app.launch()
         }
+    }
+
+    /// Výběr položky z rozbalovací nabídky – až když je nabídka (třeba v právě otevřeném okně) vidět.
+    @MainActor private func choose(_ item: String, in popUp: XCUIElement, _ app: XCUIApplication) {
+        XCTAssertTrue(popUp.waitForExistence(timeout: 3))
+        popUp.click()
+        let menuItem = app.menuItems[item]
+        XCTAssertTrue(menuItem.waitForExistence(timeout: 2), "v nabídce je \(item)")
+        menuItem.click()
+    }
+
+    /// „Vrátit“ v hlášce po zavření okna. Na pomalém CI se okno po zavření listu někdy ještě
+    /// nestihne znovu aktivovat a první klik nedojde – pak se klikne ještě jednou.
+    @MainActor private func clickUndo(_ app: XCUIApplication) {
+        let undo = app.buttons["toast.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 2))
+        for _ in 0..<3 where undo.exists {
+            undo.click()
+            _ = undo.waitForNonExistence(timeout: 1)
+        }
+        XCTAssertFalse(undo.exists, "hláška po kliknutí na Vrátit zmizí")
     }
 
     /// Na macOS nese text popisku SwiftUI `value`, ne `label`.

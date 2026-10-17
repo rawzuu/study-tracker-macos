@@ -70,6 +70,24 @@ public enum DemoData {
                        "date": .string(clock.dayKey(clock.addDays(today, 16))), "time": "", "note": ""]),
         ], now: created)
 
+        // Rozvrh: přednáška v pondělí a ve středu, cvičení ve čtvrtek – od dvou týdnů zpět do měsíce dopředu.
+        let week = clock.startOfWeek(now)
+        var lectures: [TimetableEvent] = []
+        for w in -2...4 {
+            for (day, minute, minutes, title, room) in [(0, 9 * 60 + 15, 90, "Anatomie – přednáška", "Posluchárna A"),
+                                                        (2, 9 * 60 + 15, 90, "Anatomie – přednáška", "Posluchárna A"),
+                                                        (3, 13 * 60, 100, "Fyziologie – cvičení", "Praktikum 2")] {
+                let start = clock.atMinutes(clock.addDays(week, w * 7 + day), minute)
+                lectures.append(TimetableEvent(raw: [
+                    "key": .string("\(title)|\(start)"), "series": .string(title), "title": .string(title), "location": .string(room),
+                    "start": .number(Double(start)), "end": .number(Double(start + minutes * StudyClock.minute)),
+                ]))
+            }
+        }
+        var timetable = Timetables.new(name: "Rozvrh LS", events: lectures.sorted { $0.start < $1.start }, now: created)
+        timetable.id = "demo-rozvrh"
+        doc.upsert(timetable, now: created)
+
         // Rychlý vlastní režim (3 s učení) a minimum 1 s, ať UI test projde celý blok bez čekání.
         doc.upsert(TimerPreset(raw: [
             "id": "demo-rychly", "name": "Rychlý test", "workMin": 0.05, "shortBreakMin": 0.05, "longBreakMin": 0.1, "roundsBeforeLong": 4,

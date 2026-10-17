@@ -111,6 +111,9 @@ public struct CalendarView: View {
     private func headerButtons(now: Int, week: Int) -> some View {
         let clock = store.clock
         HStack(spacing: 8) {
+            Button { sheet = .init(.timetable) } label: { Label("Rozvrh", systemImage: "building.columns") }
+                .buttonStyle(.denik(.normal))
+                .accessibilityIdentifier("calendar.timetable")
             Button { sheet = .init(.exam(ExamDraft(newAt: now, clock: clock))) } label: { Label("Zkouška", systemImage: "graduationcap") }
                 .buttonStyle(.denik(.normal))
                 .accessibilityIdentifier("calendar.addExam")
@@ -180,7 +183,9 @@ public struct CalendarView: View {
                     if let b = store.document.record(PlanBlock.self, id: id) { sheet = .init(.block(PlanBlockDraft(editing: b, clock: clock))) }
                 case .session(let id):
                     if let s = store.document.record(Session.self, id: id) { sheet = .init(.session(SessionDraft(editing: s, clock: clock))) }
-                case .live, .lecture:
+                case .lecture(let timetableId, let key):
+                    sheet = .init(.lecture(timetableId: timetableId, key: key))
+                case .live:
                     break
                 }
             },
@@ -209,6 +214,8 @@ public struct CalendarView: View {
         case .block(let draft): PlanBlockEditor(draft: draft, openTimer: { openPage("casovac") })
         case .session(let draft): SessionEditor(draft: draft)
         case .exam(let draft): ExamEditor(draft: draft)
+        case .timetable: TimetableSheet()
+        case .lecture(let timetableId, let key): LectureSheet(timetableId: timetableId, key: key) { self.sheet = .init(.timetable) }
         }
     }
 }
@@ -220,6 +227,8 @@ struct CalendarSheet: Identifiable {
         case block(PlanBlockDraft)
         case session(SessionDraft)
         case exam(ExamDraft)
+        case timetable
+        case lecture(timetableId: String, key: String)
     }
 
     let id = UUID()

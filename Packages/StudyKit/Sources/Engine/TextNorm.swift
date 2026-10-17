@@ -20,7 +20,7 @@ public func normalizedName(_ s: String) -> String {
     return out
 }
 
-extension String {
+extension StringProtocol {
     /// `trim()` z JavaScriptu: bez mezer a konců řádků na začátku a na konci – i nedělitelné mezery a BOM.
     public var jsTrimmed: String { trimmingCharacters(in: jsWhitespace) }
 }

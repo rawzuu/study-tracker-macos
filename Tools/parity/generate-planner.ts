@@ -28,6 +28,8 @@ const load = (p: string) => import(pathToFileURL(join(WEB, p)).href);
 const T = await load('src/lib/time.ts');
 const M = await load('src/features/planner/match.ts');
 const TR = await load('src/lib/trash.ts');
+const IC = await load('src/lib/ical.ts');
+const TT = await load('src/lib/timetable.ts');
 const { emptyData } = await load('src/data/schema.ts');
 const { MIN, HOUR, DAY } = T as { MIN: number; HOUR: number; DAY: number };
 
@@ -193,6 +195,186 @@ function planner() {
   write('planner.json', { layout, split, match, prefill, restore });
 }
 
+// ---------- 2. rozvrh .ics: čtení (parseIcs) ----------
+/** Ručně psané kalendáře na ošemetné případy: pásma, změny času, výjimky, přesuny, zalomené řádky… */
+const ICS_CASES: string[] = [
+  'BEGIN:VEVENT\nSUMMARY:Bez kalendáře\nEND:VEVENT',
+  '',
+  [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'X-WR-CALNAME:Rozvrh\\, LS 2026', 'X-WR-TIMEZONE:Europe/Prague',
+    'BEGIN:VTIMEZONE', 'TZID:Europe/Prague', 'BEGIN:STANDARD', 'DTSTART:19701025T030000', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100', 'END:STANDARD', 'END:VTIMEZONE',
+    'BEGIN:VEVENT', 'UID:anat-pr', 'SUMMARY:Anatomie – přednáška', 'LOCATION:Posluchárna A\\, 2. patro', 'DTSTART;TZID=Europe/Prague:20260921T091500',
+    'DTEND;TZID=Europe/Prague:20260921T104500', 'RRULE:FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20261216', 'EXDATE;TZID=Europe/Prague:20261028T091500,20261102T091500',
+    'BEGIN:VALARM', 'TRIGGER:-PT10M', 'SUMMARY:Alarm se nepočítá', 'END:VALARM', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:anat-pr', 'RECURRENCE-ID;TZID=Europe/Prague:20261007T091500', 'SUMMARY:Anatomie – přednáška (přesunuto)',
+    'DTSTART;TZID=Europe/Prague:20261008T130000', 'DTEND;TZID=Europe/Prague:20261008T143000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:anat-pr', 'RECURRENCE-ID;TZID=Europe/Prague:20261014T091500', 'STATUS:CANCELLED', 'DTSTART;TZID=Europe/Prague:20261014T091500', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:zapoc', 'SUMMARY:Zápočtový týden', 'DTSTART;VALUE=DATE:20261214', 'DTEND;VALUE=DATE:20261219', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:zrus', 'SUMMARY:Zrušeno', 'STATUS:cancelled', 'DTSTART:20261001T100000', 'DTEND:20261001T110000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:dlouhy', 'SUMMARY:Seminář s dlouhým názvem, který se v exportu zalomí na víc řádků a musí se zase', ' spojit dohromady', 'DTSTART:20261002T',
+    '\t080000', 'DURATION:PT1H30M', 'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n'),
+  // UTC, denní opakování s intervalem a počtem, výjimky v UTC
+  ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:d', 'SUMMARY:Ranní', 'DTSTART:20261023T060000Z', 'DTEND:20261023T070000Z',
+    'RRULE:FREQ=DAILY;INTERVAL=2;COUNT=6', 'EXDATE:20261027T060000Z', 'EXDATE;VALUE=DATE:20261029', 'END:VEVENT', 'END:VCALENDAR'].join('\n'),
+  // místní čas bez pásma ve dnech změny času (2:30 neexistuje / je dvakrát)
+  ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'SUMMARY:Noční jaro', 'DTSTART:20260322T023000', 'DTEND:20260322T033000', 'RRULE:FREQ=WEEKLY;COUNT=3', 'END:VEVENT',
+    'BEGIN:VEVENT', 'SUMMARY:Noční podzim', 'DTSTART:20261018T023000', 'DURATION:PT2H', 'RRULE:FREQ=WEEKLY;COUNT=3', 'END:VEVENT',
+    'BEGIN:VEVENT', 'SUMMARY:Praha jaro', 'DTSTART;TZID=Europe/Prague:20260322T023000', 'DTEND;TZID=Europe/Prague:20260322T033000', 'RRULE:FREQ=WEEKLY;COUNT=3', 'END:VEVENT',
+    'BEGIN:VEVENT', 'SUMMARY:Praha podzim', 'DTSTART;TZID=Europe/Prague:20261018T023000', 'DTEND;TZID=Europe/Prague:20261018T033000', 'RRULE:FREQ=WEEKLY;COUNT=3', 'END:VEVENT',
+    'END:VCALENDAR'].join('\n'),
+  // různá pásma, i neznámá a psaná malými písmeny
+  ['BEGIN:VCALENDAR',
+    ...['America/New_York', 'Asia/Kolkata', 'Australia/Lord_Howe', 'Europe/London', 'UTC', 'Etc/GMT-2', 'Mars/Olympus', 'europe/prague', 'Central Europe Standard Time', '"Europe/Prague"']
+      .flatMap((tz, i) => ['BEGIN:VEVENT', `UID:tz${i}`, `SUMMARY:Pásmo ${tz}`, `DTSTART;TZID=${tz}:20261026T083000`, `DTEND;TZID=${tz}:20261026T100000`,
+        'RRULE:FREQ=WEEKLY;BYDAY=MO,TH;COUNT=4', 'END:VEVENT']),
+    'END:VCALENDAR'].join('\n'),
+  // řazení a duplicity: stejný začátek, různé názvy (i lišící se jen mezerami)
+  ['BEGIN:VCALENDAR',
+    ...['Anatomie – cvičení B', 'anatomie – cvičení A', 'Ánatomie', 'Zoologie', '  Matematika   I  ', 'Matematika I', 'Matematika I', '10. seminář', '9. seminář', 'Čeština', 'Cvičení', 'Chemie']
+      .flatMap((t, i) => ['BEGIN:VEVENT', `UID:s${i}`, `SUMMARY:${t}`, 'DTSTART:20261020T100000', 'DTEND:20261020T113000', 'END:VEVENT']),
+    'BEGIN:VEVENT', 'DTSTART:20261020T100000', 'DTEND:20261020T110000', 'LOCATION:Bez názvu \\n\\N\\;\\\\x', 'END:VEVENT',
+    'END:VCALENDAR'].join('\n'),
+  // podivná pravidla opakování a délky
+  ['BEGIN:VCALENDAR',
+    ...[
+      'FREQ=MONTHLY;COUNT=3', 'FREQ=WEEKLY;BYDAY=1MO,-1FR,XX;COUNT=4', 'FREQ=WEEKLY;INTERVAL=0;COUNT=3', 'FREQ=WEEKLY;INTERVAL=abc;COUNT=3',
+      'FREQ=WEEKLY;INTERVAL=2.5;COUNT=3', 'FREQ=DAILY;INTERVAL=1.5;COUNT=4', 'FREQ=WEEKLY;COUNT=abc', 'FREQ=WEEKLY;COUNT=0', 'FREQ=WEEKLY;COUNT=2.5',
+      'FREQ=WEEKLY;COUNT=0x3', 'FREQ=WEEKLY;COUNT= 2 ', 'FREQ=WEEKLY;UNTIL=20261124T225959Z', 'FREQ=WEEKLY', 'FREQ=DAILY;UNTIL=20290101',
+      'freq=weekly;count=2', 'FREQ=WEEKLY;BYDAY=;COUNT=2', 'FREQ=WEEKLY;BYDAY=su,mo;COUNT=3', 'FREQ=DAILY;COUNT=1e1',
+    ].flatMap((r, i) => ['BEGIN:VEVENT', `UID:r${i}`, `SUMMARY:Pravidlo ${i}`, 'DTSTART:20261021T120000', 'DTEND:20261021T130000', `RRULE:${r}`, 'END:VEVENT']),
+    ...['PT90M', 'P1DT2H', 'P1W', 'PT0M', 'P', 'PT45M30S', 'P2D', 'PT1H'].flatMap((d, i) => ['BEGIN:VEVENT', `UID:d${i}`, `SUMMARY:Délka ${d}`, 'DTSTART:20261022T090000', `DURATION:${d}`, 'END:VEVENT']),
+    'BEGIN:VEVENT', 'SUMMARY:Konec před začátkem', 'DTSTART:20261022T090000', 'DTEND:20261022T080000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'SUMMARY:Bez konce', 'DTSTART:20261022T090000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'SUMMARY:Datum jako čas', 'DTSTART;VALUE=DATE:20261022T090000', 'DTEND:20261022T100000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'SUMMARY:Špatné datum', 'DTSTART:2026-10-22T09:00', 'DTEND:20261022T100000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'SUMMARY;X-P="a:b";LANGUAGE=cs:Parametr s dvojtečkou', 'DTSTART:20261022T090000', 'DTEND:20261022T091500', 'END:VEVENT',
+    'END:VCALENDAR'].join('\r'),
+  // přesunutý termín bez hlavní akce, dvakrát exportovaná akce
+  ['BEGIN:VCALENDAR', 'BEGIN:VEVENT', 'UID:sirotek', 'RECURRENCE-ID:20261105T100000', 'SUMMARY:Jen přesun', 'DTSTART:20261106T100000', 'DTEND:20261106T110000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:dvakrat', 'SUMMARY:Dvakrát', 'DTSTART:20261105T100000', 'DTEND:20261105T110000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:dvakrat', 'SUMMARY:Dvakrát', 'DTSTART:20261105T100000', 'DTEND:20261105T110000', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:m', 'SUMMARY:S přesunem v UTC', 'DTSTART;TZID=Europe/Prague:20261102T100000', 'DTEND;TZID=Europe/Prague:20261102T110000', 'RRULE:FREQ=WEEKLY;COUNT=3', 'END:VEVENT',
+    'BEGIN:VEVENT', 'UID:m', 'RECURRENCE-ID:20261109T090000Z', 'SUMMARY:Přesun (UTC)', 'DTSTART:20261110T120000Z', 'END:VEVENT',
+    'END:VCALENDAR'].join('\n'),
+];
+
+function ical() {
+  const { int, pick, chance } = random(0x1ca15);
+  const zones = ['', '', 'Europe/Prague', 'Europe/Prague', 'Z', 'America/New_York', 'Europe/London'];
+  const titles = ['Anatomie – přednáška', 'Anatomie – cvičení', 'Fyziologie', 'Biochemie I', 'Latina', 'Histologie – praktikum', 'Tělesná výchova'];
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const stamp = (t: Date, h: number, m: number) => `${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}T${pad(h)}${pad(m)}00`;
+  const dt = (name: string, zone: string, value: string) => (zone === 'Z' ? `${name}:${value}Z` : zone ? `${name};TZID=${zone}:${value}` : `${name}:${value}`);
+  const texts = [...ICS_CASES];
+  for (let n = 0; n < 120; n++) {
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0'];
+    if (chance(0.5)) lines.push(`X-WR-CALNAME:Rozvrh ${n}`);
+    for (let k = int(1, 7); k > 0; k--) {
+      const zone = pick(zones);
+      const first = new Date(pick([2026, 2027]), pick([1, 8, 9]), int(1, 28));
+      const h = int(7, 18);
+      const m = pick([0, 15, 30, 45]);
+      const minutes = pick([45, 90, 100, 135]);
+      const uid = `u${n}-${k}`;
+      const title = pick(titles);
+      lines.push('BEGIN:VEVENT', `UID:${uid}`, `SUMMARY:${title}`, dt('DTSTART', zone, stamp(first, h, m)));
+      if (chance(0.7)) {
+        const end = new Date(first.getTime() + minutes * MIN);
+        lines.push(dt('DTEND', zone, stamp(end, end.getHours(), end.getMinutes())));
+      } else lines.push(`DURATION:PT${minutes}M`);
+      if (chance(0.5)) lines.push(`LOCATION:Učebna ${int(1, 400)}`);
+      const weekly = chance(0.8);
+      if (weekly) {
+        const days = ['MO', 'TU', 'WE', 'TH', 'FR'].filter(() => chance(0.3));
+        const parts = [`FREQ=${chance(0.9) ? 'WEEKLY' : 'DAILY'}`];
+        if (days.length && chance(0.6)) parts.push(`BYDAY=${days.join(',')}`);
+        if (chance(0.2)) parts.push(`INTERVAL=${int(2, 3)}`);
+        if (chance(0.4)) parts.push(`COUNT=${int(1, 16)}`);
+        else if (chance(0.7)) {
+          const until = new Date(first.getTime() + int(20, 150) * DAY);
+          parts.push(chance(0.5) ? `UNTIL=${stamp(until, 0, 0).slice(0, 8)}` : `UNTIL=${stamp(until, 22, 59)}Z`);
+        }
+        lines.push(`RRULE:${parts.join(';')}`);
+        for (let e = int(0, 2); e > 0; e--) {
+          const ex = new Date(first.getTime() + int(0, 10) * 7 * DAY);
+          lines.push(dt('EXDATE', zone, stamp(ex, h, m)));
+        }
+      }
+      if (chance(0.1)) lines.push('STATUS:CANCELLED');
+      lines.push('END:VEVENT');
+      if (weekly && chance(0.4)) {
+        // přesunutý nebo zrušený termín řady
+        const occ = new Date(first.getTime() + int(0, 6) * 7 * DAY);
+        const to = new Date(occ.getTime() + int(-2, 2) * DAY + int(-3, 3) * HOUR);
+        lines.push('BEGIN:VEVENT', `UID:${uid}`, dt('RECURRENCE-ID', zone, stamp(occ, h, m)), `SUMMARY:${title}${chance(0.5) ? ' (náhrada)' : ''}`);
+        if (chance(0.3)) lines.push('STATUS:CANCELLED');
+        lines.push(dt('DTSTART', zone, stamp(to, to.getHours(), to.getMinutes())));
+        if (chance(0.6)) lines.push(`DURATION:PT${pick([60, 90])}M`);
+        lines.push('END:VEVENT');
+      }
+    }
+    lines.push('END:VCALENDAR');
+    texts.push(lines.join(pick(['\r\n', '\n'])));
+  }
+  const out = texts.map((text) => {
+    try {
+      const r = IC.parseIcs(text);
+      return { text, name: r.name, skippedAllDay: r.skippedAllDay, events: r.events };
+    } catch (e) {
+      return { text, error: (e as Error).message };
+    }
+  });
+  write('ical.json', out);
+}
+
+// ---------- 3. rozvrh: hodiny v týdnu, náhled změn, nová verze, přehled řad ----------
+function timetables() {
+  const { int, pick, chance } = random(0x77ab1e);
+  const series = ['Anatomie – přednáška', 'Anatomie – cvičení', 'Fyziologie', 'Biochemie I', 'Latina', 'Žurnalistika', 'chemie', 'Čeština'];
+  const base = new Date(2026, 8, 21).getTime();
+  const event = (s: string, start: number, minutes: number) => ({ key: `${s}|${start}`, series: s, title: s, location: '', start, end: start + minutes * MIN });
+  const semester = () => {
+    const list: ReturnType<typeof event>[] = [];
+    for (let k = int(1, 6); k > 0; k--) {
+      const s = pick(series);
+      const first = T.addDays(base, int(0, 6));
+      const minutes = pick([45, 90, 100]);
+      const at = T.atMinutes(first, int(7 * 4, 18 * 4) * 15);
+      for (let w = 0; w < int(2, 14); w++) list.push(event(s, T.addDays(at, w * 7), minutes));
+    }
+    return list.sort((a, b) => a.start - b.start);
+  };
+  const out = Array.from({ length: 60 }, () => {
+    const old = semester();
+    // nová verze: část termínů zůstane, část zmizí, přibudou nové
+    const next = [...old.filter(() => chance(0.8)), ...semester().filter(() => chance(0.3))].sort((a, b) => a.start - b.start);
+    const all = [...new Set(old.map((e) => e.series))];
+    const tt = {
+      id: 'tt', name: 'Rozvrh', importedAt: 1, events: old,
+      hiddenSeries: all.filter(() => chance(0.3)).concat(chance(0.2) ? ['Neexistuje'] : []),
+      skipped: old.filter(() => chance(0.1)).map((e) => e.key).concat(chance(0.2) ? ['x|1'] : []),
+      createdAt: 1, updatedAt: 1,
+    };
+    const now = T.addDays(base, int(-5, 100)) + int(0, 86_399) * 1000;
+    const from = T.startOfWeek(T.addDays(base, int(0, 100)));
+    const to = T.addDays(from, 7);
+    const data = { timetables: chance(0.1) ? [{ ...tt, deletedAt: 5 }] : [tt, { ...tt, id: 'tt2', events: old.slice(0, 2), hiddenSeries: [], skipped: [] }] };
+    return {
+      tt, next, now, from, to,
+      lectures: TT.lecturesIn(data, from, to).map((l: { timetableId: string; key: string }) => `${l.timetableId}:${l.key}`),
+      deleted: !!data.timetables[0].deletedAt,
+      diff: TT.diffTimetable(old, next, now),
+      replaced: JSON.stringify(TT.replaceEvents(tt, next, now)),
+      series: TT.seriesOf(tt, now),
+    };
+  });
+  write('timetables.json', out);
+}
+
 mkdirSync(OUT, { recursive: true });
 planner();
+ical();
+timetables();
 console.log(`Kontrolní data kalendáře → ${OUT}`);
