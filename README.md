@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **v0.3.0 – M2 hotový.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii a Předměty, umí upravovat předměty a má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi – hotové bloky ukládá jako sezení. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.4.0 – M3 hotový.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -14,11 +14,13 @@ Packages/StudyKit/      Swift Package s moduly aplikace
     JSON/               JSON se zachováním pořadí klíčů, zápis shodný s JSON.stringify
     Model/              typované pohledy na záznamy (Session, Topic, Settings…)
     Data/               schéma, migrace, slučování (merge), stabilní zápis (serialize)
-  Sources/Engine/       výpočty bez UI: kalendář v místním čase, souhrny, série, české formáty
-  Sources/Networking/   GitHub Contents API (URLSession), chyby a hlášky jako na webu
+  Sources/Engine/       výpočty bez UI: kalendář v místním čase, souhrny, série, české formáty,
+                        časovač, rozložení kalendáře, čtení a zápis .ics, rozvrh, koš
+  Sources/Networking/   GitHub Contents API a gisty (URLSession), chyby a hlášky jako na webu
   Sources/Persistence/  lokální kopie dat (GRDB/SQLite, WAL, zálohy) a token v Klíčence
   Sources/Sync/         SyncEngine (actor): stáhnout → sloučit → nahrát se sha, režim jen čtení
-  Sources/AppModel/     AppStore (@Observable), AppEnvironment (DI), připojení zálohy
+  Sources/AppModel/     AppStore (@Observable), AppEnvironment (DI), připojení zálohy, časovač,
+                        odebíraný kalendář, hlášky s „Vrátit“
   Sources/DesignSystem/ barvy a prvky vzhledu „Deník“
   Sources/Features/     obrazovky (SwiftUI) a jejich stavy (čisté funkce s testy)
   Tests/                testy každého modulu, */Fixtures = kontrolní data z webu
@@ -27,7 +29,7 @@ Config/                 xcconfig (podpis)
 project.yml             definice projektu pro XcodeGen
 ```
 
-Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persistence` → `Sync` → `AppModel` → `Features` (+ `DesignSystem`) → aplikace. V dalších milnících přibudou do `Engine` algoritmy (FSRS-6, Co teď?, ranní plán, statistiky, úspěchy) a do `Networking` AnkiConnect.
+Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persistence` → `Sync` → `AppModel` → `Features` (+ `DesignSystem`) → aplikace. V dalších milnících přibudou do `Engine` algoritmy (Co teď?, ranní plán, statistiky, úspěchy) a do `Networking` AnkiConnect.
 
 **Tok dat:** View ← stav obrazovky (čistá funkce z `AppDocument`) ← `AppStore` (`@Observable @MainActor`, drží neměnný `AppDocument`) ⇄ `SyncEngine` (actor) → `LocalStore` (SQLite na Macu) a GitHub Contents API → `data.json` v soukromém repu. Závislosti se předávají přes `AppEnvironment` a protokoly (`RemoteDataFile`, `SecretStore`, `BackupService`), testy je nahrazují podvrženými implementacemi.
 
@@ -52,7 +54,7 @@ Webová aplikace do dat průběžně přidává nová pole a kolekce. Pevné `Co
 
 ### Paritní testy
 
-`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. `generate-engine.ts` stejně ověří kalendář, formáty a souhrny (`src/lib/time.ts`, `stats.ts`) v pražském čase – včetně dnů změny času, kdy 2:30 buď neexistuje, nebo je dvakrát – do `EngineTests/Fixtures`. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
+`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. `generate-engine.ts` stejně ověří kalendář, formáty a souhrny (`src/lib/time.ts`, `stats.ts`) v pražském čase – včetně dnů změny času, kdy 2:30 buď neexistuje, nebo je dvakrát – do `EngineTests/Fixtures`. `generate-planner.ts` ověří kalendář (rozložení položek, dělení přes půlnoc, odškrtnutí, obnovení z koše), čtení .ics (pásma, opakování, výjimky, přesuny), rozvrh a export .ics včetně otisku odebíraného kalendáře. Funkce, které web nemá exportované (jsou uvnitř komponent), se vyjmou ze zdrojového kódu komponenty a spustí beze změny. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
 
 ## Sestavení
 
@@ -99,14 +101,20 @@ Běžící blok odkaz nikdy nepřeruší; mezi bloky nejdřív ukončí čekají
 
 ## Připojení dat
 
-V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained token jen pro Mac (repo `study-tracker-data`, *Contents: Read and write*) a vlož ho. GitHub jméno se zjistí z tokenu, token se uloží do Klíčenky macOS.
+V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained token jen pro Mac (repo `study-tracker-data`, *Contents: Read and write*) a vlož ho. GitHub jméno se zjistí z tokenu, token se uloží do Klíčenky macOS. Pro odebíraný kalendář potřebuje token navíc *Account permissions → Gists: Read and write*.
+
+## Kalendář a rozvrh
+
+- **Rozvrh:** Kalendář → Rozvrh → vyber export .ics ze školního systému. Nová verze rozvrhu ukáže před uložením, co se změní; proběhlé hodiny, skryté předměty a odpadlé termíny zůstanou.
+- **Export:** Kalendář → Do kalendáře uloží soubor .ics (stálá UID – opakovaný import aktualizuje stejné události).
+- **Odebíraný kalendář:** Nastavení → Odebíraný kalendář publikuje plán do tajného gistu; Apple Kalendář si ho sám stahuje. Mac i web ho po změně plánu aktualizují (se stejným obsahem, takže se navzájem nepřepisují zbytečně).
 
 ## Bezpečnost dat
 
 - Testy nikdy nesahají na skutečné datové repo ani na skutečnou Anki (port 8765); kontrolní data jsou syntetická.
 - Kontrola na skutečných datech běží jen lokálně (`ST_REAL_DATA`, `ST_REAL_EXPECTED`), data do repa nepatří.
 - Token je v Klíčence (jen pro tuto aplikaci, bez iCloudu) a nikdy se neobjeví ve výpisu ani v logu. Před prvním zápisem z Macu se datové repo zálohuje tagem.
-- Aplikace běží v sandboxu, ze sítě smí jen odchozí spojení. UI testy (`-uiTesting`) běží s ukázkovými daty v paměti – nesahají na skutečná data, Klíčenku ani síť.
+- Aplikace běží v sandboxu, ze sítě smí jen odchozí spojení a ze souborů jen ty, které uživatel sám vybere (import a export .ics). UI testy (`-uiTesting`) běží s ukázkovými daty v paměti – nesahají na skutečná data, Klíčenku ani síť.
 
 ## Technologie
 

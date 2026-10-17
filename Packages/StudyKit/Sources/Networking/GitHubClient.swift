@@ -71,6 +71,15 @@ public struct GitHubClient: Sendable {
 
     // MARK: - Požadavky
 
+    /// Požadavek s tělem JSON (`POST`, `PATCH`).
+    func jsonRequest(_ path: String, method: String, body: some Encodable) throws(GitHubError) -> URLRequest {
+        var r = request(path)
+        r.httpMethod = method
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        do { r.httpBody = try JSONEncoder().encode(body) } catch { throw .invalidResponse }
+        return r
+    }
+
     private func contentsPath(_ l: RepoLocation) -> String {
         repoPath(l) + "/contents/" + URLPath.filePath(l.path)
     }
@@ -79,7 +88,7 @@ public struct GitHubClient: Sendable {
         "/repos/\(URLPath.component(l.owner))/\(URLPath.component(l.repo))"
     }
 
-    private func request(_ path: String, query: String? = nil, accept: String = "application/vnd.github+json") -> URLRequest {
+    func request(_ path: String, query: String? = nil, accept: String = "application/vnd.github+json") -> URLRequest {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
         components.percentEncodedPath = components.percentEncodedPath + path
         components.percentEncodedQuery = query
@@ -91,7 +100,7 @@ public struct GitHubClient: Sendable {
         return r
     }
 
-    private func send(_ request: URLRequest) async throws(GitHubError) -> (Data, HTTPURLResponse) {
+    func send(_ request: URLRequest) async throws(GitHubError) -> (Data, HTTPURLResponse) {
         let result: (Data, URLResponse)
         do {
             result = try await session.data(for: request)
@@ -106,13 +115,13 @@ public struct GitHubClient: Sendable {
         return (result.0, http)
     }
 
-    private func check(_ http: HTTPURLResponse) throws(GitHubError) {
+    func check(_ http: HTTPURLResponse) throws(GitHubError) {
         guard (200..<300).contains(http.statusCode) else {
             throw GitHubError.from(status: http.statusCode, headers: http.allHeaderFields)
         }
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws(GitHubError) -> T {
+    func decode<T: Decodable>(_ type: T.Type, from data: Data) throws(GitHubError) -> T {
         do { return try JSONDecoder().decode(type, from: data) } catch { throw .invalidResponse }
     }
 }

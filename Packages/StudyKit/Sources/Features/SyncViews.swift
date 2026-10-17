@@ -256,7 +256,7 @@ public struct SyncSettingsView: View {
             Text("0. Pokud ještě nemáš soukromé repo na data, [založ ho tady](https://github.com/new?name=study-tracker-data&visibility=private&description=Data+pro+Study+Tracker) (Private, zaškrtni „Add a README“). Když už web zálohuje, použij stejné repo.")
             Text("1. Otevři [GitHub → Fine-grained tokens → Generate new token](https://github.com/settings/personal-access-tokens/new).")
             Text("2. *Repository access* → *Only select repositories* → vyber `\(location.repo.isEmpty ? RepoLocation.defaultRepo : location.repo)`.")
-            Text("3. *Permissions* → *Contents* → **Read and write**.")
+            Text("3. *Permissions* → *Contents* → **Read and write**. (Pro odebíraný kalendář navíc v *Account permissions* → *Gists* → **Read and write**.)")
             Text("4. Pojmenuj ho třeba „Study Tracker – Mac“, expiraci nastav na rok, token zkopíruj a vlož sem. Každé zařízení má vlastní token.")
             Text("Token se uloží do Klíčenky macOS a má přístup jen k datovému repu.").foregroundStyle(Palette.text3)
         }
@@ -294,6 +294,7 @@ public struct SettingsPage: View {
             VStack(alignment: .leading, spacing: 36) {
                 PageHeader("Nastavení", subtitle: "Ostatní nastavení přibude v milníku M6.")
                 SyncSettingsView()
+                CalendarFeedSettings()
                 TimerSoundSettings()
             }
             .padding(.horizontal, 48)

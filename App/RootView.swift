@@ -121,10 +121,11 @@ private struct PlaceholderPage: View {
     }
 }
 
-/// Hláška dole v okně; s akcí „Vrátit“ zůstane déle, aby se dala stihnout.
+/// Hláška dole v okně; s akcí „Vrátit“ zůstane déle (7 s jako na webu) a pod myší nezmizí.
 private struct ToastView: View {
     @Environment(Toasts.self) private var toasts
     let toast: Toasts.Toast
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 14) {
@@ -143,8 +144,14 @@ private struct ToastView: View {
         .padding(.bottom, 24)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("toast")
-        .task {
-            try? await Task.sleep(for: .seconds(toast.undo == nil ? 4 : 6))
+        .onHover { hovering = $0 }
+        .task(id: hovering) {
+            guard !hovering else { return }
+            do {
+                try await Task.sleep(for: .seconds(toast.undo == nil ? 4 : 7))
+            } catch {
+                return // myš se vrátila nad hlášku – odpočet začne znovu
+            }
             toasts.dismiss(toast.id)
         }
     }

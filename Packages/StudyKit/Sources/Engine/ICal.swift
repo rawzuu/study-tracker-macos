@@ -277,7 +277,11 @@ public enum ICal {
 
     /// `Date.UTC(y, mo, d, h, mi, s)` včetně přetečení měsíců a dnů (a roků 0–99 jako 1900–1999).
     static func utcMs(_ y: Int, _ mo: Int, _ d: Int, _ h: Int = 0, _ mi: Int = 0, _ s: Int = 0) -> Int {
-        let year = (0...99).contains(y) ? y + 1900 : y
+        epochMs((0...99).contains(y) ? y + 1900 : y, mo, d, h, mi, s)
+    }
+
+    /// Okamžik v UTC bez zvláštního zacházení s roky 0–99 (tak čte JavaScript data `YYYY-MM-DD`).
+    static func epochMs(_ year: Int, _ mo: Int, _ d: Int, _ h: Int = 0, _ mi: Int = 0, _ s: Int = 0) -> Int {
         let ym = year + Int((Double(mo) / 12).rounded(.down))
         let m = ((mo % 12) + 12) % 12
         let days = daysFromCivil(ym, m + 1, 1) + d - 1

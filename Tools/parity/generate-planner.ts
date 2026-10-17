@@ -30,6 +30,8 @@ const M = await load('src/features/planner/match.ts');
 const TR = await load('src/lib/trash.ts');
 const IC = await load('src/lib/ical.ts');
 const TT = await load('src/lib/timetable.ts');
+const ICS = await load('src/features/planner/ics.ts');
+const FEED = await load('src/features/planner/calendarFeed.ts');
 const { emptyData } = await load('src/data/schema.ts');
 const { MIN, HOUR, DAY } = T as { MIN: number; HOUR: number; DAY: number };
 
@@ -373,8 +375,65 @@ function timetables() {
   write('timetables.json', out);
 }
 
+// ---------- 4. export do kalendáře (.ics) a odebíraný kalendář ----------
+function icsExport() {
+  const { int, pick, chance } = random(0xe4a0e);
+  const realNow = Date.now;
+  const subjects = [
+    { id: 'a', name: 'Anatomie' }, { id: 'b', name: 'Biochemie; II' }, { id: 'c', name: 'Latina, řeč' }, { id: 'd', name: 'Back\\slash' },
+    { id: 'e', name: 'Fyzika 🚀 a 👩‍🔬' }, { id: 'f', name: 'Velmi dlouhý název předmětu, který se do jednoho řádku kalendáře rozhodně nevejde' },
+    { id: 'a', name: 'Anatomie (novější záznam se stejným id)' }, { id: 'z', name: 'Smazaný', deletedAt: 5 },
+  ].map((x) => ({ color: '#7d9cc0', weeklyGoalMin: 0, archived: false, createdAt: 1, updatedAt: 1, ...x }));
+  const titles = ['', 'Kapitola 5', 'Derivace, limity; řady', 'Řádek\nnový', 'Řádek\r\nWindows', 'Č'.repeat(40), 'Opakování: Ledviny, Srdce (−3 d)', 'emoji 📚📚📚 '.repeat(5)];
+  const notes = ['', 'Zkus si nejdřív vybavit z hlavy (retrieval practice), až pak se podívej do materiálů.', 'a\\b', 'x'.repeat(200)];
+  const base = new Date(2026, 9, 17).getTime();
+  const block = (i: number) => {
+    const b: Record<string, unknown> = {
+      id: `b${i}-${int(0, 1e6)}`, subjectId: pick(['a', 'b', 'c', 'd', 'e', 'f', 'z', 'x']), title: pick(titles),
+      start: T.atMinutes(T.addDays(base, int(-30, 60)), int(0, 287) * 5), durationMin: pick([5, 25, 45, 50, 90, 240]),
+      done: chance(0.3), note: pick(notes), createdAt: 1, updatedAt: 1,
+    };
+    if (chance(0.1)) b.deletedAt = 7;
+    return b;
+  };
+  const exam = (i: number) => {
+    const e: Record<string, unknown> = {
+      id: `e${i}`, subjectId: pick(['a', 'b', 'e', 'x']), name: pick(['Zápočet', 'Zkouška, ústní', 'Test; písemka', 'Kolokvium']),
+      date: T.dayKey(T.addDays(base, int(-30, 60))), time: pick(['', '', '08:30', '23:30', '00:00', '02:30']), note: pick(notes), createdAt: 1, updatedAt: 1,
+    };
+    if (chance(0.1)) e.deletedAt = 7;
+    return e;
+  };
+  // Dny změny času pro zkoušky s časem a bez něj
+  const dstExams = ['2026-03-29', '2026-10-25'].flatMap((date, i) => [
+    { ...exam(100 + i), date, time: '02:30', deletedAt: undefined },
+    { ...exam(200 + i), date, time: '', deletedAt: undefined },
+  ]);
+  const build = Array.from({ length: 80 }, (_, n) => {
+    const now = base + int(0, 86_399) * 1000 + n * 13;
+    Date.now = () => now;
+    const blocks = Array.from({ length: int(0, 8) }, (_, i) => block(i)).filter((b) => !b.deletedAt);
+    const exams = [...Array.from({ length: int(0, 3) }, (_, i) => exam(i)).filter((e) => !e.deletedAt), ...(n < 4 ? dstExams : [])];
+    const opts = { blocks, exams, subjects, alarmMin: pick([null, 5, 10, 15, 30]), feed: chance(0.5) };
+    const ics = ICS.buildIcs(opts);
+    Date.now = realNow;
+    return { ...opts, now, ics };
+  });
+  const feed = Array.from({ length: 40 }, () => {
+    const now = base + int(-5, 40) * DAY + int(0, 86_399) * 1000;
+    Date.now = () => now;
+    const data = { planBlocks: Array.from({ length: int(0, 12) }, (_, i) => block(i)), exams: Array.from({ length: int(0, 4) }, (_, i) => exam(i)), subjects };
+    const f = { includeExams: chance(0.6), alarmMin: pick([null, 10]) };
+    const ics = FEED.buildFeed(data, f);
+    Date.now = realNow;
+    return { data, ...f, now, ics, hash: FEED.feedHash(ics) };
+  });
+  write('ics.json', { build, feed });
+}
+
 mkdirSync(OUT, { recursive: true });
 planner();
 ical();
 timetables();
+icsExport();
 console.log(`Kontrolní data kalendáře → ${OUT}`);

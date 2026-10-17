@@ -59,7 +59,14 @@ public struct CalendarView: View {
         let clock = store.clock
         let week = weekStart ?? clock.startOfWeek(now)
         return VStack(alignment: .leading, spacing: 32) {
-            PageHeader("Kalendář", subtitle: subtitle) { headerButtons(now: now, week: week) }
+            // Tlačítka vedle nadpisu, a když se nevejdou (užší okno), pod ním.
+            ViewThatFits(in: .horizontal) {
+                PageHeader("Kalendář", subtitle: subtitle) { headerButtons(now: now, week: week).fixedSize() }
+                VStack(alignment: .leading, spacing: 16) {
+                    PageHeader("Kalendář", subtitle: subtitle)
+                    headerButtons(now: now, week: week)
+                }
+            }
             if store.sync.mode == .readOnly && store.isConnected {
                 Banner("Režim jen pro čtení: úpravy plánu se uloží jen na tomto Macu. Na GitHub odejdou, až v Nastavení vypneš „Jen čtení“.",
                        systemImage: "lock", tone: .warn)
@@ -111,6 +118,9 @@ public struct CalendarView: View {
     private func headerButtons(now: Int, week: Int) -> some View {
         let clock = store.clock
         HStack(spacing: 8) {
+            Button { sheet = .init(.export) } label: { Label("Do kalendáře", systemImage: "square.and.arrow.up") }
+                .buttonStyle(.denik(.normal))
+                .accessibilityIdentifier("calendar.export")
             Button { sheet = .init(.timetable) } label: { Label("Rozvrh", systemImage: "building.columns") }
                 .buttonStyle(.denik(.normal))
                 .accessibilityIdentifier("calendar.timetable")
@@ -215,6 +225,7 @@ public struct CalendarView: View {
         case .session(let draft): SessionEditor(draft: draft)
         case .exam(let draft): ExamEditor(draft: draft)
         case .timetable: TimetableSheet()
+        case .export: ExportSheet()
         case .lecture(let timetableId, let key): LectureSheet(timetableId: timetableId, key: key) { self.sheet = .init(.timetable) }
         }
     }
@@ -228,6 +239,7 @@ struct CalendarSheet: Identifiable {
         case session(SessionDraft)
         case exam(ExamDraft)
         case timetable
+        case export
         case lecture(timetableId: String, key: String)
     }
 

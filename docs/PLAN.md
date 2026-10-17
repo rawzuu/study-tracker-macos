@@ -33,8 +33,8 @@ Rizika, která řeší architektura:
 | Časovač | 6 režimů + vlastní, série s pauzami, auto-start, ukončení čekající série, soustředění, vyrušení, vybavení, více témat → FSRS | časové značky, žádný tikající časovač (jedno probuzení na konec fáze, překreslení 1× za s jen při běhu); stav přežije restart i uspání; šum a zvonky přes AVAudioEngine (engine běží jen, když hraje); notifikace naplánované dopředu na konec fáze; odkaz `studytracker://casovac?start=1…`; téma jen jako text sezení (bez FSRS) |
 | Šum, zvonky, upozornění | hnědý/růžový/bílý šum, zvonky, notifikace | AVAudioEngine, UserNotifications |
 | Odkaz pro Zkratky | `#/casovac?start=1&predmet=…&tema=…` | `studytracker://casovac?…` |
-| Kalendář | týden/měsíc, odučeno vs. plán, živý blok, filtry, přetahování a změna délky po 5 min, Hotovo zapíše čas, auto-odškrtnutí | SwiftUI Canvas |
-| Zkoušky a rozvrh | rozložené opakování ke zkoušce, import rozvrhu .ics (náhled změn, skryté řady, odpadlé termíny, opakování po přednášce) | zkoušky a rozvrh 1:1, bez generovaných bloků opakování |
+| Kalendář | týden/měsíc, odučeno vs. plán, živý blok, filtry, přetahování a změna délky po 5 min, Hotovo zapíše čas, auto-odškrtnutí | SwiftUI (vlastní `Layout` pro sloupce dne); rozložení ověřené kontrolními daty z kódu webu; běžící blok bez animace pruhů (nepřekresluje okno) |
+| Zkoušky a rozvrh | rozložené opakování ke zkoušce, import rozvrhu .ics (náhled změn, skryté řady, odpadlé termíny, opakování po přednášce) | zkoušky a rozvrh 1:1, bez generovaných bloků opakování a bez přiřazení řady k předmětu (slouží jen opakování po přednášce; v datech zůstává) |
 | Export kalendáře | .ics, odebíraný kalendář přes gist | stejné API |
 | Opakování | FSRS-6, 4 hodnocení, historie opakování, hlídání zkoušky | **vynecháno** |
 | Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port bez signálu opakování |
@@ -58,7 +58,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M0 | repo, XcodeGen, balíčky, CI, Core (JSON, modely, merge, serialize), paritní testy | build + zelené testy |
 | M1 | Klíčenka, GRDB, SyncEngine **jen čtení**, Přehled/Historie/Předměty jen pro čtení | data na Macu; po kontrole záloha `zaloha-pred-macos` a zapnutí zápisu |
 | M2 ✓ | Časovač, Přehled, šum, zvonky, notifikace, URL odkaz | každodenní používání (v0.3.0) |
-| M3 | Kalendář, zkoušky, rozvrh .ics, export a odebíraný kalendář | |
+| M3 ✓ | Kalendář, zkoušky, rozvrh .ics, export a odebíraný kalendář | v0.4.0 |
 | M4 | Co teď?, ranní plán (bez opakování) | |
 | M5 | Statistiky, report a kalibrace, reflexe, úspěchy | |
 | M6 | Nastavení, koš, export/import, Anki, onboarding | parita |

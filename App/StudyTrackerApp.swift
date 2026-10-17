@@ -18,6 +18,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.timer)
                 .environment(delegate.navigator)
                 .environment(delegate.toasts)
+                .environment(delegate.calendarFeed)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var timer = TimerStore(app: store, effects: Self.uiTesting ? nil : LiveTimerEffects())
     let navigator = Navigator()
     let toasts = Toasts()
+    lazy var calendarFeed = CalendarFeedSync(app: store)
     private var wakeObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -60,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await store.start()
             // Blok, který doběhl, zatímco aplikace neběžela, se uloží až teď; čekající odkaz se spustí.
             timer.refresh()
+            // Odebíraný kalendář se aktualizuje po změnách plánu (jen když je zapnutý).
+            calendarFeed.start()
         }
         // Po probuzení Macu dohnat konec bloku nebo pauzy, který proběhl ve spánku.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(

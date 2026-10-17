@@ -34,6 +34,8 @@ jobs:
           command -v xcodegen || brew install xcodegen
           xcodegen generate
 
+      # Sdílený CI stroj občas přebere popředí jinou aplikací („not foreground“) – neúspěšný UI test
+      # se proto jednou zopakuje. Skutečná chyba selže i podruhé.
       - name: Build a UI testy
         run: |
           set -o pipefail
@@ -41,6 +43,7 @@ jobs:
             -project StudyTracker.xcodeproj -scheme StudyTracker \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/dd -resultBundlePath build/UITests.xcresult \
+            -retry-tests-on-failure -test-iterations 2 \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             | tail -80
 
