@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build a testy
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          swift --version
+
+      - name: Testy jádra
+        run: swift test --package-path Packages/StudyKit
+
+      - name: Projekt (XcodeGen)
+        run: |
+          command -v xcodegen || brew install xcodegen
+          xcodegen generate
+
+      - name: Build a UI testy
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project StudyTracker.xcodeproj -scheme StudyTracker \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/dd -resultBundlePath build/UITests.xcresult \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            | tail -80
+
+      - name: Výsledky UI testů
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UITests.xcresult
+          path: build/UITests.xcresult
+
+  parity:
+    name: Parita s webem (WEB_REF)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Webová aplikace
+        run: |
+          git clone --quiet --depth 1 --branch "$(cat Tools/parity/WEB_REF)" https://github.com/rawzuu/study-tracker.git .parity/web
+          npm ci --prefix .parity/web --no-audit --no-fund
+      - name: Kontrolní data
+        run: |
+          npm ci --prefix Tools/parity --no-audit --no-fund
+          WEB_DIR=$PWD/.parity/web npm run generate --prefix Tools/parity
+      - name: Shodují se s uloženými?
+        run: git diff --stat --exit-code -- Packages/StudyKit/Tests/CoreTests/Fixtures
