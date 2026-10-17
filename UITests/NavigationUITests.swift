@@ -148,6 +148,22 @@ final class NavigationUITests: XCTestCase {
         attachScreenshot(app, "Historie po bloku")
     }
 
+    @MainActor
+    func testDashboardTimerAndPlanBlock() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["dash.timer"].exists)
+        XCTAssertEqual(text(of: app.staticTexts["dash.timer.time"]), "25:00")
+        attachScreenshot(app, "Přehled s časovačem")
+
+        // Blok z plánu „Opakování: Ledviny, Srdce“ připraví časovač s předmětem a tématem.
+        app.buttons["plan.start.demo-plan"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
+        XCTAssertEqual(app.textFields["timer.topic"].value as? String, "Ledviny")
+        XCTAssertEqual(app.popUpButtons["timer.subject"].value as? String, "Fyziologie")
+        XCTAssertTrue(app.buttons["timer.start"].isEnabled)
+    }
+
     /// Spuštění aplikace odkazem ze Zkratek. (XCUITest otevírá odkaz v nové instanci aplikace,
     /// takže tu jde o studený start; že běžící blok odkaz nepřeruší, hlídají unit testy.)
     @MainActor

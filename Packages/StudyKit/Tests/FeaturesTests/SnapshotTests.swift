@@ -36,10 +36,23 @@ struct SnapshotTests {
         try render(TimerView(snapshotSize: CGSize(width: 1440, height: 920)).environment(app).environment(timer), name: "timer-\(variant)")
     }
 
-    private func render(_ view: some View, name: String) throws {
+    @Test("Přehled s běžícím časovačem")
+    func dashboard() async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        var t = now - 12 * 60_000
+        let timer = TimerStore(app: app) { t }
+        timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
+        timer.start()
+        t = now
+        try render(DashboardView(snapshotNow: now).environment(app).environment(timer), name: "dashboard", height: 1500)
+    }
+
+    private func render(_ view: some View, name: String, height: CGFloat = 920) throws {
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["ST_SNAPSHOT_DIR"]!)
         for (scheme, appearance) in [("dark", NSAppearance.Name.darkAqua), ("light", .aqua)] {
-            let content = view.frame(width: 1440, height: 920, alignment: .top).environment(\.colorScheme, scheme == "dark" ? .dark : .light)
+            let content = view.frame(width: 1440, height: height, alignment: .top).environment(\.colorScheme, scheme == "dark" ? .dark : .light)
             let renderer = ImageRenderer(content: content)
             renderer.scale = 1
             var image: CGImage?

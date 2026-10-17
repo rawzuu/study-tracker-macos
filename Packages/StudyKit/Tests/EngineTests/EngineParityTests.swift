@@ -126,6 +126,14 @@ struct EngineParityTests {
         for c in f.plurals { #expect(Format.plural(c.n, "den", "dny", "dní") == c.text, "plural \(c.n)") }
     }
 
+    @Test("Témata z názvu bloku plánu")
+    func blocks() throws {
+        struct BlockCase: Decodable { let title: String; let topics: [String] }
+        let cases = try Fixture.load("blocks", as: [BlockCase].self)
+        #expect(cases.count > 200)
+        for c in cases { #expect(blockTopics(c.title) == c.topics, "„\(c.title)“") }
+    }
+
     @Test("Normalizace názvů pro hledání předmětu")
     func names() throws {
         struct NameCase: Decodable { let s: String; let norm: String }

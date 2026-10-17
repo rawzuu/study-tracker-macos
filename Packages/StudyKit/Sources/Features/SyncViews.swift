@@ -76,10 +76,14 @@ struct SyncBanner: View {
     }
 
     private func message(now: Int) -> String? {
+        let warnings = store.document.settings.tokenWarning
         if case .failed(let f, _) = store.sync.status, !f.isTransient {
-            return "Synchronizace s GitHubem teď nefunguje: \(f.localizedDescription)"
+            // Problém s tokenem nebo přístupem (401/403/404) hlídá nastavení „upozornit na token“ jako na webu;
+            // data, která Mac nesmí zapsat (novější verze, nečitelný soubor), se ukážou vždy.
+            if case .github(let e) = f, [401, 403, 404].contains(e.status), !warnings { return nil }
+            return "Synchronizace s GitHubem teď nefunguje: \(f.localizedDescription) Data jsou zatím jen na tomto Macu."
         }
-        guard store.document.settings.tokenWarning, store.sync.status != .off,
+        guard warnings, store.sync.status != .off,
               let days = store.backup?.tokenDaysLeft(now: now, clock: store.clock), days <= 7 else { return nil }
         return days <= 0
             ? "Token pro zálohu na GitHub vypršel – vytvoř nový, ať se synchronizace nezastaví."

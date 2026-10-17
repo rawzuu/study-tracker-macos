@@ -1,39 +1,62 @@
 import AppModel
+import Core
 import DesignSystem
 import Engine
 import SwiftUI
 
-/// Přehled – zatím jen pro čtení (M1): dnešek, týden po předmětech, plán, zkoušky, poslední sezení.
+/// Přehled: dnešek, týden po předmětech, plán, zkoušky, časovač, poslední sezení.
 public struct DashboardView: View {
     @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
     let openPage: (String) -> Void
+
+    /// Bez posouvání a s pevným „teď“ – jen pro náhledy (ImageRenderer nevykreslí ScrollView).
+    private var snapshotNow: Int?
 
     public init(openPage: @escaping (String) -> Void = { _ in }) {
         self.openPage = openPage
     }
 
+    init(snapshotNow: Int) {
+        self.openPage = { _ in }
+        self.snapshotNow = snapshotNow
+    }
+
     public var body: some View {
-        // Každou minutu se přepočítá „teď“ (dnešek, série, „dnes“ v seznamu).
-        TimelineView(.everyMinute) { context in
-            let now = Int(context.date.timeIntervalSince1970 * 1000)
-            let state = DashboardState(document: store.document, now: now, clock: store.clock)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 36) {
-                    PageHeader(state.title, subtitle: "Týden \(state.isoWeek)")
-                    SyncBanner(openSettings: { openPage("nastaveni") })
-                    if state.isEmpty && !store.isConnected {
-                        ConnectPrompt(openSettings: { openPage("nastaveni") })
-                    } else {
-                        content(state)
-                    }
+        Group {
+            if let snapshotNow {
+                page(now: snapshotNow)
+            } else {
+                // Každou minutu se přepočítá „teď“ (dnešek, série, „dnes“ v seznamu).
+                TimelineView(.everyMinute) { context in
+                    ScrollView { page(now: Int(context.date.timeIntervalSince1970 * 1000)) }
                 }
-                .padding(.horizontal, 48)
-                .padding(.vertical, 36)
-                .frame(maxWidth: 2200, alignment: .leading)
             }
         }
         .pageBackground()
         .navigationTitle("Přehled")
+    }
+
+    private func page(now: Int) -> some View {
+        let state = DashboardState(document: store.document, now: now, clock: store.clock)
+        return VStack(alignment: .leading, spacing: 36) {
+            PageHeader(state.title, subtitle: "Týden \(state.isoWeek)" + (state.intention.map { " · záměr: \($0)" } ?? "")) {
+                if timer.state.status == .idle {
+                    Button("Začít učení") { openPage("casovac") }
+                        .buttonStyle(.denik(.normal))
+                        .accessibilityIdentifier("dash.startLearning")
+                }
+            }
+            SyncBanner(openSettings: { openPage("nastaveni") })
+            if state.isEmpty && !store.isConnected {
+                ConnectPrompt(openSettings: { openPage("nastaveni") })
+            } else {
+                content(state)
+            }
+        }
+        .padding(.horizontal, 48)
+        .padding(.vertical, 36)
+        .frame(maxWidth: 2200, alignment: .leading)
     }
 
     @ViewBuilder
@@ -43,10 +66,20 @@ public struct DashboardView: View {
             WeekSection(state: s).frame(minWidth: 440, maxWidth: .infinity)
         }
         FlowRow {
-            PlanSection(rows: s.todayPlan).frame(minWidth: 320, maxWidth: .infinity)
-            ExamsSection(rows: s.exams).frame(minWidth: 320, maxWidth: .infinity)
+            PlanSection(rows: s.todayPlan, start: startBlock).frame(minWidth: 320, maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 40) {
+                ExamsSection(rows: s.exams)
+                DashTimer(openTimer: { openPage("casovac") })
+            }
+            .frame(minWidth: 320, maxWidth: .infinity)
         }
         RecentSection(rows: s.recent, openHistory: { openPage("historie") })
+    }
+
+    /// Spustit časovač z bloku plánu: předmět, téma z názvu a odkaz na blok (po uložení se odškrtne).
+    private func startBlock(_ b: DashboardState.PlanRow) {
+        timer.setup(TimerSetup(subjectId: b.subject.id, topic: b.topic, planBlockId: b.id))
+        openPage("casovac")
     }
 }
 
@@ -240,7 +273,9 @@ private struct WeekSection: View {
 // MARK: - Seznamy
 
 private struct PlanSection: View {
+    @Environment(TimerStore.self) private var timer
     let rows: [DashboardState.PlanRow]
+    let start: (DashboardState.PlanRow) -> Void
 
     var body: some View {
         PageSection("Dnešní plán") {
@@ -257,10 +292,18 @@ private struct PlanSection: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Text("\(b.durationMin) min").font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3)
-                            if b.done { Image(systemName: "checkmark").foregroundStyle(Palette.success).accessibilityLabel("Hotovo") }
+                            if b.done {
+                                Image(systemName: "checkmark").foregroundStyle(Palette.success).accessibilityLabel("Hotovo")
+                            } else if timer.state.canSwitch {
+                                Button { start(b) } label: { Image(systemName: "play.fill").font(.system(size: 10)) }
+                                    .buttonStyle(.denik(.normal, size: .small))
+                                    .help("Spustit časovač")
+                                    .accessibilityLabel("Spustit časovač")
+                                    .accessibilityIdentifier("plan.start.\(b.id)")
+                            }
                         }
                         .opacity(b.done ? 0.5 : 1)
-                        .accessibilityElement(children: .combine)
+                        .accessibilityElement(children: .contain)
                     }
                 }
             }
@@ -354,5 +397,71 @@ private struct ConnectPrompt: View {
             }
             .frame(maxWidth: 560, alignment: .leading)
         }
+    }
+}
+
+// MARK: - Časovač
+
+/// Časovač na přehledu – jen čas, stav a ovládání; celý ciferník je na stránce Časovač (`DashTimer`).
+private struct DashTimer: View {
+    @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
+    let openTimer: () -> Void
+
+    var body: some View {
+        let state = timer.state
+        let idle = state.status == .idle
+        PageSection("Časovač", accessory: {
+            Button("Otevřít", action: openTimer).buttonStyle(.link).font(Typo.small)
+        }) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 16) {
+                    if state.status == .running, let start = state.segmentStart {
+                        TimelineView(.periodic(from: Date(timeIntervalSince1970: Double(start) / 1000), by: 1)) { context in
+                            clock(Int(context.date.timeIntervalSince1970 * 1000))
+                        }
+                    } else {
+                        clock(timer.currentTime())
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(status(state)).foregroundStyle(Palette.text)
+                        Text(detail(state)).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if idle && state.subjectId.isEmpty {
+                    Button("Vybrat předmět", action: openTimer).buttonStyle(.denik(.normal))
+                } else {
+                    TimerControls(size: .small)
+                }
+            }
+            .padding(.top, 4)
+        }
+        .accessibilityIdentifier("dash.timer")
+    }
+
+    private func clock(_ now: Int) -> some View {
+        let state = timer.state
+        let text = state.status == .idle
+            ? Format.clock(ms: timer.mode.workDurationMs ?? 0)
+            : Format.clock(ms: state.remaining(at: now) ?? state.elapsed(at: now))
+        return Text(text)
+            .font(Typo.serifNumber(40))
+            .foregroundStyle(state.phase == .work ? Palette.text : Palette.breakColor)
+            .accessibilityIdentifier("dash.timer.time")
+    }
+
+    private func status(_ s: TimerState) -> String {
+        switch s.status {
+        case .idle: "Časovač připravený"
+        case .paused: "Pozastaveno"
+        case .ready: s.phase == .work ? "Připraveno na další blok" : "Připravená pauza"
+        case .running: s.phase == .work ? "Učení" : "Pauza"
+        }
+    }
+
+    private func detail(_ s: TimerState) -> String {
+        let subject = s.subjectId.isEmpty ? nil : store.document.record(Subject.self, id: s.subjectId)?.name
+        return timer.mode.name + (subject.map { " · \($0)" } ?? "")
     }
 }

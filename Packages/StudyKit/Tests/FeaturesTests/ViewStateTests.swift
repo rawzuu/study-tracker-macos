@@ -51,6 +51,21 @@ private func sampleDocument() -> AppDocument {
 
 @Suite("Stavy obrazovek")
 struct ViewStateTests {
+    @Test("Přehled: záměr z reflexe minulého týdne, téma z názvu bloku plánu")
+    func dashboardIntentionAndTopics() {
+        var d = sampleDocument()
+        d.upsert(Reflection(raw: ["id": "r1", "weekStart": "2026-10-05", "rating": 4, "wentWell": "", "blocked": "", "focusNext": "Víc fyziologie"]), now: 8)
+        d.upsert(Reflection(raw: ["id": "r0", "weekStart": "2026-09-28", "rating": 3, "wentWell": "", "blocked": "", "focusNext": "Starý"]), now: 8)
+        d.upsert(PlanBlock(raw: ["id": "p3", "subjectId": "fyz", "title": "Opakování: Srdce, Plíce +2", "start": .number(Double(at(2026, 10, 17, 19))), "durationMin": 30, "done": false]), now: 9)
+        let s = DashboardState(document: d, now: now, clock: clock)
+        #expect(s.intention == "Víc fyziologie")
+        #expect(s.todayPlan.map(\.topic) == ["", "Ledviny", "Srdce"])
+
+        d.updateSettings(now: 10) { $0.hiddenPages = ["reflexe"] }
+        #expect(DashboardState(document: d, now: now, clock: clock).intention == nil)
+        #expect(DashboardState(document: sampleDocument(), now: now, clock: clock).intention == nil)
+    }
+
     @Test("Přehled: dnešek, týden, cíle, série")
     func dashboard() {
         let s = DashboardState(document: sampleDocument(), now: now, clock: clock)

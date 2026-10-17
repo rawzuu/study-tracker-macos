@@ -44,6 +44,12 @@ public enum DemoData {
         }
         doc.upsert(sessions, now: created)
 
+        // Dnešní blok plánu, ze kterého jde spustit časovač.
+        doc.upsert(PlanBlock(raw: [
+            "id": "demo-plan", "subjectId": "demo-fyz", "title": "Opakování: Ledviny, Srdce",
+            "start": .number(Double(today + 20 * StudyClock.hour)), "durationMin": 45, "done": false, "note": "",
+        ]), now: created)
+
         // Rychlý vlastní režim (3 s učení) a minimum 1 s, ať UI test projde celý blok bez čekání.
         doc.upsert(TimerPreset(raw: [
             "id": "demo-rychly", "name": "Rychlý test", "workMin": 0.05, "shortBreakMin": 0.05, "longBreakMin": 0.1, "roundsBeforeLong": 4,

@@ -94,6 +94,8 @@ public struct DashboardState: Sendable {
         public let title: String
         public let durationMin: Int
         public let done: Bool
+        /// Téma pro časovač z názvu bloku („Opakování: Derivace, …“ → Derivace).
+        public let topic: String
     }
 
     public struct ExamRow: Identifiable, Hashable, Sendable {
@@ -106,6 +108,8 @@ public struct DashboardState: Sendable {
 
     public let title: String
     public let isoWeek: Int
+    /// Záměr z reflexe minulého týdne („záměr: …“ v podtitulku), pokud reflexe není skrytá.
+    public let intention: String?
     public let todaySec: Int
     public let goalSec: Int
     public let weekSec: Int
@@ -132,6 +136,9 @@ public struct DashboardState: Sendable {
 
         title = Format.capitalized(Format.date(now, .weekdayDayMonth, clock: clock))
         isoWeek = clock.isoWeek(now)
+        let lastWeekKey = clock.dayKey(clock.addDays(clock.startOfWeek(now), -7))
+        intention = settings.hiddenPages.contains("reflexe") ? nil
+            : doc.records(Reflection.self).first { !$0.isDeleted && $0.weekStart == lastWeekKey && !$0.focusNext.isEmpty }?.focusNext
         todaySec = Stats.totalSec(Stats.inRange(sessions, from: today, to: now + 1))
         let weekSessions = Stats.inRange(sessions, from: week, to: now + 1)
         weekSec = Stats.totalSec(weekSessions)
@@ -156,7 +163,10 @@ public struct DashboardState: Sendable {
         todayPlan = doc.alive(PlanBlock.self)
             .filter { clock.startOfDay($0.start) == today }
             .sorted { $0.start < $1.start }
-            .map { PlanRow(id: $0.id, time: Format.time($0.start, clock: clock), subject: subjects[$0.subjectId], title: $0.title, durationMin: $0.durationMin, done: $0.done) }
+            .map {
+                PlanRow(id: $0.id, time: Format.time($0.start, clock: clock), subject: subjects[$0.subjectId], title: $0.title,
+                        durationMin: $0.durationMin, done: $0.done, topic: blockTopics($0.title).first ?? "")
+            }
 
         exams = doc.alive(Exam.self)
             .compactMap { e in clock.parseDayKey(e.date).map { (e, $0) } }

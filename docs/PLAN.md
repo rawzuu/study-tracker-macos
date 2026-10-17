@@ -57,7 +57,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 |---|---|---|
 | M0 | repo, XcodeGen, balíčky, CI, Core (JSON, modely, merge, serialize), paritní testy | build + zelené testy |
 | M1 | Klíčenka, GRDB, SyncEngine **jen čtení**, Přehled/Historie/Předměty jen pro čtení | data na Macu; po kontrole záloha `zaloha-pred-macos` a zapnutí zápisu |
-| M2 | Časovač, Přehled, šum, zvonky, notifikace, URL odkaz | každodenní používání |
+| M2 ✓ | Časovač, Přehled, šum, zvonky, notifikace, URL odkaz | každodenní používání (v0.3.0) |
 | M3 | Kalendář, zkoušky, rozvrh .ics, export a odebíraný kalendář | |
 | M4 | Co teď?, ranní plán (bez opakování) | |
 | M5 | Statistiky, report a kalibrace, reflexe, úspěchy | |

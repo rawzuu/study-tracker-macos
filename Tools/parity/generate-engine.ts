@@ -24,6 +24,7 @@ const load = (p: string) => import(pathToFileURL(join(WEB, p)).href);
 const T = await load('src/lib/time.ts');
 const S = await load('src/lib/stats.ts');
 const TT = await load('src/lib/timetable.ts');
+const BT = await load('src/lib/blockTopic.ts');
 const webVersion = JSON.parse(readFileSync(join(WEB, 'package.json'), 'utf8')).version as string;
 
 // ---------- deterministická náhoda (stejný generátor jako generate.ts, jiný seed) ----------
@@ -201,10 +202,32 @@ function names() {
   write('names.json', out);
 }
 
+// ---------- 5. témata z názvu bloku plánu (`blockTopics`) ----------
+function blocks() {
+  const prefixes = ['', '', 'Opakování: ', 'Nové téma: ', 'Pokračovat: ', 'Příprava na zkoušku: ', 'Podle plánu: ', 'Opakování:', 'opakování: '];
+  const fixed = ['Nová látka', 'Blok podle plánu', 'Nedokončený blok', 'Po přednášce: Anatomie', 'Anki: Latina'];
+  const topics = ['Derivace', 'Limity', 'Řady', 'Zápočet', 'Kapitola 4', 'Srdce, cévy', 'A+B', ''];
+  const out: { title: string; topics: string[] }[] = [];
+  const add = (title: string) => out.push({ title, topics: BT.blockTopics(title) });
+  for (const f of fixed) add(f);
+  ['Opakování: Derivace, Limity +1', 'Nové téma: Řady', 'Opakování: Zápočet (−3 d)', 'Pokračovat: Opakování: Integrály', '  Opakování:   A,B, C +12  ', 'Opakování: , ,X', 'Příprava na zkoušku: Nová látka', ''].forEach(add);
+  for (let i = 0; i < 200; i++) {
+    let t = pick(prefixes);
+    if (chance(0.3)) t += pick(prefixes);
+    if (chance(0.2)) t += pick(fixed);
+    else t += Array.from({ length: int(1, 3) }, () => pick(topics)).join(pick([', ', ',', ' , ']));
+    if (chance(0.2)) t += pick([' +1', ' +23', ' (−3 d)', ' (−12 d)', '  ', ' +x']);
+    if (chance(0.2)) t = pick(['  ', '\t', ' ']) + t;
+    add(t);
+  }
+  write('blocks.json', out);
+}
+
 mkdirSync(OUT, { recursive: true });
 calendar();
 formats();
 stats();
 names();
+blocks();
 write('meta.json', { webVersion, timeZone: 'Europe/Prague', note: 'Vygenerováno z kódu webové aplikace (Tools/parity/generate-engine.ts). Neupravovat ručně.' });
 console.log(`Kontrolní data Engine z webu v${webVersion} → ${OUT}`);
