@@ -5,6 +5,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
     @State private var page: Page? = .prehled
 
     var body: some View {
@@ -29,6 +30,27 @@ struct RootView: View {
         }
         .preferredColorScheme(colorScheme)
         .tint(Palette.accent)
+        // Po bloku – ať je uživatel na kterékoli stránce.
+        .sheet(isPresented: Binding(get: { timer.pendingRating != nil }, set: { if !$0 { timer.skipRating() } })) {
+            if let id = timer.pendingRating { AfterBlockSheet(sessionId: id) }
+        }
+        .overlay(alignment: .bottom) {
+            if let notice = timer.notice {
+                Text(notice)
+                    .font(Typo.body)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Palette.panel3, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Palette.lineStrong))
+                    .padding(.bottom, 24)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("toast")
+                    .task(id: notice) {
+                        try? await Task.sleep(for: .seconds(4))
+                        timer.notice = nil
+                    }
+            }
+        }
     }
 
     /// Stránky skryté v nastavení (`hiddenPages`) se v navigaci neukazují – jako na webu.
@@ -55,6 +77,7 @@ struct RootView: View {
         case .ready:
             switch page ?? .prehled {
             case .prehled: DashboardView(openPage: open)
+            case .casovac: TimerView()
             case .historie: HistoryView()
             case .predmety: SubjectsView()
             case .nastaveni: SettingsPage()

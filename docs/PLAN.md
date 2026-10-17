@@ -30,7 +30,7 @@ Rizika, která řeší architektura:
 | Oblast | Web (v2.6.7) | Mac |
 |---|---|---|
 | Přehled | měřidlo dneška, Co teď?, týden po předmětech s cíli, ranní výzva, Anki panel, varování k tokenu | SwiftUI |
-| Časovač | 6 režimů + vlastní, série s pauzami, auto-start, ukončení čekající série, soustředění, vyrušení, vybavení, více témat → FSRS | časové značky; notifikace naplánované na konec bloku; téma jen jako text sezení (bez FSRS) |
+| Časovač | 6 režimů + vlastní, série s pauzami, auto-start, ukončení čekající série, soustředění, vyrušení, vybavení, více témat → FSRS | časové značky, žádný tikající časovač (jedno probuzení na konec fáze, překreslení 1× za s jen při běhu); stav přežije restart i uspání; notifikace naplánované na konec bloku; téma jen jako text sezení (bez FSRS) |
 | Šum, zvonky, upozornění | hnědý/růžový/bílý šum, zvonky, notifikace | AVAudioEngine, UserNotifications |
 | Odkaz pro Zkratky | `#/casovac?start=1&predmet=…&tema=…` | `studytracker://casovac?…` |
 | Kalendář | týden/měsíc, odučeno vs. plán, živý blok, filtry, přetahování a změna délky po 5 min, Hotovo zapíše čas, auto-odškrtnutí | SwiftUI Canvas |

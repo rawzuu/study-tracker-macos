@@ -11,8 +11,13 @@ struct StudyTrackerApp: App {
         WindowGroup("Study Tracker", id: "main") {
             RootView()
                 .environment(delegate.store)
+                .environment(delegate.timer)
                 .frame(minWidth: 900, minHeight: 600)
-                .task { await delegate.store.start() }
+                .task {
+                    await delegate.store.start()
+                    // Blok, který doběhl, zatímco aplikace neběžela, se uloží až teď.
+                    delegate.timer.refresh()
+                }
         }
         .defaultSize(width: 1440, height: 920)
         .windowToolbarStyle(.unified)
@@ -40,8 +45,20 @@ struct StudyTrackerApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = AppStore(environment: ProcessInfo.processInfo.arguments.contains("-uiTesting") ? .uiTesting() : .live())
+    lazy var timer = TimerStore(app: store)
+    private var wakeObserver: NSObjectProtocol?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Po probuzení Macu dohnat konec bloku nebo pauzy, který proběhl ve spánku.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.timer.refresh() }
+        }
+    }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        timer.refresh()
         Task { await store.setActive(true) }
     }
 

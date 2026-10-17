@@ -253,25 +253,3 @@ extension View {
         background(Palette.bg)
     }
 }
-
-/// Hlavní akce (`.btn.primary`): jantarové pozadí, tmavý text.
-public struct PrimaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    public init() {}
-
-    public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(Palette.accentInk)
-            .padding(.horizontal, 14)
-            .frame(height: 28)
-            .background(Palette.accent.opacity(configuration.isPressed ? 0.85 : 1), in: RoundedRectangle(cornerRadius: 8))
-            .opacity(isEnabled ? 1 : 0.45)
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-extension ButtonStyle where Self == PrimaryButtonStyle {
-    public static var primary: PrimaryButtonStyle { PrimaryButtonStyle() }
-}

@@ -61,6 +61,13 @@ struct SubjectEditor: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State var draft: SubjectDraft
+    /// Po uložení (id předmětu) – třeba aby ho časovač rovnou vybral.
+    var onSaved: (String) -> Void = { _ in }
+
+    init(draft: SubjectDraft, onSaved: @escaping (String) -> Void = { _ in }) {
+        _draft = State(initialValue: draft)
+        self.onSaved = onSaved
+    }
 
     var body: some View {
         let duplicate = draft.duplicate(in: store.document)
@@ -125,7 +132,9 @@ struct SubjectEditor: View {
 
     private func save() {
         guard draft.canSave(in: store.document) else { return }
-        store.upsert(draft.record())
+        let record = draft.record()
+        store.upsert(record)
+        onSaved(record.id)
         dismiss()
     }
 }

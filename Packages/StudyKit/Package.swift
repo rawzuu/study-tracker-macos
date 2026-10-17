@@ -49,6 +49,6 @@ let package = Package(
         ),
         .testTarget(name: "SyncTests", dependencies: ["Sync"]),
         .testTarget(name: "AppModelTests", dependencies: ["AppModel", "Core", "Engine", "Networking", "Persistence", "Sync"]),
-        .testTarget(name: "FeaturesTests", dependencies: ["Features", "Core", "Engine"]),
+        .testTarget(name: "FeaturesTests", dependencies: ["Features", "Core", "Engine", "AppModel", "DesignSystem"]),
     ]
 )

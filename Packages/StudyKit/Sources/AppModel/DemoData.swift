@@ -43,6 +43,12 @@ public enum DemoData {
             }
         }
         doc.upsert(sessions, now: created)
+
+        // Rychlý vlastní režim (3 s učení) a minimum 1 s, ať UI test projde celý blok bez čekání.
+        doc.upsert(TimerPreset(raw: [
+            "id": "demo-rychly", "name": "Rychlý test", "workMin": 0.05, "shortBreakMin": 0.05, "longBreakMin": 0.1, "roundsBeforeLong": 4,
+        ]), now: created)
+        doc.updateSettings(now: created) { $0.minSessionSec = 1 }
         return doc
     }
 }

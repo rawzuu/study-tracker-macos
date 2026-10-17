@@ -34,6 +34,9 @@ final class NavigationUITests: XCTestCase {
 
         app.staticTexts["nav.planovac"].click()
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Kalendář")
+
+        app.staticTexts["nav.casovac"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
     }
 
     @MainActor
@@ -97,6 +100,49 @@ final class NavigationUITests: XCTestCase {
     }
 
     @MainActor
+    func testTimerBlockSavesSession() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.casovac"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
+        XCTAssertFalse(app.buttons["timer.start"].isEnabled, "bez předmětu nejde začít")
+
+        let subject = app.popUpButtons["timer.subject"]
+        subject.click()
+        app.menuItems["Fyziologie"].click()
+        let topic = app.textFields["timer.topic"]
+        topic.click()
+        topic.typeText("Ledviny UI")
+        // Mezera v tématu blok nespustí (mezerník ovládá časovač jen mimo textová pole).
+        XCTAssertEqual(topic.value as? String, "Ledviny UI")
+        XCTAssertTrue(app.buttons["timer.start"].exists)
+        // Vlastní režim z ukázkových dat: 3 s učení.
+        app.descendants(matching: .any)["mode.demo-rychly"].firstMatch.click()
+        attachScreenshot(app, "Časovač")
+
+        app.buttons["timer.start"].click()
+        XCTAssertTrue(app.buttons["timer.pause"].waitForExistence(timeout: 2))
+        attachScreenshot(app, "Časovač běží")
+
+        // Konec bloku → sezení se uloží a otevře se okno po bloku.
+        let recall = app.textViews["rating.recall"]
+        XCTAssertTrue(recall.waitForExistence(timeout: 15))
+        attachScreenshot(app, "Blok dokončen")
+        recall.click()
+        recall.typeText("Nefron a glomerulus")
+        app.descendants(matching: .any)["rating.focus.4"].firstMatch.click()
+        app.buttons["rating.save"].click()
+        XCTAssertTrue(recall.waitForNonExistence(timeout: 3))
+        attachScreenshot(app, "Pauza")
+
+        app.staticTexts["nav.historie"].click()
+        let saved = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", "Ledviny UI", "Ledviny UI")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 3), "sezení z časovače je v historii")
+        attachScreenshot(app, "Historie po bloku")
+    }
+
+    @MainActor
     func testLaunchPerformance() {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             let app = XCUIApplication()
@@ -110,7 +156,9 @@ final class NavigationUITests: XCTestCase {
         (element.value as? String).flatMap { $0.isEmpty ? nil : $0 } ?? element.label
     }
 
+    /// Snímky pro kontrolu vzhledu. `TEST_RUNNER_ST_NO_SCREENSHOTS=1` je vypne (vypnutý displej je neumí pořídit).
     @MainActor private func attachScreenshot(_ app: XCUIApplication, _ name: String) {
+        guard ProcessInfo.processInfo.environment["ST_NO_SCREENSHOTS"] == nil else { return }
         let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
