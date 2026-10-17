@@ -1,0 +1,75 @@
+# XcodeGen: `xcodegen generate` vytvoří StudyTracker.xcodeproj (není v gitu).
+name: StudyTracker
+options:
+  bundleIdPrefix: cz.rawzuu
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ARCHS: arm64
+    DEAD_CODE_STRIPPING: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+  configs:
+    Release:
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: -O
+packages:
+  StudyKit:
+    path: Packages/StudyKit
+targets:
+  StudyTracker:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: StudyKit
+        product: Core
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Study Tracker
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.education
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+    entitlements:
+      path: App/StudyTracker.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker
+        ENABLE_HARDENED_RUNTIME: YES
+  StudyTrackerUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [UITests]
+    dependencies:
+      - target: StudyTracker
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.uitests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  StudyTracker:
+    build:
+      targets:
+        StudyTracker: all
+        StudyTrackerUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [StudyTrackerUITests]
+    profile:
+      config: Release
+    archive:
+      config: Release

@@ -1,0 +1,6 @@
+// Společné nastavení buildu.
+// Podpis: vytvoř Config/Local.xcconfig (není v gitu) s řádkem `DEVELOPMENT_TEAM = <tvoje Team ID>`.
+// CI podepisuje ad-hoc (CODE_SIGN_IDENTITY=-), takže tým nepotřebuje.
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+#include? "Local.xcconfig"
