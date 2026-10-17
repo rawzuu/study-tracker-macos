@@ -1,0 +1,11 @@
+.DS_Store
+*.xcodeproj/
+.build/
+.swiftpm/
+DerivedData/
+build/
+xcuserdata/
+Config/Local.xcconfig
+Tools/parity/node_modules/
+.parity/
+*.trace
