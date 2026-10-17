@@ -23,6 +23,11 @@ public enum Format {
         n.formatted(.number.locale(cs).precision(.fractionLength(digits)).rounded(rule: .toNearestOrAwayFromZero))
     }
 
+    /// Počet po česku s mezerami po tisících: „12 345“ (`toLocaleString('cs-CZ')`).
+    public static func count(_ n: Int) -> String {
+        n.formatted(.number.locale(cs))
+    }
+
     /// Hodiny nejvýš s jedním desetinným místem: „3,5 h“.
     public static func hours(_ sec: Int) -> String {
         (Double(sec) / 3600).formatted(.number.locale(cs).precision(.fractionLength(0...1)).rounded(rule: .toNearestOrAwayFromZero)) + " h"
@@ -41,14 +46,46 @@ public enum Format {
         return h > 0 ? "\(h):\(two(m)):\(two(s))" : "\(two(m)):\(two(s))"
     }
 
-    /// „čtvrtek 8. října“
-    public static func longDay(_ t: Int, clock: StudyClock) -> String {
-        clock.date(t).formatted(
-            Date.VerbatimFormatStyle(
-                format: "\(weekday: .wide) \(day: .defaultDigits). \(month: .wide)",
-                locale: cs, timeZone: clock.calendar.timeZone, calendar: clock.calendar
-            )
-        )
+    /// Tvary data, které web používá (`fmtDate` / `toLocaleDateString('cs-CZ', …)`).
+    public enum DateStyle: String, CaseIterable, Sendable {
+        /// „čtvrtek 8. října“
+        case weekdayDayMonth
+        /// „čt 8. 10.“
+        case shortWeekdayDayNumericMonth
+        /// „8. 10.“
+        case dayNumericMonth
+        /// „8. 10. 2026“
+        case dayNumericMonthYear
+        /// „8. 10. 26“
+        case dayNumericMonthShortYear
+        /// „8. října“
+        case dayMonth
+        /// „čt 8. října“
+        case shortWeekdayDayMonth
+        /// „čtvrtek 8. 10.“
+        case weekdayDayNumericMonth
+        /// „říjen 26“
+        case monthShortYear
+        /// „říjen 2026“
+        case monthYear
+    }
+
+    public static func date(_ t: Int, _ style: DateStyle, clock: StudyClock) -> String {
+        let c = clock.calendar.dateComponents([.year, .month, .day], from: clock.date(t))
+        let y = c.year ?? 0, m = c.month ?? 1, d = c.day ?? 0
+        let wd = clock.weekdayIndex(t)
+        return switch style {
+        case .weekdayDayMonth: "\(weekdaysLong[wd]) \(d). \(monthsGenitive[m - 1])"
+        case .shortWeekdayDayNumericMonth: "\(weekdaysLower[wd]) \(d). \(m)."
+        case .dayNumericMonth: "\(d). \(m)."
+        case .dayNumericMonthYear: "\(d). \(m). \(y)"
+        case .dayNumericMonthShortYear: "\(d). \(m). \(two(y % 100))"
+        case .dayMonth: "\(d). \(monthsGenitive[m - 1])"
+        case .shortWeekdayDayMonth: "\(weekdaysLower[wd]) \(d). \(monthsGenitive[m - 1])"
+        case .weekdayDayNumericMonth: "\(weekdaysLong[wd]) \(d). \(m)."
+        case .monthShortYear: "\(months[m - 1]) \(two(y % 100))"
+        case .monthYear: "\(months[m - 1]) \(y)"
+        }
     }
 
     /// „Dnes“, „Včera“, „Zítra“, jinak „čtvrtek 8. října“.
@@ -58,14 +95,7 @@ public enum Format {
         if d == today { return "Dnes" }
         if d == clock.addDays(today, -1) { return "Včera" }
         if d == clock.addDays(today, 1) { return "Zítra" }
-        return longDay(t, clock: clock)
-    }
-
-    /// „so 17. 10.“
-    public static func shortDay(_ t: Int, clock: StudyClock) -> String {
-        let c = clock.calendar.dateComponents([.day, .month], from: clock.date(t))
-        let weekday = ["po", "út", "st", "čt", "pá", "so", "ne"][clock.weekdayIndex(t)]
-        return "\(weekday) \(c.day ?? 0). \(c.month ?? 0)."
+        return date(t, .weekdayDayMonth, clock: clock)
     }
 
     /// První písmeno velké („čtvrtek 8. října“ → „Čtvrtek 8. října“).
@@ -81,6 +111,11 @@ public enum Format {
     }
 
     public static let weekdaysShort = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+    public static let weekdaysLong = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
+    private static let weekdaysLower = ["po", "út", "st", "čt", "pá", "so", "ne"]
+    /// Měsíce v 1. pádě („říjen 2026“) a ve 2. pádě („8. října“).
+    public static let months = ["leden", "únor", "březen", "duben", "květen", "červen", "červenec", "srpen", "září", "říjen", "listopad", "prosinec"]
+    private static let monthsGenitive = ["ledna", "února", "března", "dubna", "května", "června", "července", "srpna", "září", "října", "listopadu", "prosince"]
     public static let focusLabels = ["", "Rozptýlený", "Spíš slabé", "V pohodě", "Soustředěný", "Hluboký flow"]
 
     /// Název režimu časovače (`modeName` na webu).

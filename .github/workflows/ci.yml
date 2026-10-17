@@ -69,4 +69,4 @@ jobs:
           npm ci --prefix Tools/parity --no-audit --no-fund
           WEB_DIR=$PWD/.parity/web npm run generate --prefix Tools/parity
       - name: Shodují se s uloženými?
-        run: git diff --stat --exit-code -- Packages/StudyKit/Tests/CoreTests/Fixtures
+        run: git diff --stat --exit-code -- Packages/StudyKit/Tests/CoreTests/Fixtures Packages/StudyKit/Tests/EngineTests/Fixtures

@@ -37,7 +37,11 @@ let package = Package(
             dependencies: ["Core"],
             resources: [.copy("Fixtures")]
         ),
-        .testTarget(name: "EngineTests", dependencies: ["Engine"]),
+        .testTarget(
+            name: "EngineTests",
+            dependencies: ["Engine", "Core"],
+            resources: [.copy("Fixtures")]
+        ),
         .testTarget(name: "NetworkingTests", dependencies: ["Networking"]),
         .testTarget(
             name: "PersistenceTests",

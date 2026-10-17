@@ -21,7 +21,7 @@ Packages/StudyKit/      Swift Package s moduly aplikace
   Sources/AppModel/     AppStore (@Observable), AppEnvironment (DI), připojení zálohy
   Sources/DesignSystem/ barvy a prvky vzhledu „Deník“
   Sources/Features/     obrazovky (SwiftUI) a jejich stavy (čisté funkce s testy)
-  Tests/                testy každého modulu, CoreTests/Fixtures = kontrolní data z webu
+  Tests/                testy každého modulu, */Fixtures = kontrolní data z webu
 Tools/parity/           generátor kontrolních dat ze skutečného kódu webové aplikace
 Config/                 xcconfig (podpis)
 project.yml             definice projektu pro XcodeGen
@@ -52,7 +52,7 @@ Webová aplikace do dat průběžně přidává nová pole a kolekce. Pevné `Co
 
 ### Paritní testy
 
-`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
+`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. `generate-engine.ts` stejně ověří kalendář, formáty a souhrny (`src/lib/time.ts`, `stats.ts`) v pražském čase – včetně dnů změny času, kdy 2:30 buď neexistuje, nebo je dvakrát – do `EngineTests/Fixtures`. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
 
 ## Sestavení
 

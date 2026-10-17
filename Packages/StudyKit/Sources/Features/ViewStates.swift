@@ -130,7 +130,7 @@ public struct DashboardState: Sendable {
         let today = clock.startOfDay(now)
         let week = clock.startOfWeek(now)
 
-        title = Format.capitalized(Format.longDay(now, clock: clock))
+        title = Format.capitalized(Format.date(now, .weekdayDayMonth, clock: clock))
         isoWeek = clock.isoWeek(now)
         todaySec = Stats.totalSec(Stats.inRange(sessions, from: today, to: now + 1))
         let weekSessions = Stats.inRange(sessions, from: week, to: now + 1)
@@ -164,7 +164,7 @@ public struct DashboardState: Sendable {
             .sorted { $0.0.date < $1.0.date }
             .prefix(5)
             .map { e, day in
-                ExamRow(id: e.id, name: e.name, subject: subjects[e.subjectId], daysLeft: Int((Double(day - today) / Double(StudyClock.day)).rounded()), day: Format.shortDay(day, clock: clock))
+                ExamRow(id: e.id, name: e.name, subject: subjects[e.subjectId], daysLeft: Int((Double(day - today) / Double(StudyClock.day)).rounded()), day: Format.date(day, .shortWeekdayDayNumericMonth, clock: clock))
             }
 
         let presets = doc.presetNames

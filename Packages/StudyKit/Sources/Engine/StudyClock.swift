@@ -25,8 +25,13 @@ public struct StudyClock: Sendable {
 
     public func startOfDay(_ t: Int) -> Int { ms(calendar.startOfDay(for: date(t))) }
 
+    /// Stejný místní čas o `n` dní později. Jako `setDate` v JS: čas, který při změně času neexistuje,
+    /// se posune dopředu (2:30 → 3:30), a z dvakrát opakovaného času se bere první výskyt.
     public func addDays(_ t: Int, _ n: Int) -> Int {
-        ms(calendar.date(byAdding: .day, value: n, to: date(t)) ?? date(t + n * Self.day))
+        let millis = ((t % 1000) + 1000) % 1000
+        var c = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date(t - millis))
+        c.day = (c.day ?? 0) + n
+        return calendar.date(from: c).map { ms($0) + millis } ?? t + n * Self.day
     }
 
     /// 0 = pondělí … 6 = neděle
@@ -61,6 +66,14 @@ public struct StudyClock: Sendable {
     /// Číslo týdne podle ISO 8601.
     public func isoWeek(_ t: Int) -> Int {
         calendar.component(.weekOfYear, from: date(t))
+    }
+
+    /// Okamžik `min` minut po půlnoci dne `day` podle místního času (`atMinutes` na webu; i ve dnech změny času).
+    public func atMinutes(_ day: Int, _ min: Int) -> Int {
+        var c = calendar.dateComponents([.year, .month, .day], from: date(day))
+        c.hour = 0
+        c.minute = min
+        return calendar.date(from: c).map(ms) ?? startOfDay(day) + min * Self.minute
     }
 
     /// Minuty od půlnoci podle místního času.

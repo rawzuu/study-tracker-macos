@@ -2,9 +2,9 @@
   "name": "study-tracker-parity",
   "private": true,
   "type": "module",
-  "description": "Generuje kontrolní data z kódu webové aplikace pro paritní testy ve Swiftu.",
+  "description": "Generuje kontrolní data z kódu webové aplikace pro paritní testy ve Swiftu (Core i Engine).",
   "scripts": {
-    "generate": "LC_ALL=cs_CZ.UTF-8 tsx generate.ts"
+    "generate": "LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate.ts && LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate-engine.ts"
   },
   "devDependencies": {
     "tsx": "4.23.15"

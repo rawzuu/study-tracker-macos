@@ -25,7 +25,7 @@ jobs:
         run: |
           npm ci --prefix Tools/parity --no-audit --no-fund
           WEB_DIR=$PWD/.parity/web npm run generate --prefix Tools/parity
-          git diff --stat -- Packages/StudyKit/Tests/CoreTests/Fixtures
+          git diff --stat -- Packages/StudyKit/Tests/CoreTests/Fixtures Packages/StudyKit/Tests/EngineTests/Fixtures
       - name: Testy jádra proti aktuálnímu webu
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)"
