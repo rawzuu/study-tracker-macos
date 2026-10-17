@@ -90,11 +90,20 @@ public struct AppDocument: Sendable, Hashable {
 
     /// Měkké smazání – záznam zůstane s `deletedAt`, aby se smazání dostalo i na ostatní zařízení.
     public mutating func remove(_ key: CollectionKey, id: String, now: Int) {
-        guard var list = raw.array(key.rawValue) else { return }
-        for i in list.indices {
-            guard var o = list[i].objectValue, o.string("id") == id else { continue }
+        modifyRecords(key) { o in
+            guard o.string("id") == id else { return }
             o["deletedAt"] = .number(Double(now))
             o["updatedAt"] = .number(Double(now))
+        }
+    }
+
+    /// Úprava záznamů kolekce na místě (`d[key].map(...)` na webu): `change` dostane každý záznam
+    /// a může ho změnit. Pořadí záznamů i jejich klíčů zůstává, razítka nastavuje `change` sám.
+    public mutating func modifyRecords(_ key: CollectionKey, _ change: (inout JSONObject) -> Void) {
+        guard var list = raw.array(key.rawValue) else { return }
+        for i in list.indices {
+            guard var o = list[i].objectValue else { continue }
+            change(&o)
             list[i] = .object(o)
         }
         raw[key.rawValue] = .array(list)
