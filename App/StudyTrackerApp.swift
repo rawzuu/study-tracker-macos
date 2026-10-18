@@ -27,11 +27,12 @@ struct StudyTrackerApp: App {
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
-        // Poprvé (než si okno zapamatuje velikost) zabere většinu obrazovky – na velkém monitoru tedy víc než na notebooku.
+        // Poprvé (než si okno zapamatuje velikost): na notebooku 1440 × 920 (nebo celá menší obrazovka),
+        // na velkém monitoru většina obrazovky.
         .defaultWindowPlacement { _, context in
             let screen = context.defaultDisplay.visibleRect.size
-            return WindowPlacement(size: CGSize(width: min(max(screen.width * 0.82, 1000), 2400),
-                                                height: min(max(screen.height * 0.86, 640), 1500)))
+            return WindowPlacement(size: CGSize(width: min(screen.width, max(1440, screen.width * 0.82)),
+                                                height: min(screen.height, max(920, screen.height * 0.86))))
         }
         .windowToolbarStyle(.unified)
         .commands {
