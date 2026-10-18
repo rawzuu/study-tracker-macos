@@ -84,6 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var appleCalendar = AppleCalendarSync(app: store, service: Self.uiTesting ? DemoCalendars.service() : EventKitCalendarService())
     private var wakeObserver: NSObjectProtocol?
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Příjemce tlačítek v oznámení musí existovat dřív, než systém předá odpověď –
+        // aplikaci mohlo spustit právě tlačítko v oznámení (akce počká na načtení dat).
+        _ = timer
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Data se načítají hned po spuštění, nezávisle na okně (i když aplikaci spustí odkaz).
         Task {

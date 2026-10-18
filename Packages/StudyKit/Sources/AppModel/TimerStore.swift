@@ -29,6 +29,10 @@ public final class TimerStore {
     @ObservationIgnored private var pristine: Bool
     /// Odkaz, který přišel dřív, než se načetla data (spuštění aplikace odkazem).
     @ObservationIgnored private var pendingLink: TimerLink?
+    /// Akce z oznámení, která přišla dřív, než se načetla data (aplikaci spustilo oznámení).
+    @ObservationIgnored private var pendingAction: TimerAction?
+    /// Poslední uložené sezení – hodnocení z oznámení, když už okno s hodnocením zmizelo.
+    @ObservationIgnored private var lastSessionId: String?
 
     static let stateKey = "st.timer"
 
@@ -40,6 +44,7 @@ public final class TimerStore {
         let saved = defaults.data(forKey: Self.stateKey).flatMap { try? JSONDecoder().decode(TimerState.self, from: $0) }
         state = saved ?? TimerState(modeId: Schema.defaultSettings.string("defaultMode") ?? "pomodoro")
         pristine = saved == nil
+        effects?.setActionHandler { [weak self] action in self?.perform(action) }
     }
 
     // MARK: - Odvozené hodnoty
@@ -81,6 +86,43 @@ public final class TimerStore {
         if app.phase == .ready, let link = pendingLink {
             pendingLink = nil
             open(link)
+        }
+        if app.phase == .ready, let action = pendingAction {
+            pendingAction = nil
+            perform(action)
+        }
+    }
+
+    /// Tlačítko v oznámení na konci bloku nebo pauzy. Nejdřív dožene konec fáze (oznámení mohlo
+    /// přijít, když aplikace spala), pak udělá jen to, co v daném stavu dává smysl.
+    public func perform(_ action: TimerAction) {
+        guard app.phase == .ready else {
+            pendingAction = action
+            return
+        }
+        refresh()
+        let onBreak = state.phase != .work
+        switch action {
+        case .focus(let focus):
+            rateLastBlock(focus: focus)
+        case .startBreak:
+            if onBreak && state.status == .ready { start() }
+        case .skipBreak, .startWork:
+            if onBreak { skip() }
+            if state.phase == .work && state.status == .ready { start() }
+        case .endSeries:
+            if !onBreak && (state.status == .running || state.status == .paused) { stop() } else { discard() }
+        }
+    }
+
+    /// Soustředění k právě skončenému bloku (z oznámení) – zavře i okno s hodnocením.
+    private func rateLastBlock(focus: Int) {
+        guard (1...5).contains(focus) else { return }
+        if pendingRating != nil {
+            saveRating(focus: focus, recall: "", note: "")
+        } else if let id = lastSessionId, var session = app.document.record(Session.self, id: id) {
+            session.focus = focus
+            app.upsert(session)
         }
     }
 
@@ -164,6 +206,7 @@ public final class TimerStore {
             switch event {
             case .session(let session):
                 app.update { $0.saveTimerSession(session, now: t) }
+                lastSessionId = session.id
                 let s = app.document.settings
                 if s.askFocusRating || s.askRecall { pendingRating = session.id }
             case .tooShort:
@@ -189,6 +232,45 @@ public final class TimerStore {
             try? await Task.sleep(for: .milliseconds(delay), tolerance: .milliseconds(250))
             guard !Task.isCancelled else { return }
             self?.refresh()
+        }
+    }
+}
+
+/// Tlačítka v oznámení na konci bloku a pauzy.
+public enum TimerAction: Sendable, Hashable {
+    case startBreak, skipBreak, startWork, endSeries
+    /// Soustředění 1–5 k bloku, který právě skončil.
+    case focus(Int)
+
+    public var identifier: String {
+        switch self {
+        case .startBreak: "st.startBreak"
+        case .skipBreak: "st.skipBreak"
+        case .startWork: "st.startWork"
+        case .endSeries: "st.endSeries"
+        case .focus(let n): "st.focus.\(n)"
+        }
+    }
+
+    public init?(identifier: String) {
+        switch identifier {
+        case "st.startBreak": self = .startBreak
+        case "st.skipBreak": self = .skipBreak
+        case "st.startWork": self = .startWork
+        case "st.endSeries": self = .endSeries
+        default:
+            guard identifier.hasPrefix("st.focus."), let n = Int(identifier.dropFirst("st.focus.".count)), (1...5).contains(n) else { return nil }
+            self = .focus(n)
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .startBreak: "Začít pauzu"
+        case .skipBreak: "Bez pauzy – další blok"
+        case .startWork: "Začít další blok"
+        case .endSeries: "Ukončit sérii"
+        case .focus(let n): "Soustředění \(n) – \(Format.focusLabels[n].lowercased())"
         }
     }
 }

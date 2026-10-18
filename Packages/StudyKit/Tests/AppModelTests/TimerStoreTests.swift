@@ -162,3 +162,63 @@ struct MenuBarStatusTests {
         #expect(status.title == "23:59" && status.symbol == "pause.circle", "pauza čas nezmění")
     }
 }
+
+@MainActor
+@Suite("Tlačítka v oznámení")
+struct TimerActionTests {
+    @Test("Po bloku: hodnocení z oznámení uloží soustředění, „Bez pauzy“ spustí další blok, „Ukončit“ sérii ukončí")
+    func afterBlock() async throws {
+        let app = try await makeApp(defaults: freshDefaults()) { $0.askFocusRating = true }
+        let clock = TestClock()
+        let timer = TimerStore(app: app) { clock.t }
+        timer.configure(TimerSetup(subjectId: "anat", modeId: "pomodoro"))
+        timer.start()
+        // oznámení přišlo, ale aplikace konec bloku ještě nezpracovala – akce ho dožene
+        clock.t += 25 * minute
+        timer.perform(.focus(4))
+        #expect(app.document.alive(Session.self).map(\.focus) == [4])
+        #expect(timer.pendingRating == nil, "okno s hodnocením se zavře")
+        #expect(timer.state.phase != .work && timer.state.status == .running, "pauza běží sama")
+
+        // druhé hodnocení stejného bloku ho jen opraví
+        timer.perform(.focus(5))
+        #expect(app.document.alive(Session.self).map(\.focus) == [5])
+
+        timer.perform(.skipBreak)
+        #expect(timer.state.phase == .work && timer.state.status == .running)
+        clock.t += 2 * minute
+        timer.perform(.endSeries)
+        #expect(timer.state.status == .idle)
+        #expect(app.document.alive(Session.self).count == 2, "rozpracovaný blok se uložil")
+    }
+
+    @Test("Po pauze: „Začít další blok“; pauza, která čeká, jde spustit z oznámení")
+    func afterBreak() async throws {
+        let app = try await makeApp(defaults: freshDefaults()) { $0.autoStartBreaks = false }
+        let clock = TestClock()
+        let timer = TimerStore(app: app) { clock.t }
+        timer.configure(TimerSetup(subjectId: "anat", modeId: "pomodoro"))
+        timer.start()
+        clock.t += 25 * minute
+        timer.perform(.startBreak)
+        #expect(timer.state.phase != .work && timer.state.status == .running)
+        clock.t += 5 * minute
+        timer.perform(.startWork)
+        #expect(timer.state.phase == .work && timer.state.status == .running)
+        #expect(timer.state.segmentStart == clock.t)
+    }
+
+    @Test("Tlačítka odpovídají nastavení; identifikátory jdou tam i zpět")
+    func actions() {
+        #expect(BlockNotifier.actions(phase: .work, autoBreak: true, autoWork: false, rating: true)
+            == [.skipBreak, .endSeries, .focus(5), .focus(4), .focus(3), .focus(2), .focus(1)])
+        #expect(BlockNotifier.actions(phase: .work, autoBreak: false, autoWork: false, rating: false) == [.startBreak, .skipBreak, .endSeries])
+        #expect(BlockNotifier.actions(phase: .short, autoBreak: true, autoWork: true, rating: true) == [.endSeries])
+        for a in [TimerAction.startBreak, .skipBreak, .startWork, .endSeries, .focus(1), .focus(5)] {
+            #expect(TimerAction(identifier: a.identifier) == a)
+        }
+        #expect(TimerAction(identifier: "st.focus.6") == nil)
+        #expect(TimerAction(identifier: "com.apple.UNNotificationDefaultActionIdentifier") == nil)
+        #expect(TimerAction.focus(5).title == "Soustředění 5 – hluboký flow")
+    }
+}

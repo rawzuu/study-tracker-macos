@@ -111,6 +111,10 @@ V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained tok
 - **Apple Kalendář přímo (jen Mac):** Nastavení → Apple Kalendář. Mac zapisuje bloky (od dvou týdnů zpět) a zkoušky do vlastního kalendáře „Studijní plán“ – v iCloudu jsou hned v iPhonu, iPadu i hodinkách, bez čekání na obnovu odebíraného kalendáře. Kalendář je jen kopie `data.json`: po každé změně dat se srovná, úpravy v Kalendáři se přepíšou podle dat a ostatních kalendářů se zápis nikdy nedotkne (každá změna se ověřuje). Událost odkazuje zpátky do aplikace (`studytracker://planovac?blok=…`). Další Mac najde stejný kalendář podle názvu. Odebíraný kalendář z gistu může zůstat jako záloha – v Kalendáři si ho jen skryj, ať bloky nevidíš dvakrát.
 - **Obsazený čas:** události z vybraných kalendářů (ve výchozím stavu vlastní kalendáře, ne odebírané ani narozeniny; bez celodenních, volných a odmítnutých) ranní plán obchází a Kalendář je ukazuje šedě šrafované.
 
+## Oznámení s tlačítky
+
+Na konci bloku přijde oznámení s tlačítky v „Možnostech“: hodnocení soustředění 1–5 (zavře i okno s hodnocením), „Bez pauzy – další blok“, „Ukončit sérii“ a – když se pauza nespouští sama – „Začít pauzu“. Na konci pauzy „Začít další blok“. Všechno bez přepnutí do aplikace; když oznámení aplikaci spustí, akce počká na načtení dat.
+
 ## Horní lišta
 
 Ikona v horní liště ukazuje odpočet běžícího bloku (překresluje se jen tehdy, když časovač běží – v klidu nestojí žádné CPU). Okénko z lišty: dnešní čas a cíl, běžící blok s ovládáním (pozastavit, hotovo, ukončit), v klidu „Co teď?“ se spuštěním jedním kliknutím a nejbližší blok z plánu. Vypíná se v Nastavení → Horní lišta (jen pro tento Mac).

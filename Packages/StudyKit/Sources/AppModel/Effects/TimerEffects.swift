@@ -15,6 +15,12 @@ public protocol TimerEffects: AnyObject {
     var isPreviewing: Bool { get }
     /// Ukázka zvonku (Nastavení).
     func previewChime(volume: Double)
+    /// Kam poslat tlačítko stisknuté v oznámení.
+    func setActionHandler(_ handler: @escaping @MainActor (TimerAction) -> Void)
+}
+
+public extension TimerEffects {
+    func setActionHandler(_ handler: @escaping @MainActor (TimerAction) -> Void) {}
 }
 
 /// Skutečné zvuky a systémové notifikace.
@@ -50,7 +56,7 @@ public final class LiveTimerEffects: TimerEffects {
 
         if notifications {
             if settings.notifications, let phaseEnd {
-                notifier.schedule(at: phaseEnd, phase: state.phase, now: now)
+                notifier.schedule(at: phaseEnd, phase: state.phase, settings: settings, now: now)
             } else {
                 notifier.cancel()
             }
@@ -86,6 +92,11 @@ public final class LiveTimerEffects: TimerEffects {
             preview = nil
             audio.stopNoise()
         }
+    }
+
+    public func setActionHandler(_ handler: @escaping @MainActor (TimerAction) -> Void) {
+        // Oznámení musí mít příjemce hned po spuštění – aplikaci mohlo spustit právě tlačítko v oznámení.
+        if notifications { notifier.onAction = handler }
     }
 
     public func previewChime(volume: Double) {
