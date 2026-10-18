@@ -36,6 +36,10 @@ targets:
         product: DesignSystem
       - package: StudyKit
         product: Features
+      - package: StudyKit
+        product: WidgetData
+      # Widgety (rozšíření WidgetKitu) jsou součástí aplikace.
+      - target: StudyTrackerWidgets
     info:
       path: App/Info.plist
       properties:
@@ -49,6 +53,8 @@ targets:
           - CFBundleURLName: cz.rawzuu.studytracker.link
             CFBundleURLSchemes: [studytracker]
         # Apple Kalendář: zápis plánu do vlastního kalendáře a obsazený čas z ostatních (jen na žádost v Nastavení).
+        # Sdílený kontejner s widgety (souhrn pro widgety a příkazy z jejich tlačítek).
+        STAppGroup: $(ST_APP_GROUP)
         NSCalendarsFullAccessUsageDescription: Study Tracker zapisuje tvůj studijní plán do kalendáře „Studijní plán“ a události z ostatních kalendářů bere v ranním plánu jako obsazený čas. Ostatní kalendáře jen čte.
     entitlements:
       path: App/StudyTracker.entitlements
@@ -60,17 +66,62 @@ targets:
         com.apple.security.files.user-selected.read-write: true
         # Apple Kalendář (EventKit) – jen po zapnutí v Nastavení a se souhlasem v systému.
         com.apple.security.personal-information.calendars: true
+        # Sdílený kontejner s widgety (identifikátor začíná Team ID – na Macu bez profilu).
+        com.apple.security.application-groups: [$(ST_APP_GROUP)]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker
         APP_DISPLAY_NAME: Study Tracker
+        ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       configs:
         # Vývojové sestavení (Xcode ⌘R, UI testy) má vlastní identifikátor, a tedy vlastní data,
-        # nastavení i Klíčenku – nikdy nesáhne na data nainstalované aplikace a nekoliduje s ní.
+        # nastavení, Klíčenku i kontejner widgetů – nikdy nesáhne na data nainstalované aplikace.
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.dev
+          APP_DISPLAY_NAME: Study Tracker (vývoj)
+          ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker.dev
+  StudyTrackerWidgets:
+    type: app-extension
+    platform: macOS
+    sources: [Widgets]
+    dependencies:
+      - package: StudyKit
+        product: WidgetUI
+      - package: StudyKit
+        product: WidgetData
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        STAppGroup: $(ST_APP_GROUP)
+        STAppBundleId: $(ST_APP_BUNDLE_ID)
+    entitlements:
+      path: Widgets/StudyTrackerWidgets.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(ST_APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.widgets
+        ST_APP_BUNDLE_ID: cz.rawzuu.studytracker
+        ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker
+        APP_DISPLAY_NAME: Study Tracker
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.dev.widgets
+          ST_APP_BUNDLE_ID: cz.rawzuu.studytracker.dev
+          ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker.dev
           APP_DISPLAY_NAME: Study Tracker (vývoj)
   StudyTrackerUITests:
     type: bundle.ui-testing

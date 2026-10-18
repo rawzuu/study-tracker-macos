@@ -35,6 +35,17 @@ public enum Palette {
         return Color(nsColor: base.blended(withFraction: amount, of: NSColor(rgb: other)) ?? base)
     }
 
+    /// Pevná barva pro daný vzhled (widgety a náhledy kreslí mimo okno aplikace, kde se dynamická barva
+    /// nemusí přepnout se systémem).
+    public static func fixed(_ color: Color, _ scheme: ColorScheme) -> Color {
+        let dynamic = NSColor(color)
+        var resolved = dynamic
+        NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+            resolved = dynamic.usingColorSpace(.sRGB) ?? dynamic
+        }
+        return Color(nsColor: resolved)
+    }
+
     /// Text světlého vzhledu – s ním se v kalendáři ztmavují názvy předmětů na světlém pozadí.
     public static let lightText: UInt32 = 0x1D1B18
 

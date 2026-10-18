@@ -7,7 +7,8 @@ Stav: **v0.5.0 – M4 hotový.** Mac synchronizuje data s GitHubem oběma směry
 ## Architektura
 
 ```
-App/                    vstupní bod, okna, navigace (SwiftUI)
+App/                    vstupní bod, okna, horní lišta, navigace, akce pro Zkratky (SwiftUI, App Intents)
+Widgets/                rozšíření widgetů – jen registrace widgetů a akce tlačítek (WidgetKit)
 UITests/                UI testy hlavních toků (XCUITest)
 Packages/StudyKit/      Swift Package s moduly aplikace
   Sources/Core/         datový model sdílený s webem – bez závislostí
@@ -23,6 +24,8 @@ Packages/StudyKit/      Swift Package s moduly aplikace
                         odebíraný kalendář, hlášky s „Vrátit“
   Sources/DesignSystem/ barvy a prvky vzhledu „Deník“
   Sources/Features/     obrazovky (SwiftUI) a jejich stavy (čisté funkce s testy)
+  Sources/WidgetData/   souhrn pro widgety a příkazy z jejich tlačítek (jen Foundation)
+  Sources/WidgetUI/     vzhled a časová osa widgetů (bez dat, sítě a databáze – malá paměť)
   Tests/                testy každého modulu, */Fixtures = kontrolní data z webu
 Tools/parity/           generátor kontrolních dat ze skutečného kódu webové aplikace
 Config/                 xcconfig (podpis)
@@ -120,6 +123,16 @@ V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained tok
 ## Oznámení s tlačítky
 
 Na konci bloku přijde oznámení s tlačítky v „Možnostech“: hodnocení soustředění 1–5 (zavře i okno s hodnocením), „Bez pauzy – další blok“, „Ukončit sérii“ a – když se pauza nespouští sama – „Začít pauzu“. Na konci pauzy „Začít další blok“. Všechno bez přepnutí do aplikace; když oznámení aplikaci spustí, akce počká na načtení dat.
+
+## Widgety
+
+Na plochu a do Centra oznámení: **Dnešek** (malý, střední), **Časovač** (malý, střední – živý odpočet, pauza, hotovo, v klidu „Co teď?“ se spuštěním), **Plán** (střední, velký – i zítřek a zkouška), **Zkoušky** (malý, střední) a **Přehled** (velký a extra velký – pro velký monitor).
+
+- Aplikace zapisuje do sdíleného kontejneru (app group) malý souhrn – jen odvozený výřez z dat, zdrojem pravdy zůstává `data.json`. Zapisuje a překresluje widgety jen při skutečné změně (WidgetKit má denní limit překreslení).
+- Widget si stav dopočítá sám: odpočet běží živě (systémový časovač, žádné překreslování), během bloku se kruh posune každou minutu, na začátku a konci bloků a o půlnoci se přepne sám – i když aplikace neběží.
+- Tlačítka: když aplikace běží, pošlou příkaz rovnou (soubor v kontejneru + Darwin oznámení), widget hned ukáže očekávaný stav a do vteřiny skutečný; když neběží, aplikaci otevřou odkazem a příkaz provedou po načtení dat.
+- Vzhled Deník ve světlém i tmavém režimu a v tlumeném režimu plochy (vibrant). Náhledy: `ST_SNAPSHOT_DIR=… swift test --filter WidgetSnapshots`.
+- Vývojové sestavení má vlastní kontejner a vlastní widgety („Study Tracker (vývoj)“); po lokálním buildu ho odregistruj (`Tools/dev/unregister-dev.sh`), ať se v galerii widgetů neplete.
 
 ## Horní lišta
 

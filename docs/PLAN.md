@@ -60,7 +60,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M2 ✓ | Časovač, Přehled, šum, zvonky, notifikace, URL odkaz | každodenní používání (v0.3.0) |
 | M3 ✓ | Kalendář, zkoušky, rozvrh .ics, export a odebíraný kalendář | v0.4.0 |
 | M4 ✓ | Co teď?, ranní plán (bez opakování) | v0.5.0 |
-| M4+ | Integrace s macOS (schváleno 18. 10. 2026): velký monitor, Apple Kalendář (EventKit), horní lišta, oznámení s akcemi, Zkratky a Siri, widgety | #27–#32 |
+| M4+ ✓ | Integrace s macOS (schváleno 18. 10. 2026): velký monitor, Apple Kalendář (EventKit), horní lišta, oznámení s akcemi, Zkratky a Siri, widgety | v0.6.0, #27–#32 |
 | M5 | Statistiky, report a kalibrace, reflexe, úspěchy | |
 | M6 | Nastavení, koš, export/import, Anki, onboarding | parita |
 | M7 | profilování v Instruments, optimalizace, výkonnostní testy | v1.0.0 |

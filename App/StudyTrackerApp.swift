@@ -6,6 +6,8 @@ import Core
 import Engine
 import Features
 import SwiftUI
+import WidgetData
+import WidgetKit
 
 @main
 struct StudyTrackerApp: App {
@@ -81,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var calendarFeed = CalendarFeedSync(app: store)
     lazy var advisor = Advisor(store: store)
     lazy var menuBar = MenuBarStatus(timer: timer)
+    // Widgety: souhrn do sdíleného kontejneru (UI testy bez widgetů) a příkazy z jejich tlačítek.
+    lazy var widgets = WidgetBridge(app: store, timer: timer, advisor: advisor, files: Self.uiTesting ? nil : WidgetFiles.shared()) {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
     // UI testy mají kalendáře v paměti – nikdy nesahají na skutečný Apple Kalendář.
     lazy var appleCalendar = AppleCalendarSync(app: store, service: Self.uiTesting ? DemoCalendars.service() : EventKitCalendarService())
     private var wakeObserver: NSObjectProtocol?
@@ -103,6 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             timer.refresh()
             // Odebíraný kalendář se aktualizuje po změnách plánu (jen když je zapnutý).
             calendarFeed.start()
+            // Widgety dostanou souhrn a začnou se poslouchat jejich tlačítka.
+            widgets.start()
             // Apple Kalendář: zápis plánu (když je zapnutý) a obsazený čas z ostatních kalendářů.
             await appleCalendar.start()
         }
@@ -116,6 +124,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `studytracker://casovac…` – otevře časovač a s `start=1` rovnou spustí blok.
     func application(_ application: NSApplication, open urls: [URL]) {
+        // Tlačítko widgetu, když aplikace neběžela: příkaz se provede po načtení dat.
+        for url in urls {
+            guard let command = WidgetCommand(url: url, at: store.nowMs) else { continue }
+            widgets.open(command)
+        }
+        // Odkaz na stránku (klepnutí na widget): studytracker://prehled, …/planovac…
+        for url in urls where url.scheme?.lowercased() == TimerLink.scheme && url.query == nil {
+            if let page = Page(rawValue: url.host ?? "") { navigator.page = page }
+        }
         // Odkaz z události v Apple Kalendáři: kalendář na týdnu bloku nebo zkoušky.
         for url in urls {
             guard let key = CalendarMirror.Key(url: url) else { continue }
@@ -159,6 +176,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Tlačítka ve widgetech pak aplikaci otevřou odkazem.
+        widgets.markStopped()
         let store = store
         Task {
             // Ukončení nesmí viset na síti – nejvýš 5 s, data jsou stejně uložená na Macu.
