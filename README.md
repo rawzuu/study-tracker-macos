@@ -82,6 +82,8 @@ TEST_RUNNER_ST_NO_SCREENSHOTS=1 xcodebuild test …                 # bez snímk
 ST_SNAPSHOT_DIR=/tmp/nahledy swift test --package-path Packages/StudyKit --filter Náhledy   # náhledy obrazovek do PNG
 ```
 
+Spotřeba v klidu (vývojové sestavení s ukázkovými daty v paměti, spuštěné skrytě): `Tools/dev/idle-cpu.sh` – CPU má být ≈ 0 %.
+
 Instalace sestavené verze do /Applications (předchozí verze se přesune do zálohy, nic se nemaže):
 
 ```bash

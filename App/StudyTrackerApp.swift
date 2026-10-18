@@ -48,7 +48,9 @@ struct StudyTrackerApp: App {
         }
 
         // Horní lišta: odpočet a ovládání bez otevírání okna (vypíná se v Nastavení).
-        MenuBarExtra(isInserted: $menuBarShown) {
+        // Jen čtení: zápis systému do vazby (při každé aktualizaci ikony) by přes UserDefaults znovu
+        // přepočítal scénu a vznikla by nekonečná smyčka (100 % CPU).
+        MenuBarExtra(isInserted: Binding(get: { menuBarShown }, set: { _ in })) {
             MenuBarPanel(openPage: { delegate.navigator.page = Page(rawValue: $0) ?? .prehled })
                 .environment(delegate.store)
                 .environment(delegate.timer)
