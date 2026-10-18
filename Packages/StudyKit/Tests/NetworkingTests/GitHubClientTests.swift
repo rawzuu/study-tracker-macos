@@ -67,6 +67,32 @@ struct GitHubClientTests {
         #expect(server.requests[1].path == contentsPath && server.requests[1].query == "ref=main")
     }
 
+    @Test("Podmíněné stažení: se značkou 304 bez obsahu, bez značky se porovná verze, jiná verze se stáhne")
+    func conditionalFetch() async throws {
+        let tag = #"W/"e1""#
+        let server = StubServer { r in
+            if r.header("If-None-Match") == tag { return .http(304) }
+            return .json(200, ["sha": "s1", "encoding": "base64", "content": githubBase64("{}")], headers: ["ETag": tag])
+        }
+        let client = server.client()
+        #expect(try await client.fetchFile(at: location, ifChangedFrom: "s1", etag: nil) == .unchanged(etag: tag))
+        #expect(server.requests[0].header("If-None-Match") == nil)
+        #expect(try await client.fetchFile(at: location, ifChangedFrom: "s1", etag: tag) == .unchanged(etag: tag))
+        #expect(server.requests[1].header("If-None-Match") == tag)
+        let changed = try await client.fetchFile(at: location, ifChangedFrom: "s0", etag: nil)
+        #expect(changed == .changed(RemoteFile(content: Data("{}".utf8), sha: "s1"), etag: tag))
+    }
+
+    @Test("Velký soubor ve stejné verzi se znovu nestahuje")
+    func conditionalLargeFile() async throws {
+        let server = StubServer { r in
+            if r.header("Accept") == "application/vnd.github.raw+json" { return .http(200, body: Data(repeating: 120, count: 1_200_000)) }
+            return .json(200, ["sha": "big", "encoding": "none", "content": ""])
+        }
+        #expect(try await server.client().fetchFile(at: location, ifChangedFrom: "big", etag: nil) == .unchanged(etag: nil))
+        #expect(server.requests.count == 1)
+    }
+
     @Test("Chybějící soubor v existujícím repu = nil")
     func fetchMissingFile() async throws {
         let server = StubServer { r in

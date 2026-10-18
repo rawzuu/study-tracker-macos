@@ -76,6 +76,12 @@ struct StudyTrackerApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let uiTesting = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+    /// `-measureTimer <stránka>`: s ukázkovými daty spustí blok a otevře stránku (měření výkonu).
+    private static let measurePage: Page? = {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-measureTimer"), i + 1 < args.count else { return nil }
+        return Page(rawValue: args[i + 1])
+    }()
     private static let log = Logger(subsystem: "cz.rawzuu.studytracker", category: "odkaz")
     let store = AppStore(environment: uiTesting ? .uiTesting() : .live())
     // UI testy běží potichu – bez šumu, zvonků a notifikací.
@@ -115,6 +121,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             widgets.start()
             // Apple Kalendář: zápis plánu (když je zapnutý) a obsazený čas z ostatních kalendářů.
             await appleCalendar.start()
+            // Měření výkonu s běžícím blokem (Tools/dev/idle-cpu.sh casovac) – jen s ukázkovými daty.
+            if Self.uiTesting, let page = Self.measurePage {
+                timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
+                timer.start()
+                navigator.page = page
+            }
         }
         // Po probuzení Macu dohnat konec bloku nebo pauzy, který proběhl ve spánku.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(

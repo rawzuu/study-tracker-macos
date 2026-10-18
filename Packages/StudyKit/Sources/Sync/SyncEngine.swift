@@ -183,7 +183,21 @@ public actor SyncEngine {
         setStatus(.syncing)
         do {
             for attempt in 0..<Self.maxAttempts {
-                let file = try await remote.fetch()
+                let file: RemoteFile?
+                if attempt == 0, !state.dirty, !adoptRemote, let known = remoteSha {
+                    // Na Macu nic nového a GitHub má nejspíš pořád stejnou verzi: podmíněný dotaz –
+                    // bez stahování, slučování a ukládání (pravidelná kontrola pak skoro nic nestojí).
+                    let check = try await remote.fetch(ifChangedFrom: known)
+                    guard started == generation else { return }
+                    switch check {
+                    case .changed(let changed): file = changed
+                    case .unchanged where !state.dirty: return confirmSynced()
+                    // Mezitím přišla změna z Macu → normálně stáhnout, sloučit a odeslat.
+                    case .unchanged: file = try await remote.fetch()
+                    }
+                } else {
+                    file = try await remote.fetch()
+                }
                 guard started == generation else { return }
                 let remoteDoc = try file.map { try Self.parse($0.content) }
                 let remoteText = remoteDoc.map(Merge.serialize)
@@ -201,16 +215,17 @@ public actor SyncEngine {
                     continuation.yield(.document(merged))
                     schedulePersist()
                 }
-                let text = Merge.serialize(merged)
+                // Sloučení často dá přesně stav GitHubu – text se pak nepočítá podruhé.
+                let text = remoteDoc == merged ? remoteText ?? Merge.serialize(merged) : Merge.serialize(merged)
 
                 if remoteText == text || state.mode == .readOnly {
-                    try await finish(sha: file?.sha, syncedText: remoteText)
+                    try await finish(sha: file?.sha, synced: remoteDoc.map { ($0, remoteText ?? "") })
                     return
                 }
                 do {
                     let sha = try await remote.push(Data(text.utf8), sha: file?.sha, message: Self.commitMessage(at: now()))
                     guard started == generation else { return }
-                    try await finish(sha: sha, syncedText: text)
+                    try await finish(sha: sha, synced: (merged, text))
                     return
                 } catch let error as GitHubError where error.isConflict && attempt < Self.maxAttempts - 1 {
                     continue  // mezitím zapsalo jiné zařízení – stáhnout, sloučit a zkusit znovu
@@ -227,12 +242,21 @@ public actor SyncEngine {
         }
     }
 
+    /// GitHub i dokument jsou od poslední synchronizace beze změny – jen se potvrdí stav.
+    private func confirmSynced() {
+        let at = now()
+        state.lastSyncedAt = at
+        state.status = .synced(at: at)
+        emitState()
+    }
+
     /// Úspěch: zapamatuje si verzi na GitHubu a uloží dokument.
-    /// `syncedText` = obsah GitHubu po synchronizaci; pokud se dokument mezitím změnil, zůstává `dirty`.
-    private func finish(sha: String?, syncedText: String?) async throws {
+    /// `synced` = obsah GitHubu po synchronizaci (dokument a jeho text); pokud se dokument mezitím
+    /// změnil, zůstává `dirty`.
+    private func finish(sha: String?, synced: (document: AppDocument, text: String)?) async throws {
         remoteSha = sha
         let at = now()
-        state.dirty = syncedText.map { $0 != Merge.serialize(document) } ?? (document != .empty)
+        state.dirty = synced.map { document != $0.document && Merge.serialize(document) != $0.text } ?? (document != .empty)
         state.lastSyncedAt = at
         state.status = .synced(at: at)
         emitState()

@@ -105,7 +105,54 @@ struct SyncEngineTests {
         await engine.syncNow()
         await engine.syncNow()
         #expect(await remote.commits.isEmpty)
+        #expect(await remote.fetchCount == 1)
+        #expect(await remote.unchangedChecks == 1)
+    }
+
+    @Test("Beze změn na obou stranách se nic nestahuje, neslučuje ani neukládá")
+    func unchangedSkipsWork() async throws {
+        let remote = FakeGitHub(document: doc(("s1", "Anatomie", 1_000)))
+        let (engine, store) = try await makeEngine(remote)
+        await engine.syncNow()
+        await engine.settle()
+        let saved = try #require(try await store.load())
+        try await Task.sleep(for: .milliseconds(20))
+        await engine.syncNow()
+        await engine.settle()
+        #expect(await remote.fetchCount == 1)
+        #expect(await remote.unchangedChecks == 1)
+        #expect(try await store.load()?.savedAt == saved.savedAt, "nic se znovu neukládalo")
+        let state = await engine.state
+        guard case .synced(let at) = state.status else { Issue.record("stav \(state.status)"); return }
+        #expect(at > saved.savedAt && state.dirty == false)
+    }
+
+    @Test("Změna z webu mezi kontrolami se stáhne a sloučí")
+    func changedRemoteIsFetched() async throws {
+        let remote = FakeGitHub(document: doc(("s1", "Anatomie", 1_000)))
+        let (engine, _) = try await makeEngine(remote)
+        await engine.syncNow()
+        await remote.webWrite(Merge.serialize(doc(("s1", "Anatomie", 1_000), ("s2", "Fyziologie", 2_000))))
+        await engine.syncNow()
+        #expect(names(await engine.document) == ["s1": "Anatomie", "s2": "Fyziologie"])
         #expect(await remote.fetchCount == 2)
+        #expect(await remote.unchangedChecks == 0)
+        #expect(await remote.commits.isEmpty)
+        #expect(await engine.state.dirty == false)
+    }
+
+    @Test("Změna na Macu během kontroly se neztratí: stáhne, sloučí a odešle se")
+    func editDuringCheckIsPushed() async throws {
+        let remote = FakeGitHub(document: doc(("s1", "Anatomie", 1_000)))
+        let (engine, _) = try await makeEngine(remote)
+        await engine.syncNow()
+        let base = await engine.document
+        await remote.duringNextCheck { await engine.localDidChange(adding(base, "s2", "Fyziologie", at: 2_000)) }
+        await engine.syncNow()
+        await engine.settle()
+        #expect(names(try await remote.document) == ["s1": "Anatomie", "s2": "Fyziologie"])
+        #expect(await remote.commits.count == 1)
+        #expect(await engine.state.dirty == false)
     }
 
     @Test("Chybějící soubor se vytvoří (jen při zápisu)", arguments: [SyncMode.readWrite, .readOnly])
@@ -397,5 +444,20 @@ struct SyncEngineTests {
         c.timeZone = tz
         let date = Calendar(identifier: .gregorian).date(from: c)!
         #expect(SyncEngine.commitMessage(at: date, timeZone: tz) == "Sync dat (Mac) · 17. 10. 2026 9:05:03")
+    }
+}
+
+@Suite("Synchronizace – značky odpovědí")
+struct ETagMemoryTests {
+    @Test("Značka patří k verzi: k jiné verzi se nepošle (304 by jinak zamlčelo změnu)")
+    func pairsWithVersion() {
+        let memory = ETagMemory()
+        #expect(memory.etag(for: "v1") == nil)
+        memory.remember("e1", sha: "v1")
+        #expect(memory.etag(for: "v1") == "e1" && memory.etag(for: "v2") == nil)
+        memory.remember("e2", sha: "v2")
+        #expect(memory.etag(for: "v1") == nil && memory.etag(for: "v2") == "e2")
+        memory.remember(nil, sha: "v3")
+        #expect(memory.etag(for: "v2") == nil && memory.etag(for: "v3") == nil)
     }
 }

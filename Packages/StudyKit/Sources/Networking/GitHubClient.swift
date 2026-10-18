@@ -11,6 +11,14 @@ public struct RemoteFile: Sendable, Hashable {
     }
 }
 
+/// Výsledek podmíněného stažení (`fetchFile(at:ifChangedFrom:etag:)`).
+public enum FileChange: Sendable, Hashable {
+    /// Soubor má pořád známou verzi; `etag` = značka odpovědi pro příští dotaz.
+    case unchanged(etag: String?)
+    /// Jiná verze, nebo soubor zmizel (`nil`), a značka odpovědi.
+    case changed(RemoteFile?, etag: String?)
+}
+
 /// Přístup ke GitHub Contents API – stejné požadavky jako `github.ts` na webu.
 ///
 /// Nemá žádný měnitelný stav (token a adresa jsou neměnné, `URLSession` je bezpečná pro souběh),
@@ -35,24 +43,47 @@ public struct GitHubClient: Sendable {
 
     /// Stáhne soubor (`fetchRemote`). `nil` = soubor ještě neexistuje, repo ale ano.
     public func fetchFile(at location: RepoLocation) async throws(GitHubError) -> RemoteFile? {
+        try await fetch(location, ifChangedFrom: nil, etag: nil).file
+    }
+
+    /// Stáhne soubor, jen když už nemá verzi `sha`. `etag` je značka odpovědi, která k `sha` patří:
+    /// GitHub na ni odpoví 304 bez obsahu (a takový dotaz nečerpá limit API). Bez značky se porovná
+    /// verze z první odpovědi – obsah (a velký soubor zvlášť) se pak stahuje jen při změně.
+    public func fetchFile(at location: RepoLocation, ifChangedFrom sha: String, etag: String?) async throws(GitHubError) -> FileChange {
+        let fetched = try await fetch(location, ifChangedFrom: sha, etag: etag)
+        return fetched.unchanged ? .unchanged(etag: fetched.etag) : .changed(fetched.file, etag: fetched.etag)
+    }
+
+    private struct Fetched {
+        var file: RemoteFile?
+        var etag: String?
+        var unchanged = false
+    }
+
+    private func fetch(_ location: RepoLocation, ifChangedFrom sha: String?, etag: String?) async throws(GitHubError) -> Fetched {
         let ref = "ref=\(URLPath.component(location.branch))"
-        let (data, http) = try await send(request(contentsPath(location), query: ref))
+        var first = request(contentsPath(location), query: ref)
+        if let etag { first.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        let (data, http) = try await send(first)
+        if http.statusCode == 304 { return Fetched(file: nil, etag: etag, unchanged: true) }
         if http.statusCode == 404 {
             // Rozliší „soubor neexistuje“ od „repo neexistuje / bez přístupu“.
             let (_, repo) = try await send(request(repoPath(location)))
             try check(repo)
-            return nil
+            return Fetched(file: nil, etag: nil)
         }
         try check(http)
         let body = try decode(ContentsResponse.self, from: data)
+        let tag = http.value(forHTTPHeaderField: "ETag")
+        if let sha, body.sha == sha { return Fetched(file: nil, etag: tag, unchanged: true) }
         if let content = body.content, !content.isEmpty, body.encoding == "base64" {
             guard let bytes = Data(base64Encoded: content, options: .ignoreUnknownCharacters) else { throw .invalidResponse }
-            return RemoteFile(content: bytes, sha: body.sha)
+            return Fetched(file: RemoteFile(content: bytes, sha: body.sha), etag: tag)
         }
         // Soubory nad 1 MB API v `content` nevrací – stáhnou se jako raw.
         let (raw, rawHTTP) = try await send(request(contentsPath(location), query: ref, accept: "application/vnd.github.raw+json"))
         try check(rawHTTP)
-        return RemoteFile(content: raw, sha: body.sha)
+        return Fetched(file: RemoteFile(content: raw, sha: body.sha), etag: tag)
     }
 
     /// Zapíše soubor jedním commitem (`pushRemote`). `sha` = verze, kterou přepisujeme (`nil` pro nový soubor).
