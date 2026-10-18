@@ -81,4 +81,18 @@ public struct StudyClock: Sendable {
         let c = calendar.dateComponents([.hour, .minute, .second], from: date(t))
         return Double((c.hour ?? 0) * 60 + (c.minute ?? 0)) + Double(c.second ?? 0) / 60
     }
+
+    /// Hodina místního času (`getHours()` v JS).
+    public func hour(_ t: Int) -> Int {
+        calendar.component(.hour, from: date(t))
+    }
+
+    /// Hodina místního času a začátek té další (`new Date(y, m, d, h + 1)` v JS) – i ve dnech změny času,
+    /// kdy hodina trvá 0 nebo 2 hodiny skutečného času.
+    func hourAndNext(_ t: Int) -> (hour: Int, next: Int) {
+        var c = calendar.dateComponents([.year, .month, .day, .hour], from: date(t))
+        let h = c.hour ?? 0
+        c.hour = h + 1
+        return (h, calendar.date(from: c).map(ms) ?? t + Self.hour)
+    }
 }

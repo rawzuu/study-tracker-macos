@@ -2,9 +2,9 @@
   "name": "study-tracker-parity",
   "private": true,
   "type": "module",
-  "description": "Generuje kontrolní data z kódu webové aplikace pro paritní testy ve Swiftu (Core, Engine a kalendář).",
+  "description": "Generuje kontrolní data z kódu webové aplikace pro paritní testy ve Swiftu (Core, Engine, kalendář, Co teď? a ranní plán).",
   "scripts": {
-    "generate": "LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate.ts && LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate-engine.ts && LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate-planner.ts"
+    "generate": "LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate.ts && LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate-engine.ts && LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate-planner.ts && LC_ALL=cs_CZ.UTF-8 TZ=Europe/Prague tsx generate-advice.ts"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

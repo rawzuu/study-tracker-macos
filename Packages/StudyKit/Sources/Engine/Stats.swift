@@ -62,4 +62,80 @@ public enum Stats {
         guard !rated.isEmpty else { return nil }
         return Double(rated.reduce(0, +)) / Double(rated.count)
     }
+
+    // MARK: - Denní doba
+
+    /// Dvouhodinové okno dne, které začíná v hodině `from` (`to` = `from + 2`, přes půlnoc dokola).
+    public struct HourWindow: Sendable, Hashable {
+        public let from: Int
+        public var to: Int { (from + 2) % 24 }
+    }
+
+    /// Čistý čas sezení rozpočítaný do hodin, přes které opravdu probíhalo (pauzy poměrně).
+    static func forEachHour(_ s: Session, clock: StudyClock, _ body: (_ t: Int, _ hour: Int, _ minutes: Double) -> Void) {
+        let span = Double(max(1, s.end - s.start))
+        let ratio = Double(s.durationSec * 1000) / span
+        var t = s.start
+        while t < s.end {
+            let (hour, next) = clock.hourAndNext(t)
+            let seg = min(next, s.end) - t
+            body(t, hour, Double(seg) * ratio / 60_000)
+            t += seg
+        }
+    }
+
+    /// Matice [den v týdnu][hodina] s minutami učení (`hourWeekdayMatrix` na webu).
+    public static func hourWeekdayMatrix(_ sessions: [Session], clock: StudyClock) -> [[Double]] {
+        var m = Array(repeating: Array(repeating: 0.0, count: 24), count: 7)
+        for s in sessions {
+            forEachHour(s, clock: clock) { t, hour, minutes in m[clock.weekdayIndex(t)][hour] += minutes }
+        }
+        return m
+    }
+
+    /// Minuty učení po hodinách dne (0–23).
+    public static func byHour(_ sessions: [Session], clock: StudyClock) -> [Double] {
+        let m = hourWeekdayMatrix(sessions, clock: clock)
+        return (0..<24).map { h in m.reduce(0) { $0 + $1[h] } }
+    }
+
+    /// Nejproduktivnější dvouhodinové okno podle minut učení.
+    public static func bestWindow(_ sessions: [Session], clock: StudyClock) -> HourWindow? {
+        let h = byHour(sessions, clock: clock)
+        var best = -1.0, at = 0
+        for i in 0..<24 where h[i] + h[(i + 1) % 24] > best {
+            best = h[i] + h[(i + 1) % 24]
+            at = i
+        }
+        return best > 0 ? HourWindow(from: at) : nil
+    }
+
+    /// Nejsilnější dvouhodinové okno podle KVALITY soustředění (vážený průměr hodnocení 1–5). Málo dat v okně
+    /// se „přitahuje“ k celkovému průměru (90 „virtuálních“ minut), aby nevyhrálo okno s jedním výborným blokem.
+    /// Bez dostatku hodnocení rozhodne množství učení (`bestWindow`).
+    public static func focusWindow(_ sessions: [Session], clock: StudyClock) -> HourWindow? {
+        let rated = sessions.filter { ($0.focus ?? 0) != 0 && $0.mode != "anki" }
+        guard rated.count >= 8 else { return bestWindow(sessions, clock: clock) }
+        var min = Array(repeating: 0.0, count: 24)
+        var fsum = Array(repeating: 0.0, count: 24)
+        for s in rated {
+            let focus = Double(s.focus ?? 0)
+            forEachHour(s, clock: clock) { _, hour, minutes in
+                min[hour] += minutes
+                fsum[hour] += minutes * focus
+            }
+        }
+        let total = min.reduce(0, +)
+        let g = fsum.reduce(0, +) / total
+        let k = 90.0
+        var best: (at: Int, score: Double)?
+        for i in 0..<24 {
+            let j = (i + 1) % 24
+            let w = min[i] + min[j]
+            if w < Swift.max(60, total * 0.05) { continue }
+            let score = (fsum[i] + fsum[j] + k * g) / (w + k)
+            if best == nil || score > best!.score { best = (i, score) }
+        }
+        return best.map { HourWindow(from: $0.at) } ?? bestWindow(sessions, clock: clock)
+    }
 }
