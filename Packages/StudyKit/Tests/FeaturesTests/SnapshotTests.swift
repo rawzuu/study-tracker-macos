@@ -33,7 +33,8 @@ struct SnapshotTests {
             t = now
             if variant == "paused" { timer.pause() }
         }
-        try render(TimerView(snapshotSize: CGSize(width: 1440, height: 920)).environment(app).environment(timer), name: "timer-\(variant)")
+        try render(TimerView(snapshotSize: CGSize(width: 1440, height: 920)).environment(app).environment(timer).environment(Advisor(store: app)),
+                   name: "timer-\(variant)")
     }
 
     @Test("Přehled s běžícím časovačem")
@@ -46,7 +47,8 @@ struct SnapshotTests {
         timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
         timer.start()
         t = now
-        try render(DashboardView(snapshotNow: now).environment(app).environment(timer), name: "dashboard", height: 1500)
+        try render(DashboardView(snapshotNow: now).environment(app).environment(timer).environment(Advisor(store: app)).environment(Toasts()),
+                   name: "dashboard", height: 1400)
     }
 
     @Test("Kalendář: týden a měsíc", arguments: ["week", "month"])
@@ -63,10 +65,23 @@ struct SnapshotTests {
                    name: "calendar-\(variant)", height: variant == "week" ? 1900 : 1500)
     }
 
-    private func render(_ view: some View, name: String, height: CGFloat = 920) throws {
+    @Test("Ranní plán")
+    func dayPlan() async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        let clock = app.clock
+        // Návrh na dopoledne, ať je v náhledu vždy co ukázat.
+        let morning = clock.atMinutes(clock.startOfDay(now), 7 * 60 + 40)
+        let items = DayPlan.propose(app.document, now: morning, extra: 1, clock: clock)
+        try render(DayPlanSheet(items: items, scrolls: false).environment(app).environment(Toasts()).background(Palette.bg),
+                   name: "dayplan", width: 720, height: 640)
+    }
+
+    private func render(_ view: some View, name: String, width: CGFloat = 1440, height: CGFloat = 920) throws {
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["ST_SNAPSHOT_DIR"]!)
         for (scheme, appearance) in [("dark", NSAppearance.Name.darkAqua), ("light", .aqua)] {
-            let content = view.frame(width: 1440, height: height, alignment: .top).environment(\.colorScheme, scheme == "dark" ? .dark : .light)
+            let content = view.frame(width: width, height: height, alignment: .top).environment(\.colorScheme, scheme == "dark" ? .dark : .light)
             let renderer = ImageRenderer(content: content)
             renderer.scale = 1
             var image: CGImage?

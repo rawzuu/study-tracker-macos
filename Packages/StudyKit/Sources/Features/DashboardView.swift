@@ -8,6 +8,9 @@ import SwiftUI
 public struct DashboardView: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
+    @Environment(Advisor.self) private var advisor
+    @Environment(Toasts.self) private var toasts
+    @State private var dayPlan: DayPlanRequest?
     let openPage: (String) -> Void
 
     /// Bez posouvání a s pevným „teď“ – jen pro náhledy (ImageRenderer nevykreslí ScrollView).
@@ -35,6 +38,12 @@ public struct DashboardView: View {
         }
         .pageBackground()
         .navigationTitle("Přehled")
+        .sheet(item: $dayPlan, onDismiss: { toasts.presentAfterSheet() }) { DayPlanSheet(items: $0.items) }
+    }
+
+    /// Otevře ranní plán s čerstvým návrhem.
+    private func planDay() {
+        dayPlan = DayPlanRequest(items: DayPlan.propose(store.document, now: store.nowMs, clock: store.clock))
     }
 
     private func page(now: Int) -> some View {
@@ -48,10 +57,22 @@ public struct DashboardView: View {
                 }
             }
             SyncBanner(openSettings: { openPage("nastaveni") })
+            if advisor.showsMorningPrompt(now: now) {
+                Banner("Dobré ráno – naplánuj si dnešek. Navrhnu bloky podle zkoušek a cílů, ty jen potvrdíš.", systemImage: "sunrise") {
+                    Button("Naplánovat den", action: planDay)
+                        .buttonStyle(.denik(.normal, size: .small))
+                        .accessibilityIdentifier("dash.morning.plan")
+                    Button { advisor.dismissMorningPrompt(now: now) } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
+                        .buttonStyle(.denik(.ghost, size: .small))
+                        .help("Skrýt na dnešek")
+                        .accessibilityLabel("Skrýt")
+                }
+                .accessibilityIdentifier("dash.morning")
+            }
             if state.isEmpty && !store.isConnected {
                 ConnectPrompt(openSettings: { openPage("nastaveni") })
             } else {
-                content(state)
+                content(state, now: now)
             }
         }
         .padding(.horizontal, 48)
@@ -60,18 +81,18 @@ public struct DashboardView: View {
     }
 
     @ViewBuilder
-    private func content(_ s: DashboardState) -> some View {
+    private func content(_ s: DashboardState, now: Int) -> some View {
         FlowRow {
             TodaySection(state: s).frame(minWidth: 460, maxWidth: .infinity)
+            NextUpSection(now: now, openTimer: { openPage("casovac") }).frame(minWidth: 440, maxWidth: .infinity)
+        }
+        FlowRow {
+            PlanSection(rows: s.todayPlan, start: startBlock, planDay: planDay).frame(minWidth: 320, maxWidth: .infinity)
             WeekSection(state: s).frame(minWidth: 440, maxWidth: .infinity)
         }
         FlowRow {
-            PlanSection(rows: s.todayPlan, start: startBlock).frame(minWidth: 320, maxWidth: .infinity)
-            VStack(alignment: .leading, spacing: 40) {
-                ExamsSection(rows: s.exams)
-                DashTimer(openTimer: { openPage("casovac") })
-            }
-            .frame(minWidth: 320, maxWidth: .infinity)
+            ExamsSection(rows: s.exams).frame(minWidth: 320, maxWidth: .infinity)
+            DashTimer(openTimer: { openPage("casovac") }).frame(minWidth: 320, maxWidth: .infinity)
         }
         RecentSection(rows: s.recent, openHistory: { openPage("historie") })
     }
@@ -276,9 +297,12 @@ private struct PlanSection: View {
     @Environment(TimerStore.self) private var timer
     let rows: [DashboardState.PlanRow]
     let start: (DashboardState.PlanRow) -> Void
+    let planDay: () -> Void
 
     var body: some View {
-        PageSection("Dnešní plán") {
+        PageSection("Dnešní plán", accessory: {
+            Button("Naplánovat", action: planDay).buttonStyle(.denik(.ghost, size: .small)).accessibilityIdentifier("dash.planDay")
+        }) {
             if rows.isEmpty {
                 EmptyNote("Na dnešek nic", systemImage: "calendar")
             } else {
@@ -464,4 +488,10 @@ private struct DashTimer: View {
         let subject = s.subjectId.isEmpty ? nil : store.document.record(Subject.self, id: s.subjectId)?.name
         return timer.mode.name + (subject.map { " · \($0)" } ?? "")
     }
+}
+
+/// Otevřený ranní plán s návrhem z okamžiku otevření.
+struct DayPlanRequest: Identifiable {
+    let id = UUID()
+    let items: [DayPlanItem]
 }

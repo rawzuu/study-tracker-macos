@@ -61,6 +61,7 @@ public struct TimerView: View {
                 timerCard(ringSize: ringSize(size))
                 if !zen {
                     VStack(alignment: .leading, spacing: 32) {
+                        NextUpInline()
                         studyingSection
                         modeSection
                         NoiseSection()

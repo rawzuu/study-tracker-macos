@@ -159,7 +159,9 @@ final class NavigationUITests: XCTestCase {
         attachScreenshot(app, "Přehled s časovačem")
 
         // Blok z plánu „Opakování: Ledviny, Srdce“ připraví časovač s předmětem a tématem.
-        app.buttons["plan.start.demo-plan"].click()
+        let start = app.buttons["plan.start.demo-plan"]
+        reveal(start, app)
+        start.click()
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
         XCTAssertEqual(app.textFields["timer.topic"].value as? String, "Ledviny")
         XCTAssertEqual(app.popUpButtons["timer.subject"].value as? String, "Fyziologie")
@@ -202,6 +204,55 @@ final class NavigationUITests: XCTestCase {
         let logged = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "cal.session.", "UI blok")).firstMatch
         XCTAssertTrue(logged.waitForExistence(timeout: 3), "odučený čas je v kalendáři")
+    }
+
+    /// „Co teď?“ ukáže důvody i signály a „Začít“ připraví časovač s doporučeným předmětem.
+    @MainActor
+    func testNextUpStartsTimer() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["dash.next"].waitForExistence(timeout: 3))
+        XCTAssertFalse(text(of: app.staticTexts["next.title"]).isEmpty)
+        let subject = text(of: app.descendants(matching: .any)["next.subject"])
+
+        app.buttons["next.why"].click()
+        XCTAssertTrue(app.descendants(matching: .any)["next.whyTable"].waitForExistence(timeout: 2))
+        attachScreenshot(app, "Co teď?")
+
+        let start = app.buttons["next.start"]
+        reveal(start, app)
+        start.click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
+        let picked = app.popUpButtons["timer.subject"].value as? String ?? ""
+        XCTAssertFalse(picked.isEmpty)
+        XCTAssertTrue(subject.hasPrefix(picked), "časovač má doporučený předmět (\(subject) → \(picked))")
+        XCTAssertTrue(app.buttons["timer.start"].isEnabled)
+        // Na stránce časovače je doporučení i s „Použít“ (časovač stojí).
+        XCTAssertTrue(app.buttons["timer.useRecommendation"].exists)
+    }
+
+    /// Ranní plán z kalendáře: návrh, „Další blok“ a uložení do kalendáře.
+    @MainActor
+    func testDayPlanFromCalendar() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.planovac"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Kalendář")
+        app.buttons["calendar.planDay"].click()
+        let save = app.buttons["dayplan.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 3))
+        app.buttons["dayplan.more"].click()
+        attachScreenshot(app, "Ranní plán")
+        if save.isEnabled {
+            save.click()
+            XCTAssertTrue(save.waitForNonExistence(timeout: 2))
+            let toast = app.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@ OR label BEGINSWITH %@", "Do kalendáře", "Do kalendáře")).firstMatch
+            XCTAssertTrue(toast.waitForExistence(timeout: 3), "hláška o uložených blocích")
+        } else {
+            // Pozdě večer se do dne nic nevejde – okno to řekne a jde zavřít.
+            app.typeKey(.escape, modifierFlags: [])
+            XCTAssertTrue(save.waitForNonExistence(timeout: 2))
+        }
     }
 
     /// Nová zkouška se objeví v seznamu s odpočtem; smazanou vrátí „Vrátit“ v hlášce.
@@ -272,6 +323,16 @@ final class NavigationUITests: XCTestCase {
             app.launchArguments = ["-uiTesting"]
             app.launch()
         }
+    }
+
+    /// Posune stránku, dokud prvek není vidět (na malé obrazovce CI je přehled pod sebou a delší než okno).
+    @MainActor private func reveal(_ element: XCUIElement, _ app: XCUIApplication) {
+        XCTAssertTrue(element.waitForExistence(timeout: 3))
+        let page = app.scrollViews.firstMatch
+        for _ in 0..<12 where !element.isHittable {
+            page.scroll(byDeltaX: 0, deltaY: -120)
+        }
+        XCTAssertTrue(element.isHittable, "prvek je vidět")
     }
 
     /// Výběr položky z rozbalovací nabídky – až když je nabídka (třeba v právě otevřeném okně) vidět.

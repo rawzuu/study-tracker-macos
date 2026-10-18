@@ -62,10 +62,12 @@ public struct CalendarView: View {
         return VStack(alignment: .leading, spacing: 32) {
             // Tlačítka vedle nadpisu, a když se nevejdou (užší okno), pod ním.
             ViewThatFits(in: .horizontal) {
-                PageHeader("Kalendář", subtitle: subtitle) { headerButtons(now: now, week: week).fixedSize() }
+                PageHeader("Kalendář", subtitle: subtitle) {
+                    HStack(spacing: 8) { headerButtons(now: now, week: week) }.fixedSize()
+                }
                 VStack(alignment: .leading, spacing: 16) {
                     PageHeader("Kalendář", subtitle: subtitle)
-                    headerButtons(now: now, week: week)
+                    WrapLayout(spacing: 8, lineSpacing: 8) { headerButtons(now: now, week: week) }
                 }
             }
             if store.sync.mode == .readOnly && store.isConnected {
@@ -115,10 +117,16 @@ public struct CalendarView: View {
             + "plán přesouvej tažením a délku měň tažením za spodní okraj."
     }
 
+    /// Tlačítka v záhlaví – vedle sebe, nebo v užším okně zalomená do řádků.
     @ViewBuilder
     private func headerButtons(now: Int, week: Int) -> some View {
         let clock = store.clock
-        HStack(spacing: 8) {
+        Group {
+            Button { sheet = .init(.dayPlan(DayPlan.propose(store.document, now: store.nowMs, clock: clock))) } label: {
+                Label("Naplánovat den", systemImage: "calendar.day.timeline.left")
+            }
+            .buttonStyle(.denik(.normal))
+            .accessibilityIdentifier("calendar.planDay")
             Button { sheet = .init(.export) } label: { Label("Do kalendáře", systemImage: "square.and.arrow.up") }
                 .buttonStyle(.denik(.normal))
                 .accessibilityIdentifier("calendar.export")
@@ -228,6 +236,7 @@ public struct CalendarView: View {
         case .timetable: TimetableSheet()
         case .export: ExportSheet()
         case .lecture(let timetableId, let key): LectureSheet(timetableId: timetableId, key: key) { self.sheet = .init(.timetable) }
+        case .dayPlan(let items): DayPlanSheet(items: items)
         }
     }
 }
@@ -242,6 +251,7 @@ struct CalendarSheet: Identifiable {
         case timetable
         case export
         case lecture(timetableId: String, key: String)
+        case dayPlan([DayPlanItem])
     }
 
     let id = UUID()

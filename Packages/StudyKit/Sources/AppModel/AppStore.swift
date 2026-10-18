@@ -20,7 +20,11 @@ public final class AppStore {
         case failed(String)
     }
 
-    public private(set) var document: AppDocument = .empty
+    public private(set) var document: AppDocument = .empty {
+        didSet { revision &+= 1 }
+    }
+    /// Verze dat – roste s každou změnou `document`. Levné porovnání pro výpočty v mezipaměti.
+    public private(set) var revision = 0
     public private(set) var sync = SyncState(status: .off, mode: .readOnly, dirty: false, lastSyncedAt: nil)
     public private(set) var backup: BackupConfig?
     public private(set) var phase: Phase = .loading

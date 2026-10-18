@@ -58,8 +58,8 @@ public enum DayPlan {
         return (day, max(roundUp, range.start), range.end)
     }
 
-    /// `HH:MM` v daném dni (`hm` na webu: chybějící nebo neplatná část = 0).
-    static func hm(_ day: Int, _ value: String, clock: StudyClock) -> Int {
+    /// `HH:MM` v daném dni (`hm` na webu: chybějící nebo neplatná část = 0, „24:00“ = půlnoc dalšího dne).
+    public static func hm(_ day: Int, _ value: String, clock: StudyClock) -> Int {
         let parts = value.split(separator: ":", omittingEmptySubsequences: false).map { ICal.jsNumber(String($0)) }
         let h = parts.first.flatMap { $0 } ?? 0, m = parts.count > 1 ? parts[1] ?? 0 : 0
         let total = (h.isFinite ? h : 0) * 60 + (m.isFinite ? m : 0)

@@ -19,6 +19,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.navigator)
                 .environment(delegate.toasts)
                 .environment(delegate.calendarFeed)
+                .environment(delegate.advisor)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -54,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let navigator = Navigator()
     let toasts = Toasts()
     lazy var calendarFeed = CalendarFeedSync(app: store)
+    lazy var advisor = Advisor(store: store)
     private var wakeObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
