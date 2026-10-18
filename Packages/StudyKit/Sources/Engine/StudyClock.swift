@@ -34,9 +34,16 @@ public struct StudyClock: Sendable {
         return calendar.date(from: c).map { ms($0) + millis } ?? t + n * Self.day
     }
 
-    /// 0 = pondělí … 6 = neděle
+    /// Místní čas v sekundách od 1. 1. 1970 – posun pásma platný v daném okamžiku, takže i ve dnech změny
+    /// času přesně. Den v týdnu, hodina a minuty se z něj počítají mnohem rychleji než přes kalendář
+    /// (volají se pro každé sezení).
+    func localSeconds(_ t: Int) -> Int {
+        t.floorDiv(1000) + calendar.timeZone.secondsFromGMT(for: date(t))
+    }
+
+    /// 0 = pondělí … 6 = neděle (1. 1. 1970 byl čtvrtek).
     public func weekdayIndex(_ t: Int) -> Int {
-        (calendar.component(.weekday, from: date(t)) + 5) % 7
+        (localSeconds(t).floorDiv(86_400) + 3).floorMod(7)
     }
 
     public func startOfWeek(_ t: Int) -> Int {
@@ -76,23 +83,34 @@ public struct StudyClock: Sendable {
         return calendar.date(from: c).map(ms) ?? startOfDay(day) + min * Self.minute
     }
 
-    /// Minuty od půlnoci podle místního času.
+    /// Minuty od půlnoci podle místního času (`h * 60 + m + s / 60` jako na webu).
     public func minutesOfDay(_ t: Int) -> Double {
-        let c = calendar.dateComponents([.hour, .minute, .second], from: date(t))
-        return Double((c.hour ?? 0) * 60 + (c.minute ?? 0)) + Double(c.second ?? 0) / 60
+        let sec = localSeconds(t).floorMod(86_400)
+        return Double(sec / 3600 * 60 + sec % 3600 / 60) + Double(sec % 60) / 60
     }
 
     /// Hodina místního času (`getHours()` v JS).
     public func hour(_ t: Int) -> Int {
-        calendar.component(.hour, from: date(t))
+        localSeconds(t).floorMod(86_400) / 3600
     }
 
     /// Hodina místního času a začátek té další (`new Date(y, m, d, h + 1)` v JS) – i ve dnech změny času,
     /// kdy hodina trvá 0 nebo 2 hodiny skutečného času.
     func hourAndNext(_ t: Int) -> (hour: Int, next: Int) {
+        let offset = calendar.timeZone.secondsFromGMT(for: date(t))
+        let local = t.floorDiv(1000) + offset
+        let h = local.floorMod(86_400) / 3600
+        // Bez změny času do další celé hodiny stačí dopočítat; jinak rozhodne kalendář jako JS.
+        let next = (local - local.floorMod(3600) + 3600 - offset) * 1000
+        if calendar.timeZone.secondsFromGMT(for: date(next)) == offset { return (h, next) }
         var c = calendar.dateComponents([.year, .month, .day, .hour], from: date(t))
-        let h = c.hour ?? 0
-        c.hour = h + 1
+        c.hour = (c.hour ?? 0) + 1
         return (h, calendar.date(from: c).map(ms) ?? t + Self.hour)
     }
+}
+
+extension Int {
+    /// Dělení zaokrouhlené dolů (i pro záporné hodnoty, časy před rokem 1970).
+    func floorDiv(_ d: Int) -> Int { (self >= 0 ? self : self - d + 1) / d }
+    func floorMod(_ d: Int) -> Int { ((self % d) + d) % d }
 }

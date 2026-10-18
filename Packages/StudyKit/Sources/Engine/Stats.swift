@@ -72,7 +72,7 @@ public enum Stats {
     }
 
     /// Čistý čas sezení rozpočítaný do hodin, přes které opravdu probíhalo (pauzy poměrně).
-    static func forEachHour(_ s: Session, clock: StudyClock, _ body: (_ t: Int, _ hour: Int, _ minutes: Double) -> Void) {
+    static func forEachHour(_ s: some TimedStudy, clock: StudyClock, _ body: (_ t: Int, _ hour: Int, _ minutes: Double) -> Void) {
         let span = Double(max(1, s.end - s.start))
         let ratio = Double(s.durationSec * 1000) / span
         var t = s.start
@@ -85,7 +85,7 @@ public enum Stats {
     }
 
     /// Matice [den v týdnu][hodina] s minutami učení (`hourWeekdayMatrix` na webu).
-    public static func hourWeekdayMatrix(_ sessions: [Session], clock: StudyClock) -> [[Double]] {
+    public static func hourWeekdayMatrix(_ sessions: [some TimedStudy], clock: StudyClock) -> [[Double]] {
         var m = Array(repeating: Array(repeating: 0.0, count: 24), count: 7)
         for s in sessions {
             forEachHour(s, clock: clock) { t, hour, minutes in m[clock.weekdayIndex(t)][hour] += minutes }
@@ -94,13 +94,13 @@ public enum Stats {
     }
 
     /// Minuty učení po hodinách dne (0–23).
-    public static func byHour(_ sessions: [Session], clock: StudyClock) -> [Double] {
+    public static func byHour(_ sessions: [some TimedStudy], clock: StudyClock) -> [Double] {
         let m = hourWeekdayMatrix(sessions, clock: clock)
         return (0..<24).map { h in m.reduce(0) { $0 + $1[h] } }
     }
 
     /// Nejproduktivnější dvouhodinové okno podle minut učení.
-    public static func bestWindow(_ sessions: [Session], clock: StudyClock) -> HourWindow? {
+    public static func bestWindow(_ sessions: [some TimedStudy], clock: StudyClock) -> HourWindow? {
         let h = byHour(sessions, clock: clock)
         var best = -1.0, at = 0
         for i in 0..<24 where h[i] + h[(i + 1) % 24] > best {
@@ -113,13 +113,13 @@ public enum Stats {
     /// Nejsilnější dvouhodinové okno podle KVALITY soustředění (vážený průměr hodnocení 1–5). Málo dat v okně
     /// se „přitahuje“ k celkovému průměru (90 „virtuálních“ minut), aby nevyhrálo okno s jedním výborným blokem.
     /// Bez dostatku hodnocení rozhodne množství učení (`bestWindow`).
-    public static func focusWindow(_ sessions: [Session], clock: StudyClock) -> HourWindow? {
-        let rated = sessions.filter { ($0.focus ?? 0) != 0 && $0.mode != "anki" }
+    public static func focusWindow(_ sessions: [some TimedStudy], clock: StudyClock) -> HourWindow? {
+        let rated = sessions.filter { $0.focusValue != 0 && $0.mode != "anki" }
         guard rated.count >= 8 else { return bestWindow(sessions, clock: clock) }
         var min = Array(repeating: 0.0, count: 24)
         var fsum = Array(repeating: 0.0, count: 24)
         for s in rated {
-            let focus = Double(s.focus ?? 0)
+            let focus = Double(s.focusValue)
             forEachHour(s, clock: clock) { _, hour, minutes in
                 min[hour] += minutes
                 fsum[hour] += minutes * focus
@@ -137,5 +137,42 @@ public enum Stats {
             if best == nil || score > best!.score { best = (i, score) }
         }
         return best.map { HourWindow(from: $0.at) } ?? bestWindow(sessions, clock: clock)
+    }
+}
+
+/// Sezení, jak s ním počítají statistiky a doporučení – záznam z dat i jeho kompaktní kopie.
+public protocol TimedStudy: Sendable {
+    var start: Int { get }
+    var end: Int { get }
+    /// Čistý čas bez pauz.
+    var durationSec: Int { get }
+    /// Soustředění 1–5, 0 = nehodnoceno.
+    var focusValue: Int { get }
+    var mode: String { get }
+}
+
+extension Session: TimedStudy {
+    public var focusValue: Int { focus ?? 0 }
+}
+
+/// Sezení zúžené na pole, se kterými počítají doporučení a ranní plán. Z JSON se čte jednou –
+/// opakované čtení polí záznamu (slovník s textovými klíči) by bylo u tisíců sezení znát.
+struct SessionFacts: TimedStudy {
+    let subjectId: String, topic: String, mode: String
+    let start: Int, end: Int, durationSec: Int
+    let focusValue: Int
+
+    init(_ s: Session) {
+        subjectId = s.subjectId
+        topic = s.topic
+        mode = s.mode
+        start = s.start
+        end = s.end
+        durationSec = s.durationSec
+        focusValue = s.focus ?? 0
+    }
+
+    static func alive(in doc: AppDocument) -> [SessionFacts] {
+        doc.alive(Session.self).map(SessionFacts.init)
     }
 }

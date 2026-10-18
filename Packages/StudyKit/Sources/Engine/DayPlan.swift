@@ -68,12 +68,16 @@ public enum DayPlan {
 
     /// Obsazené úseky dne (výuka, plán, odučené), seřazené podle začátku.
     public static func busyIntervals(_ doc: AppDocument, day: Int, excluding exclude: Set<String> = [], clock: StudyClock) -> [BusyInterval] {
+        busyIntervals(doc, sessions: SessionFacts.alive(in: doc), day: day, excluding: exclude, clock: clock)
+    }
+
+    static func busyIntervals(_ doc: AppDocument, sessions: [SessionFacts], day: Int, excluding exclude: Set<String>, clock: StudyClock) -> [BusyInterval] {
         let next = clock.addDays(day, 1)
         var out = Timetables.lectures(doc, from: day, to: next).map { BusyInterval(start: $0.event.start, end: $0.event.end) }
         for b in doc.alive(PlanBlock.self) where !exclude.contains(b.id) && b.start >= day && b.start < next {
             out.append(BusyInterval(start: b.start, end: b.start + b.durationMin * StudyClock.minute))
         }
-        for s in doc.alive(Session.self) where s.start >= day && s.start < next {
+        for s in sessions where s.start >= day && s.start < next {
             out.append(BusyInterval(start: s.start, end: s.end))
         }
         return JS.sort(out) { Recommender.order(Double($0.start - $1.start)) }
@@ -97,7 +101,9 @@ public enum DayPlan {
         let day = clock.startOfDay(now)
         let next = clock.addDays(day, 1)
         let blocks = doc.alive(PlanBlock.self)
-        let studied = doc.alive(Session.self).filter { $0.start >= day }.reduce(0.0) { $0 + Double($1.durationSec) / 60 }
+        // sezení se z dat čtou jednou pro doporučení, cíl i rozmístění
+        let sessions = SessionFacts.alive(in: doc)
+        let studied = sessions.filter { $0.start >= day }.reduce(0.0) { $0 + Double($1.durationSec) / 60 }
         let plannedLeft = blocks
             .filter { !$0.done && $0.start >= day && $0.start < next && $0.start + $0.durationMin * StudyClock.minute > now }
             .reduce(0) { $0 + $1.durationMin }
@@ -115,7 +121,7 @@ public enum DayPlan {
         }
 
         // 2) doporučení se simulací – plní se do cíle (i když už žádný předmět nemá kladné skóre)
-        let recommender = Recommender(document: doc, now: now, clock: clock)
+        let recommender = Recommender(document: doc, sessions: sessions, now: now, clock: clock)
         var sim = Recommender.Simulation()
         for it in items { sim.extraMinutes[it.subjectId, default: 0] += Double(it.minutes) }
         var round = 0
@@ -138,7 +144,7 @@ public enum DayPlan {
             sim.lastSubject = subjectId
             target -= Double(minutes)
         }
-        return place(doc, items: items, now: now, clock: clock)
+        return place(doc, items: items, sessions: sessions, now: now, clock: clock)
     }
 
     /// Rozmístí položky do volných míst dne:
@@ -147,9 +153,13 @@ public enum DayPlan {
     /// Stejný předmět nikdy těsně za sebou (když jsou v plánu i jiné) a pauza po bloku podle jeho délky.
     /// Co se nevejde, má `start` 0 a není zaškrtnuté. Seřazeno podle začátku.
     public static func place(_ doc: AppDocument, items: [DayPlanItem], now: Int, clock: StudyClock) -> [DayPlanItem] {
+        place(doc, items: items, sessions: SessionFacts.alive(in: doc), now: now, clock: clock)
+    }
+
+    static func place(_ doc: AppDocument, items: [DayPlanItem], sessions: [SessionFacts], now: Int, clock: StudyClock) -> [DayPlanItem] {
         let (day, from, to) = dayBounds(doc.settings, now: now, clock: clock)
-        var busy = busyIntervals(doc, day: day, excluding: Set(items.compactMap { $0.carry?.id }), clock: clock)
-        let recent = doc.alive(Session.self).filter { $0.start > now - 60 * StudyClock.day && $0.mode != "anki" }
+        var busy = busyIntervals(doc, sessions: sessions, day: day, excluding: Set(items.compactMap { $0.carry?.id }), clock: clock)
+        let recent = sessions.filter { $0.start > now - 60 * StudyClock.day && $0.mode != "anki" }
         let peakFrom = Stats.focusWindow(recent, clock: clock).map { clock.atMinutes(day, $0.from * 60) }
         let varied = Set(items.map(\.subjectId)).count > 1
         let minute = StudyClock.minute

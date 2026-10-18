@@ -112,20 +112,25 @@ public struct Recommender: Sendable {
     let anki: Recommendation?
 
     public init(document doc: AppDocument, now: Int, clock: StudyClock) {
+        self.init(document: doc, sessions: SessionFacts.alive(in: doc), now: now, clock: clock)
+    }
+
+    /// `sessions` = nesmazaná sezení z `doc` (ranní plán je přečte jednou pro všechny výpočty).
+    init(document doc: AppDocument, sessions: [SessionFacts], now: Int, clock: StudyClock) {
         self.now = now
-        let sessions = doc.alive(Session.self)
         let today = clock.startOfDay(now)
         let tomorrow = clock.addDays(today, 1)
         let weekStart = clock.startOfWeek(now)
+        let rated = Rated.list(sessions, clock: clock)
         share = Self.weekShare(sessions, now: now, clock: clock)
-        lowFocus = Self.lowFocusNow(sessions, now: now, clock: clock)
+        lowFocus = Self.lowFocusNow(rated, now: now, clock: clock)
         defaultMode = doc.settings.defaultMode
-        block = Self.personalBlock(sessions, now: now, clock: clock)
+        block = Self.personalBlock(rated, now: now, clock: clock)
 
         // Jeden průchod sezeními pro všechny předměty
         struct Facts { var lastStudied = 0, doneWeek = 0.0, recentMin = 0.0, lastTopic: (end: Int, topic: String)? }
         var facts: [String: Facts] = [:]
-        var last: Session?
+        var last: SessionFacts?
         for s in sessions {
             var f = facts[s.subjectId] ?? Facts()
             f.lastStudied = max(f.lastStudied, s.end)
@@ -242,17 +247,44 @@ public struct Recommender: Sendable {
 
     // MARK: - Signály a délka bloku
 
+    // MARK: - Sezení
+
+    /// Hodnocené sezení (ne z Anki) s částí dne, kdy začalo – pro délku bloku a „slabší“ denní dobu.
+    struct Rated: Sendable {
+        let focus: Int
+        let durationSec: Int
+        let part: Int
+
+        static func list(_ sessions: [SessionFacts], clock: StudyClock) -> [Rated] {
+            sessions.compactMap { s in
+                s.focusValue != 0 && s.mode != "anki" ? Rated(focus: s.focusValue, durationSec: s.durationSec, part: dayPart(clock.hour(s.start))) : nil
+            }
+        }
+
+        /// Průměrné soustředění (`avgFocus` na webu).
+        static func average(_ list: some Collection<Rated>) -> Double? {
+            list.isEmpty ? nil : Double(list.reduce(0) { $0 + $1.focus }) / Double(list.count)
+        }
+    }
+
     /// Jaká část týdenní práce bývá hotová do tohoto okamžiku týdne – podle posledních 8 týdnů (kdo se učí
     /// hlavně o víkendu, toho ve středu týdenní cíl ještě netlačí). Bez dostatku dat rovnoměrně přes 7 dní;
     /// osobní tempo se mírně „přitahuje“ k rovnoměrnému.
     public static func weekShare(_ sessions: [Session], now: Int, clock: StudyClock) -> Double {
+        weekShare(sessions.map(SessionFacts.init), now: now, clock: clock)
+    }
+
+    static func weekShare(_ sessions: [SessionFacts], now: Int, clock: StudyClock) -> Double {
         let weekStart = clock.startOfWeek(now)
         let elapsed = clamp(Double(now - weekStart) / Double(7 * StudyClock.day))
         let uniform = max(elapsed, 1.0 / 7)
         let from = clock.addDays(weekStart, -56)
         let hist = sessions.filter { $0.start >= from && $0.start < weekStart && $0.mode != "anki" }
         let total = hist.reduce(0) { $0 + $1.durationSec }
-        guard total >= 5 * 3600, Set(hist.map { clock.startOfWeek($0.start) }).count >= 3 else { return uniform }
+        // týdny s učením: začátky 8 minulých týdnů se spočítají jednou, sezení se k nim jen přiřadí
+        let starts = (1...8).map { clock.addDays(weekStart, -7 * $0) }
+        let weeks = Set(hist.map { s in starts.firstIndex { s.start >= $0 } })
+        guard total >= 5 * 3600, weeks.count >= 3 else { return uniform }
         func pos(_ t: Int) -> Double { Double(clock.weekdayIndex(t) * 1440) + clock.minutesOfDay(t) }
         let nowPos = pos(now)
         let before = hist.filter { pos($0.start) < nowPos }.reduce(0) { $0 + $1.durationSec }
@@ -264,16 +296,14 @@ public struct Recommender: Sendable {
         hour >= 5 && hour < 12 ? 0 : hour >= 12 && hour < 17 ? 1 : hour >= 17 && hour < 22 ? 2 : 3
     }
 
-    private static func isRated(_ s: Session) -> Bool { (s.focus ?? 0) != 0 && s.mode != "anki" }
-
     /// Délka bloku podle tvých dat: v jaké délce bloků máš v tuto denní dobu nejlepší soustředění.
     /// Průměr každé délky se „přitahuje“ k celkovému (3 bloky), delší blok vyhraje jen se zřetelně lepším
     /// soustředěním (+0,15). Bez dat 50 min.
-    static func personalBlock(_ sessions: [Session], now: Int, clock: StudyClock) -> (minutes: Int, modeId: String) {
+    static func personalBlock(_ all: [Rated], now: Int, clock: StudyClock) -> (minutes: Int, modeId: String) {
         let part = dayPart(clock.hour(now))
-        let rated = sessions.filter { isRated($0) && dayPart(clock.hour($0.start)) == part }
+        let rated = all.filter { $0.part == part }
         let buckets: [(max: Double, minutes: Int, modeId: String)] = [(35, 25, "pomodoro"), (70, 50, "pomodoro-long"), (.infinity, 90, "ultradian")]
-        let g = Stats.avgFocus(rated) ?? 3
+        let g = Rated.average(rated) ?? 3
         let k = 3.0
         var best: (minutes: Int, modeId: String)?
         var bestF = 0.0
@@ -281,7 +311,7 @@ public struct Recommender: Sendable {
             let lo = i == 0 ? 0 : buckets[i - 1].max
             let list = rated.filter { Double($0.durationSec) / 60 > lo && Double($0.durationSec) / 60 <= b.max }
             guard list.count >= 3 else { continue }
-            let f = (Double(list.reduce(0) { $0 + ($1.focus ?? 0) }) + k * g) / (Double(list.count) + k)
+            let f = (Double(list.reduce(0) { $0 + $1.focus }) + k * g) / (Double(list.count) + k)
             if f > bestF + 0.15 {
                 best = (b.minutes, b.modeId)
                 bestF = f
@@ -292,11 +322,14 @@ public struct Recommender: Sendable {
 
     /// Je teď pro tebe „slabší“ denní doba? (soustředění v této části dne výrazně pod průměrem)
     public static func lowFocusNow(_ sessions: [Session], now: Int, clock: StudyClock) -> Bool {
+        lowFocusNow(Rated.list(sessions.map(SessionFacts.init), clock: clock), now: now, clock: clock)
+    }
+
+    static func lowFocusNow(_ rated: [Rated], now: Int, clock: StudyClock) -> Bool {
         let part = dayPart(clock.hour(now))
-        let rated = sessions.filter(isRated)
-        let here = rated.filter { dayPart(clock.hour($0.start)) == part }
+        let here = rated.filter { $0.part == part }
         guard here.count >= 5, rated.count >= 10 else { return false }
-        return (Stats.avgFocus(here) ?? 0) <= (Stats.avgFocus(rated) ?? 0) - 0.4
+        return (Rated.average(here) ?? 0) <= (Rated.average(rated) ?? 0) - 0.4
     }
 
     /// Krátká hláška nad doporučením (pozdní hodina, splněný cíl, slabší denní doba).
