@@ -9,6 +9,7 @@ import SwiftUI
 public struct CalendarView: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
+    @Environment(Toasts.self) private var toasts
     let openPage: (String) -> Void
 
     @State private var mode: Mode = .week
@@ -48,7 +49,7 @@ public struct CalendarView: View {
         }
         .pageBackground()
         .navigationTitle("Kalendář")
-        .sheet(item: $sheet) { sheet in
+        .sheet(item: $sheet, onDismiss: { toasts.presentAfterSheet() }) { sheet in
             sheetContent(sheet)
         }
     }

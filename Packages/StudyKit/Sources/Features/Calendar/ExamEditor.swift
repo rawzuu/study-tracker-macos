@@ -85,7 +85,7 @@ struct ExamEditor: View {
         guard let id = draft.original?.id else { return }
         let now = store.nowMs
         store.update { $0.removeExam(id, now: now) }
-        toasts.show("Zkouška smazána") { [store] in store.restore(.exams, id: id) }
+        toasts.showAfterSheet("Zkouška smazána") { [store] in store.restore(.exams, id: id) }
         dismiss()
     }
 }

@@ -14,11 +14,26 @@ public final class Toasts {
     }
 
     public private(set) var current: Toast?
+    /// Hláška z otevřeného okna formuláře, která čeká na jeho zavření.
+    @ObservationIgnored private var afterSheet: Toast?
 
     public init() {}
 
     public func show(_ text: String, undo: (@MainActor () -> Void)? = nil) {
         current = Toast(text: text, undo: undo)
+    }
+
+    /// Hláška z okna formuláře (sheet) – ukáže se až po jeho zavření (`presentAfterSheet()` v `onDismiss`).
+    /// Změna hlavního okna během zavírání listu ho na macOS 26 nechá bez událostí myši.
+    public func showAfterSheet(_ text: String, undo: (@MainActor () -> Void)? = nil) {
+        afterSheet = Toast(text: text, undo: undo)
+    }
+
+    /// Okno formuláře se zavřelo – ukázat hlášku, která na to čekala.
+    public func presentAfterSheet() {
+        guard let toast = afterSheet else { return }
+        afterSheet = nil
+        current = toast
     }
 
     /// „Vrátit“: vrátí akci a hlášku zavře.

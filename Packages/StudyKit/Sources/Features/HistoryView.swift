@@ -7,6 +7,7 @@ import SwiftUI
 /// Historie sezení po dnech: filtr podle předmětu, ruční zápis a úpravy. Starší dny se načítají postupně.
 public struct HistoryView: View {
     @Environment(AppStore.self) private var store
+    @Environment(Toasts.self) private var toasts
     @State private var subjectId: String?
     @State private var limit = 30
     @State private var editing: EditedSession?
@@ -60,7 +61,7 @@ public struct HistoryView: View {
         }
         .pageBackground()
         .navigationTitle("Historie")
-        .sheet(item: $editing) { SessionEditor(draft: $0.draft) }
+        .sheet(item: $editing, onDismiss: { toasts.presentAfterSheet() }) { SessionEditor(draft: $0.draft) }
     }
 
     private func edit(_ id: String) {

@@ -59,7 +59,7 @@ struct SnapshotTests {
         timer.configure(TimerSetup(subjectId: "demo-lat", topic: "Deklinace"))
         timer.start()
         t = now
-        try render(CalendarView(snapshotNow: now, mode: variant == "week" ? .week : .month).environment(app).environment(timer),
+        try render(CalendarView(snapshotNow: now, mode: variant == "week" ? .week : .month).environment(app).environment(timer).environment(Toasts()),
                    name: "calendar-\(variant)", height: variant == "week" ? 1900 : 1500)
     }
 

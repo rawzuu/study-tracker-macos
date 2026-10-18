@@ -152,10 +152,10 @@ struct TimetableSheet: View {
             if let tt = store.document.record(Timetable.self, id: id) {
                 store.upsert(Timetables.replacingEvents(tt, with: pending.result.events, now: now))
             }
-            toasts.show("Rozvrh aktualizován")
+            toasts.showAfterSheet("Rozvrh aktualizován")
         } else {
             store.upsert(Timetables.new(name: pending.name, events: pending.result.events, now: now))
-            toasts.show("Rozvrh importován")
+            toasts.showAfterSheet("Rozvrh importován")
         }
         self.pending = nil
     }
@@ -168,7 +168,7 @@ struct TimetableSheet: View {
 
     private func remove(_ tt: Timetable) {
         store.remove(.timetables, id: tt.id)
-        toasts.show("Rozvrh odstraněn") { [store] in store.restore(.timetables, id: tt.id) }
+        toasts.showAfterSheet("Rozvrh odstraněn") { [store] in store.restore(.timetables, id: tt.id) }
     }
 }
 
@@ -268,7 +268,7 @@ struct LectureSheet: View {
         edit(&t)
         store.upsert(t)
         let before = (hidden: tt.hiddenSeries, skipped: tt.skipped)
-        toasts.show(message) { [store] in
+        toasts.showAfterSheet(message) { [store] in
             guard var current = store.document.record(Timetable.self, id: tt.id) else { return }
             current.hiddenSeries = before.hidden
             current.skipped = before.skipped

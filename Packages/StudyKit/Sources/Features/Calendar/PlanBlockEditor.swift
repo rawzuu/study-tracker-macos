@@ -93,7 +93,7 @@ struct PlanBlockEditor: View {
         d.original = current
         let blocks = d.records(clock: store.clock)
         store.upsert(blocks)
-        if blocks.count > 1 { toasts.show("Přidáno \(blocks.count) bloků") }
+        if blocks.count > 1 { toasts.showAfterSheet("Přidáno \(blocks.count) bloků") }
         dismiss()
     }
 
@@ -119,7 +119,7 @@ struct PlanBlockEditor: View {
 
     private func delete(_ block: PlanBlock) {
         store.remove(.planBlocks, id: block.id)
-        toasts.show("Blok smazán") { [store] in store.restore(.planBlocks, id: block.id) }
+        toasts.showAfterSheet("Blok smazán") { [store] in store.restore(.planBlocks, id: block.id) }
         dismiss()
     }
 }

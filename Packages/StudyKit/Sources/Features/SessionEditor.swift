@@ -93,7 +93,7 @@ struct SessionEditor: View {
     private func delete() {
         guard let id = draft.original?.id else { return }
         store.remove(.sessions, id: id)
-        toasts.show("Sezení smazáno") { [store] in store.restore(.sessions, id: id) }
+        toasts.showAfterSheet("Sezení smazáno") { [store] in store.restore(.sessions, id: id) }
         dismiss()
     }
 }
