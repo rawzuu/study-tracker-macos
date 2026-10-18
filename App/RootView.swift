@@ -1,3 +1,4 @@
+import AppKit
 import AppModel
 import DesignSystem
 import Features
@@ -25,12 +26,13 @@ struct RootView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
         } detail: {
-            // Hláška je pod obsahem, ne přes něj: na macOS 26 by rolovací oblast stránky (NSScrollView)
-            // pod plovoucí hláškou přebrala klik na „Vrátit“.
+            // Hláška je pod obsahem a ve vlastním pohledu AppKitu: na macOS 26 se plocha pro klik vnořené
+            // rolovací oblasti (týdenní mřížka) neořízne podle stránky a vybíhá pod obsah – klik na „Vrátit“
+            // by jinak dostal schovaný blok kalendáře.
             VStack(spacing: 0) {
                 detail.frame(maxHeight: .infinity)
                 if let toast = toasts.current {
-                    ToastView(toast: toast)
+                    ToastHost(toast: toast, toasts: toasts)
                         .id(toast.id)
                         .frame(maxWidth: .infinity)
                         .background(Palette.bg)
@@ -126,6 +128,28 @@ private struct PlaceholderPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .pageBackground()
         .navigationTitle(page.title)
+    }
+}
+
+/// Hláška ve vlastním `NSHostingView` – AppKit ho řadí nad rolovací oblasti stránky, takže klik dostane vždy ona.
+private struct ToastHost: NSViewRepresentable {
+    let toast: Toasts.Toast
+    let toasts: Toasts
+
+    func makeNSView(context: Context) -> NSHostingView<AnyView> {
+        NSHostingView(rootView: content)
+    }
+
+    func updateNSView(_ view: NSHostingView<AnyView>, context: Context) {
+        view.rootView = content
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSHostingView<AnyView>, context: Context) -> CGSize? {
+        nsView.fittingSize
+    }
+
+    private var content: AnyView {
+        AnyView(ToastView(toast: toast).environment(toasts))
     }
 }
 
