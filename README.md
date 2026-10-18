@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **v0.5.0 – M4 hotový.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Na Přehledu radí „Co teď?“ a ráno navrhne plán dne. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.6.0 – M4 a integrace s macOS hotové.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Na Přehledu radí „Co teď?“ a ráno navrhne plán dne. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -80,6 +80,13 @@ ST_KEYCHAIN_TESTS=1 swift test --package-path Packages/StudyKit   # + test skute
 xcodebuild test -project StudyTracker.xcodeproj -scheme StudyTracker -destination 'platform=macOS'
 TEST_RUNNER_ST_NO_SCREENSHOTS=1 xcodebuild test …                 # bez snímků (např. při vypnutém displeji)
 ST_SNAPSHOT_DIR=/tmp/nahledy swift test --package-path Packages/StudyKit --filter Náhledy   # náhledy obrazovek do PNG
+```
+
+Instalace sestavené verze do /Applications (předchozí verze se přesune do zálohy, nic se nemaže):
+
+```bash
+xcodebuild build -project StudyTracker.xcodeproj -scheme StudyTracker -configuration Release -derivedDataPath build/DerivedData
+Tools/install-release.sh
 ```
 
 Obnovení kontrolních dat (po změně webu):
