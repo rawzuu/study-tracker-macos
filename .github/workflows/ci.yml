@@ -47,6 +47,11 @@ jobs:
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             | tail -80
 
+      - name: Souhrn UI testů (i zopakované)
+        if: always()
+        run: |
+          xcrun xcresulttool get test-results tests --path build/UITests.xcresult | python3 Tools/ci/ui-test-summary.py
+
       - name: Výsledky UI testů
         if: failure()
         uses: actions/upload-artifact@v5
