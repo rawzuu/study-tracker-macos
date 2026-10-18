@@ -172,12 +172,12 @@ private struct DayPlanRow: View {
                     .font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Picker("Délka", selection: Binding(get: { item.minutes }, set: resize)) {
+            Picker("Délka", selection: Binding(get: { item.minutes }, set: { resize($0) })) {
                 ForEach(durations, id: \.self) { Text("\($0) min").tag($0) }
             }
             .labelsHidden()
             .fixedSize()
-            Button(action: remove) { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
+            Button { remove() } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
                 .buttonStyle(.denik(.ghost, size: .small))
                 .help("Odebrat")
                 .accessibilityLabel("Odebrat")
