@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **v0.4.0 – M3 hotový.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.5.0 – M4 hotový.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Na Přehledu radí „Co teď?“ a ráno navrhne plán dne. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -54,7 +54,7 @@ Webová aplikace do dat průběžně přidává nová pole a kolekce. Pevné `Co
 
 ### Paritní testy
 
-`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. `generate-engine.ts` stejně ověří kalendář, formáty a souhrny (`src/lib/time.ts`, `stats.ts`) v pražském čase – včetně dnů změny času, kdy 2:30 buď neexistuje, nebo je dvakrát – do `EngineTests/Fixtures`. `generate-planner.ts` ověří kalendář (rozložení položek, dělení přes půlnoc, odškrtnutí, obnovení z koše), čtení .ics (pásma, opakování, výjimky, přesuny), rozvrh a export .ics včetně otisku odebíraného kalendáře. Funkce, které web nemá exportované (jsou uvnitř komponent), se vyjmou ze zdrojového kódu komponenty a spustí beze změny. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
+`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. `generate-engine.ts` stejně ověří kalendář, formáty a souhrny (`src/lib/time.ts`, `stats.ts`) v pražském čase – včetně dnů změny času, kdy 2:30 buď neexistuje, nebo je dvakrát – do `EngineTests/Fixtures`. `generate-planner.ts` ověří kalendář (rozložení položek, dělení přes půlnoc, odškrtnutí, obnovení z koše), čtení .ics (pásma, opakování, výjimky, přesuny), rozvrh a export .ics včetně otisku odebíraného kalendáře. `generate-advice.ts` ověří „Co teď?“ (skóre, signály, důvody, délku bloku) a ranní plán (návrh, rozmístění, nové rozmístění po úpravách) na náhodných datech bez témat – tak, jak je počítá Mac bez opakování. Funkce, které web nemá exportované (jsou uvnitř komponent), se vyjmou ze zdrojového kódu komponenty a spustí beze změny. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
 
 ## Sestavení
 
@@ -108,6 +108,16 @@ V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained tok
 - **Rozvrh:** Kalendář → Rozvrh → vyber export .ics ze školního systému. Nová verze rozvrhu ukáže před uložením, co se změní; proběhlé hodiny, skryté předměty a odpadlé termíny zůstanou.
 - **Export:** Kalendář → Do kalendáře uloží soubor .ics (stálá UID – opakovaný import aktualizuje stejné události).
 - **Odebíraný kalendář:** Nastavení → Odebíraný kalendář publikuje plán do tajného gistu; Apple Kalendář si ho sám stahuje. Mac i web ho po změně plánu aktualizují (se stejným obsahem, takže se navzájem nepřepisují zbytečně).
+
+## Co teď? a ranní plán
+
+- **Co teď?** na Přehledu doporučí, čemu se věnovat, a řekne proč: blízká zkouška, zaostávání za týdenním cílem (podle toho, kdy v týdnu se obvykle učíš), dny bez učení, blok naplánovaný na teď a prostřídání předmětů. Délka bloku vychází z toho, v jaké délce se ti v tuhle denní dobu nejlépe soustředí. „Proč“ ukáže signály všech předmětů. Na stránce Časovač je totéž doporučení s „Použít“.
+- **Ranní plán** (Přehled ráno, „Naplánovat“ u dnešního plánu, Kalendář → Naplánovat den) navrhne bloky na zbytek dne až do denního cíle: přesune nedokončené bloky z posledních dvou dnů, náročnou látku dá do doby, kdy se ti nejlépe soustředí, předměty prostřídá, nechá pauzy a vyhne se výuce z rozvrhu. Návrh jde upravit (začátek, délka, odebrat, „Další blok“) a uložit do kalendáře.
+- Opakování (FSRS) na Macu není, proto Mac témata k opakování nenavrhuje a nečte; ostatní výpočty jsou shodné s webem (ověřeno kontrolními daty).
+
+## Výkon
+
+Výpočty, které běží často, mají měření v testech (`AdvicePerformanceTests`, release, 3 200 sezení za 2 roky): „Co teď?“ ~2–3 ms, ranní plán ~3,5 ms. Sezení se z dat čtou jednou do kompaktní kopie, hodina a den v týdnu se počítají z posunu časového pásma (přesně i při změně času) a doporučení na Přehledu se přepočítají jen po změně dat nebo jednou za 5 minut.
 
 ## Bezpečnost dat
 

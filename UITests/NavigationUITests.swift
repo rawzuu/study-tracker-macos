@@ -326,11 +326,15 @@ final class NavigationUITests: XCTestCase {
     }
 
     /// Posune stránku, dokud prvek není vidět (na malé obrazovce CI je přehled pod sebou a delší než okno).
+    /// Posouvá se oblast, ve které prvek je – první posuvná oblast okna je postranní panel.
     @MainActor private func reveal(_ element: XCUIElement, _ app: XCUIApplication) {
         XCTAssertTrue(element.waitForExistence(timeout: 3))
-        let page = app.scrollViews.firstMatch
-        for _ in 0..<12 where !element.isHittable {
-            page.scroll(byDeltaX: 0, deltaY: -120)
+        let page = app.scrollViews.containing(.any, identifier: element.identifier).firstMatch
+        let area = page.exists ? page : app.windows.firstMatch
+        for delta in [-150.0, 150.0] {
+            for _ in 0..<10 where !element.isHittable {
+                area.scroll(byDeltaX: 0, deltaY: delta)
+            }
         }
         XCTAssertTrue(element.isHittable, "prvek je vidět")
     }

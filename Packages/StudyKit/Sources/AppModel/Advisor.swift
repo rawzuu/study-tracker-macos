@@ -12,7 +12,7 @@ import Observation
 @Observable
 public final class Advisor {
     @ObservationIgnored private let store: AppStore
-    @ObservationIgnored private var cache: (revision: Int, bucket: Int, value: [Recommendation])?
+    @ObservationIgnored private var cache: (revision: Int, bucket: Int, value: Advice)?
     /// Den (`YYYY-MM-DD`), pro který je ranní výzva skrytá.
     private var morningDismissedDay: String?
 
@@ -24,14 +24,28 @@ public final class Advisor {
         morningDismissedDay = store.defaults.string(forKey: Self.morningKey)
     }
 
-    /// Doporučení seřazená od nejlepšího.
-    public func recommendations(now: Int) -> [Recommendation] {
+    /// Doporučení a hláška nad nimi (pozdní hodina, splněný cíl, slabší denní doba).
+    public struct Advice: Equatable, Sendable {
+        public let recommendations: [Recommendation]
+        public let note: String?
+    }
+
+    public func advice(now: Int) -> Advice {
         let revision = store.revision
         let bucket = now / Self.bucketMs
         if let cache, cache.revision == revision, cache.bucket == bucket { return cache.value }
-        let value = Recommender(document: store.document, now: now, clock: store.clock).recommend()
+        let doc = store.document
+        let value = Advice(
+            recommendations: Recommender(document: doc, now: now, clock: store.clock).recommend(),
+            note: Recommender.contextNote(doc, now: now, clock: store.clock)
+        )
         cache = (revision, bucket, value)
         return value
+    }
+
+    /// Doporučení seřazená od nejlepšího.
+    public func recommendations(now: Int) -> [Recommendation] {
+        advice(now: now).recommendations
     }
 
     /// Ranní výzva na Přehledu: dopoledne (5–13 h), dokud na dnešek není nic v plánu, a jen když jsou předměty.

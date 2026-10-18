@@ -15,7 +15,8 @@ struct NextUpSection: View {
     @State private var why = false
 
     var body: some View {
-        let recs = advisor.recommendations(now: now)
+        let advice = advisor.advice(now: now)
+        let recs = advice.recommendations
         PageSection("Co teď?", accessory: {
             if !recs.isEmpty {
                 Button { why.toggle() } label: {
@@ -27,7 +28,7 @@ struct NextUpSection: View {
         }) {
             if let top = recs.first {
                 VStack(alignment: .leading, spacing: 18) {
-                    main(top)
+                    main(top, note: advice.note)
                     if recs.count > 1 { alternatives(Array(recs.dropFirst().prefix(3))) }
                     if why { WhyTable(recs: Array(recs.prefix(6))) }
                 }
@@ -44,9 +45,8 @@ struct NextUpSection: View {
     /// Blokuje jen běžící nebo pozastavený blok; mezi bloky jde rovnou začít něco jiného.
     private var busy: Bool { !timer.state.canSwitch }
 
-    private func main(_ top: Recommendation) -> some View {
+    private func main(_ top: Recommendation, note: String?) -> some View {
         let subject = SubjectInfo(top.subjectId, in: store.document)
-        let note = Recommender.contextNote(store.document, now: now, clock: store.clock)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 ColorMark(color: subject.color)

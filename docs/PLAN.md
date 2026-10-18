@@ -37,7 +37,7 @@ Rizika, která řeší architektura:
 | Zkoušky a rozvrh | rozložené opakování ke zkoušce, import rozvrhu .ics (náhled změn, skryté řady, odpadlé termíny, opakování po přednášce) | zkoušky a rozvrh 1:1, bez generovaných bloků opakování a bez přiřazení řady k předmětu (slouží jen opakování po přednášce; v datech zůstává) |
 | Export kalendáře | .ics, odebíraný kalendář přes gist | stejné API |
 | Opakování | FSRS-6, 4 hodnocení, historie opakování, hlídání zkoušky | **vynecháno** |
-| Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port bez signálu opakování |
+| Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port bez signálu opakování a bez opakování po přednášce; témata se nečtou; výsledky shodné s webem (kontrolní data), předpočítané údaje sdílí simulace ranního plánu |
 | Statistiky | heatmapy, trend, den × hodina, soustředění, série | Swift Charts |
 | Report, reflexe | postřehy, návrhy úprav (kalibrace), tisk/PDF, týdenní reflexe | systémový tisk do PDF |
 | Úspěchy | 119 úspěchů, stabilní id, medaile, trvalé záznamy | stejná id |
@@ -59,7 +59,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M1 | Klíčenka, GRDB, SyncEngine **jen čtení**, Přehled/Historie/Předměty jen pro čtení | data na Macu; po kontrole záloha `zaloha-pred-macos` a zapnutí zápisu |
 | M2 ✓ | Časovač, Přehled, šum, zvonky, notifikace, URL odkaz | každodenní používání (v0.3.0) |
 | M3 ✓ | Kalendář, zkoušky, rozvrh .ics, export a odebíraný kalendář | v0.4.0 |
-| M4 | Co teď?, ranní plán (bez opakování) | |
+| M4 ✓ | Co teď?, ranní plán (bez opakování) | v0.5.0 |
 | M5 | Statistiky, report a kalibrace, reflexe, úspěchy | |
 | M6 | Nastavení, koš, export/import, Anki, onboarding | parita |
 | M7 | profilování v Instruments, optimalizace, výkonnostní testy | v1.0.0 |
