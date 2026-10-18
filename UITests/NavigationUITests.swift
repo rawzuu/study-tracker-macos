@@ -226,7 +226,7 @@ final class NavigationUITests: XCTestCase {
         app.buttons["exam.delete"].click()
         app.buttons["exam.confirmDelete"].firstMatch.click()
         XCTAssertTrue(row.waitForNonExistence(timeout: 3), "smazaná zkouška zmizí")
-        clickUndo(app)
+        undoViaShortcut(app)
         XCTAssertTrue(row.waitForExistence(timeout: 3), "Vrátit zkoušku obnoví")
     }
 
@@ -244,7 +244,7 @@ final class NavigationUITests: XCTestCase {
         app.buttons["lecture.skip"].click()
         let same = app.descendants(matching: .any)[id]
         XCTAssertTrue(same.waitForNonExistence(timeout: 3), "odpadlý termín zmizí")
-        clickUndo(app)
+        undoViaShortcut(app)
         XCTAssertTrue(same.waitForExistence(timeout: 3), "Vrátit termín vrátí")
     }
 
@@ -283,16 +283,13 @@ final class NavigationUITests: XCTestCase {
         menuItem.click()
     }
 
-    /// „Vrátit“ v hlášce po zavření okna. Na pomalém CI se okno po zavření listu někdy ještě
-    /// nestihne znovu aktivovat a první klik nedojde – pak se klikne ještě jednou.
-    @MainActor private func clickUndo(_ app: XCUIApplication) {
+    /// „Vrátit“ v hlášce přes ⌘Z. Klik by na CI netrefil: hláška je u spodního okraje malé obrazovky
+    /// těsně nad Dockem a klik tam nedojde (ani na najetí myší nereaguje), lokálně funguje.
+    @MainActor private func undoViaShortcut(_ app: XCUIApplication) {
         let undo = app.buttons["toast.undo"]
         XCTAssertTrue(undo.waitForExistence(timeout: 2))
-        for _ in 0..<3 where undo.exists {
-            undo.click()
-            _ = undo.waitForNonExistence(timeout: 1)
-        }
-        XCTAssertFalse(undo.exists, "hláška po kliknutí na Vrátit zmizí")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertTrue(undo.waitForNonExistence(timeout: 2), "hláška po Vrátit zmizí")
     }
 
     /// Na macOS nese text popisku SwiftUI `value`, ne `label`.

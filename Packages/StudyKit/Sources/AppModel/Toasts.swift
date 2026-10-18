@@ -23,8 +23,8 @@ public final class Toasts {
         current = Toast(text: text, undo: undo)
     }
 
-    /// Hláška z okna formuláře (sheet) – ukáže se až po jeho zavření (`presentAfterSheet()` v `onDismiss`).
-    /// Změna hlavního okna během zavírání listu ho na macOS 26 nechá bez událostí myši.
+    /// Hláška z okna formuláře (sheet) – ukáže se až po jeho zavření (`presentAfterSheet()` v `onDismiss`),
+    /// kdy už jde na „Vrátit“ kliknout.
     public func showAfterSheet(_ text: String, undo: (@MainActor () -> Void)? = nil) {
         afterSheet = Toast(text: text, undo: undo)
     }
