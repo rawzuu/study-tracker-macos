@@ -75,7 +75,7 @@ public final class WidgetBridge {
         let subjectWeek = activeSubjects
             .map { WidgetSnapshot.SubjectWeek(subjectId: $0.id, sec: bySubject[$0.id] ?? 0, goalSec: $0.weeklyGoalMin * 60) }
             .filter { $0.goalSec > 0 || $0.sec > 0 }
-            .sorted { ($0.goalSec > 0) != ($1.goalSec > 0) ? $0.goalSec > 0 : $0.sec != $1.sec ? $0.sec > $1.sec : $0.subjectId < $1.subjectId }
+            .sorted(by: subjectWeekOrder)
             .prefix(6)
         let exams = ExamCountdown.upcoming(doc, now: now, clock: clock).prefix(6).compactMap { e in
             clock.parseDayKey(e.date).map { WidgetSnapshot.ExamItem(id: e.id, subjectId: e.subjectId, name: e.name, day: $0, time: e.time) }
@@ -110,6 +110,14 @@ public final class WidgetBridge {
                 .init(subjectId: $0.subjectId!, title: $0.title, topic: $0.topic, modeId: $0.modeId, minutes: $0.minutes, reason: $0.reasons.first ?? "")
             }
         )
+    }
+
+    /// Předměty v týdnu: nejdřív ty s cílem, pak podle odučeného času, nakonec podle id.
+    private static func subjectWeekOrder(_ a: WidgetSnapshot.SubjectWeek, _ b: WidgetSnapshot.SubjectWeek) -> Bool {
+        let aGoal = a.goalSec > 0, bGoal = b.goalSec > 0
+        if aGoal != bGoal { return aGoal }
+        if a.sec != b.sec { return a.sec > b.sec }
+        return a.subjectId < b.subjectId
     }
 
     /// Sestaví souhrn a zapíše ho, jen když se změnil.
