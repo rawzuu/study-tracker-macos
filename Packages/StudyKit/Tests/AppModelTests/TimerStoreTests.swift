@@ -222,3 +222,66 @@ struct TimerActionTests {
         #expect(TimerAction.focus(5).title == "Soustředění 5 – hluboký flow")
     }
 }
+
+@MainActor
+@Suite("Zkratky a Siri")
+struct StudyActionsTests {
+    private func actions() async throws -> (StudyActions, TimerStore, TestClock, AppStore) {
+        let app = try await makeApp(defaults: freshDefaults()) { $0.dailyGoalMin = 120 }
+        // týdenní cíl → „Co teď?“ má co doporučit
+        app.upsert(Subject(raw: ["id": "anat", "name": "Anatomie", "color": "#c98a5b", "weeklyGoalMin": 300, "archived": false]))
+        let clock = TestClock()
+        let timer = TimerStore(app: app) { clock.t }
+        return (StudyActions(store: app, timer: timer, advisor: Advisor(store: app)), timer, clock, app)
+    }
+
+    @Test("Začít učení: zadaný předmět, jinak doporučení; běžící blok nepřeruší")
+    func start() async throws {
+        let (actions, timer, clock, _) = try await actions()
+        try await actions.ready()
+        #expect(actions.subjects.map(\.name) == ["Anatomie"])
+        let text = try actions.start(subjectId: "anat", topic: " Lebka ", modeId: "pomodoro")
+        #expect(text == "Začínám: Anatomie – Lebka · 25 min (Pomodoro).")
+        #expect(timer.state.status == .running && timer.state.topic == "Lebka")
+        #expect(throws: StudyActions.Failure.blockRunning("Anatomie")) { try actions.start(subjectId: nil, topic: nil, modeId: nil) }
+
+        clock.t += 61_000
+        #expect(try actions.pause() == "Pozastaveno – zbývá 23:59.")
+        #expect(throws: StudyActions.Failure.notRunning) { try actions.pause() }
+        #expect(try actions.resume() == "Pokračuji – zbývá 23:59.")
+        #expect(try actions.finish() == "Blok uložen (Anatomie). Dej si pauzu.")
+        // během pauzy „Začít učení“ bez zadání pokračuje sérií
+        #expect(try actions.start(subjectId: nil, topic: nil, modeId: nil).hasPrefix("Začínám: Anatomie"))
+        #expect(timer.state.phase == .work && timer.state.status == .running)
+        #expect(try actions.stop() == "Ukončeno, blok je uložený.")
+        #expect(timer.state.status == .idle)
+        #expect(throws: StudyActions.Failure.notRunning) { try actions.stop() }
+    }
+
+    @Test("Bez předmětu podle Co teď?; bez předmětů srozumitelná chyba")
+    func recommendation() async throws {
+        let (actions, timer, _, _) = try await actions()
+        try await actions.ready()
+        #expect(try actions.start(subjectId: nil, topic: nil, modeId: nil).hasPrefix("Začínám: Anatomie"))
+        #expect(timer.state.subjectId == "anat")
+        _ = try actions.stop()
+        #expect(throws: StudyActions.Failure.noSubject) { try actions.start(subjectId: "neexistuje", topic: nil, modeId: nil) }
+        let (empty, _, _, app) = try await self.actions()
+        app.remove(.subjects, id: "anat")
+        #expect(throws: StudyActions.Failure.noSubject) { try empty.start(subjectId: nil, topic: nil, modeId: nil) }
+        #expect(empty.whatNow() == "Teď není co doporučit – přidej předměty, cíle nebo zkoušky.")
+    }
+
+    @Test("Dnešní čas a Co teď? jako věta")
+    func queries() async throws {
+        let (actions, timer, clock, _) = try await actions()
+        try await actions.ready()
+        #expect(actions.today().text == "Dnes 0 min z 2 h, zbývá 2 h.")
+        #expect(actions.whatNow().hasPrefix("Anatomie: "))
+        clock.t = Int(Date().timeIntervalSince1970 * 1000) - 30 * minute
+        try actions.start(subjectId: "anat", topic: nil, modeId: "pomodoro")
+        clock.t += 25 * minute
+        timer.refresh()
+        #expect(actions.today().minutes == 25)
+    }
+}

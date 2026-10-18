@@ -1,3 +1,4 @@
+import AppIntents
 import AppKit
 import OSLog
 import AppModel
@@ -88,6 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Příjemce tlačítek v oznámení musí existovat dřív, než systém předá odpověď –
         // aplikaci mohlo spustit právě tlačítko v oznámení (akce počká na načtení dat).
         _ = timer
+        // Zkratky a Siri: akce dostanou stejný stav aplikace jako okno.
+        let store = store, timer = timer, advisor = advisor
+        let actions = StudyActionsProvider { StudyActions(store: store, timer: timer, advisor: advisor) }
+        AppDependencyManager.shared.add(dependency: actions)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

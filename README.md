@@ -87,9 +87,15 @@ npm ci --prefix Tools/parity
 WEB_DIR=$PWD/../study-tracker-web npm run generate --prefix Tools/parity
 ```
 
-## Spuštění bloku ze Zkratek
+## Zkratky, Spotlight a Siri
 
-Stejně jako odkaz na webu – třeba jako akce „Otevřít URL“ ve Zkratkách, přes Siri nebo Spotlight:
+Aplikace má vlastní akce v aplikaci Zkratky (App Intents): **Začít učení** (předmět, téma, režim – bez předmětu podle „Co teď?“, během pauzy pokračuje dalším blokem), **Pozastavit**, **Pokračovat**, **Hotovo – uložit blok**, **Ukončit učení**, **Co se mám teď učit?** a **Dnešní učení** (vrací minuty). Akce běží v aplikaci se stejným stavem jako okno; když aplikace neběží, systém ji spustí a akce počká na načtení dat. Logika je v `StudyActions` (AppModel) s testy.
+
+Režim Soustředění: ve Zkratkách stačí spojit „Nastavit režim Soustředění“ a „Začít učení“ (a obráceně „Ukončit učení“ s vypnutím). Siri česky neumí – anglické věty („Start studying in Study Tracker“) fungují se Siri v angličtině.
+
+### Odkaz
+
+Stejně jako odkaz na webu – třeba jako akce „Otevřít URL“ ve Zkratkách:
 
 ```
 studytracker://casovac?start=1                       poslední použitý předmět
