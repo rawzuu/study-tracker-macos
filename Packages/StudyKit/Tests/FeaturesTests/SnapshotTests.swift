@@ -13,8 +13,16 @@ import Testing
 @MainActor
 @Suite("Náhledy", .serialized, .enabled(if: ProcessInfo.processInfo.environment["ST_SNAPSHOT_DIR"] != nil))
 struct SnapshotTests {
-    @Test("Časovač: v klidu, běží, pauza", arguments: ["idle", "running", "break", "paused"])
-    func timer(_ variant: String) async throws {
+    /// Stránka vedle postranního panelu: okno na notebooku a okno přes celý monitor 2560 × 1440.
+    enum Screen: String, CaseIterable, CustomTestStringConvertible {
+        case laptop, monitor
+
+        var size: CGSize { self == .laptop ? CGSize(width: 1440, height: 920) : CGSize(width: 2360, height: 1340) }
+        var testDescription: String { rawValue }
+    }
+
+    @Test("Časovač: v klidu, běží, pauza", arguments: ["idle", "running", "break", "paused"], Screen.allCases)
+    func timer(_ variant: String, _ screen: Screen) async throws {
         let now = Int(Date().timeIntervalSince1970 * 1000)
         let app = AppStore(environment: .uiTesting(now: now))
         await app.start()
@@ -33,12 +41,12 @@ struct SnapshotTests {
             t = now
             if variant == "paused" { timer.pause() }
         }
-        try render(TimerView(snapshotSize: CGSize(width: 1440, height: 920)).environment(app).environment(timer).environment(Advisor(store: app)),
-                   name: "timer-\(variant)")
+        try render(TimerView(snapshotSize: screen.size).environment(app).environment(timer).environment(Advisor(store: app)),
+                   name: "timer-\(variant)-\(screen)", size: screen.size)
     }
 
-    @Test("Přehled s běžícím časovačem")
-    func dashboard() async throws {
+    @Test("Přehled s běžícím časovačem", arguments: Screen.allCases)
+    func dashboard(_ screen: Screen) async throws {
         let now = Int(Date().timeIntervalSince1970 * 1000)
         let app = AppStore(environment: .uiTesting(now: now))
         await app.start()
@@ -47,8 +55,17 @@ struct SnapshotTests {
         timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
         timer.start()
         t = now
-        try render(DashboardView(snapshotNow: now).environment(app).environment(timer).environment(Advisor(store: app)).environment(Toasts()),
-                   name: "dashboard", height: 1400)
+        try render(DashboardView(snapshotNow: now, width: screen.size.width).environment(app).environment(timer).environment(Advisor(store: app)).environment(Toasts()),
+                   name: "dashboard-\(screen)", size: CGSize(width: screen.size.width, height: screen == .laptop ? 1400 : 1340))
+    }
+
+    @Test("Historie a předměty", arguments: Screen.allCases)
+    func lists(_ screen: Screen) async throws {
+        let app = AppStore(environment: .uiTesting())
+        await app.start()
+        try render(HistoryView(snapshotWidth: screen.size.width).environment(app).environment(Toasts()),
+                   name: "history-\(screen)", size: CGSize(width: screen.size.width, height: 1800))
+        try render(SubjectsView(snapshotWidth: screen.size.width).environment(app), name: "subjects-\(screen)", size: screen.size)
     }
 
     @Test("Kalendář: týden a měsíc", arguments: ["week", "month"])
@@ -62,7 +79,7 @@ struct SnapshotTests {
         timer.start()
         t = now
         try render(CalendarView(snapshotNow: now, mode: variant == "week" ? .week : .month).environment(app).environment(timer).environment(Toasts()),
-                   name: "calendar-\(variant)", height: variant == "week" ? 1900 : 1500)
+                   name: "calendar-\(variant)", size: CGSize(width: 1440, height: variant == "week" ? 1900 : 1500))
     }
 
     @Test("Ranní plán")
@@ -75,13 +92,13 @@ struct SnapshotTests {
         let morning = clock.atMinutes(clock.startOfDay(now), 7 * 60 + 40)
         let items = DayPlan.propose(app.document, now: morning, extra: 1, clock: clock)
         try render(DayPlanSheet(items: items, scrolls: false).environment(app).environment(Toasts()).background(Palette.bg),
-                   name: "dayplan", width: 720, height: 640)
+                   name: "dayplan", size: CGSize(width: 720, height: 640))
     }
 
-    private func render(_ view: some View, name: String, width: CGFloat = 1440, height: CGFloat = 920) throws {
+    private func render(_ view: some View, name: String, size: CGSize = Screen.laptop.size) throws {
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["ST_SNAPSHOT_DIR"]!)
         for (scheme, appearance) in [("dark", NSAppearance.Name.darkAqua), ("light", .aqua)] {
-            let content = view.frame(width: width, height: height, alignment: .top).environment(\.colorScheme, scheme == "dark" ? .dark : .light)
+            let content = view.frame(width: size.width, height: size.height, alignment: .top).environment(\.colorScheme, scheme == "dark" ? .dark : .light)
             let renderer = ImageRenderer(content: content)
             renderer.scale = 1
             var image: CGImage?

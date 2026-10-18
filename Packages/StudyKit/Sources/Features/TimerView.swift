@@ -52,14 +52,25 @@ public struct TimerView: View {
     }
 
     private func page(size: CGSize) -> some View {
-        VStack(alignment: .leading, spacing: 28) {
+        let metrics = PageMetrics(width: size.width)
+        // Na velkém monitoru jsou nastavení ve dvou sloupcích vedle kruhu, jinak v jednom.
+        let sideColumns = zen ? 0 : metrics.size == .wide ? 2 : 1
+        return VStack(alignment: .leading, spacing: 28) {
             if !zen { header }
             if store.sync.mode == .readOnly && store.isConnected {
                 Banner("Režim jen pro čtení: bloky se uloží jen na tomto Macu. Na GitHub odejdou, až v Nastavení vypneš „Jen čtení“.", systemImage: "lock", tone: .warn)
             }
             HStack(alignment: .top, spacing: 40) {
-                timerCard(ringSize: ringSize(size))
-                if !zen {
+                timerCard(ringSize: ringSize(size, metrics: metrics, sideColumns: sideColumns))
+                if sideColumns == 2 {
+                    VStack(alignment: .leading, spacing: 32) {
+                        NextUpInline()
+                        studyingSection
+                        NoiseSection()
+                    }
+                    .frame(width: Self.sideWidth)
+                    modeSection.frame(width: Self.sideWidth)
+                } else if sideColumns == 1 {
                     VStack(alignment: .leading, spacing: 32) {
                         NextUpInline()
                         studyingSection
@@ -70,21 +81,23 @@ public struct TimerView: View {
                 }
             }
         }
-        .padding(.horizontal, 48)
+        .padding(.horizontal, metrics.padding)
         .padding(.vertical, 36)
-        .frame(maxWidth: zen ? .infinity : 1400, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private static let sideWidth: CGFloat = 400
 
     /// Píše se do textového pole (téma)? Pole v AppKitu edituje sdílený `NSTextView` okna.
     private var isEditingText: Bool {
         NSApp.keyWindow?.firstResponder is NSTextView
     }
 
-    /// Kruh roste s oknem: na notebooku ~360 bodů, na velkém monitoru až 640.
-    private func ringSize(_ size: CGSize) -> CGFloat {
-        let byHeight = min(zen ? 820 : 640, max(300, size.height * (zen ? 0.72 : 0.56)))
-        let byWidth = size.width - 96 - (zen ? 0 : 420) - 48
+    /// Kruh roste s oknem: na notebooku ~480 bodů, na velkém monitoru až 760 (v zen režimu 900).
+    private func ringSize(_ size: CGSize, metrics: PageMetrics, sideColumns: Int) -> CGFloat {
+        let byHeight = min(zen ? 900 : 760, max(300, size.height * (zen ? 0.72 : 0.56)))
+        let side: CGFloat = sideColumns == 2 ? 2 * (Self.sideWidth + 40) : sideColumns == 1 ? 420 : 0
+        let byWidth = metrics.contentWidth - side - 48
         return max(260, min(byHeight, byWidth))
     }
 

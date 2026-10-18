@@ -290,16 +290,22 @@ public struct SettingsPage: View {
     public init() {}
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 36) {
-                PageHeader("Nastavení", subtitle: "Ostatní nastavení přibude v milníku M6.")
-                SyncSettingsView()
-                CalendarFeedSettings()
-                TimerSoundSettings()
+        GeometryReader { proxy in
+            let metrics = PageMetrics(width: proxy.size.width)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 36) {
+                    PageHeader("Nastavení", subtitle: "Ostatní nastavení přibude v milníku M6.")
+                    // Na velkém monitoru skupiny vedle sebe, jinak pod sebou.
+                    ColumnsLayout(columns: metrics.size == .wide ? 3 : 1, rowSpacing: 36) {
+                        SyncSettingsView()
+                        CalendarFeedSettings()
+                        TimerSoundSettings()
+                    }
+                }
+                .padding(.horizontal, metrics.padding)
+                .padding(.vertical, 36)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 48)
-            .padding(.vertical, 36)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .pageBackground()
         .navigationTitle("Nastavení")

@@ -12,56 +12,84 @@ public struct HistoryView: View {
     @State private var limit = 30
     @State private var editing: EditedSession?
 
+    /// Pevná šířka bez posouvání – jen pro náhledy (ImageRenderer nevykreslí ScrollView).
+    private var snapshotWidth: CGFloat?
+
     public init() {}
+
+    init(snapshotWidth: CGFloat) {
+        self.snapshotWidth = snapshotWidth
+    }
 
     public var body: some View {
         let now = Int(Date().timeIntervalSince1970 * 1000)
         let state = HistoryState(document: store.document, subjectId: subjectId, now: now, clock: store.clock)
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 32) {
-                PageHeader("Historie") {
-                    HStack(spacing: 8) {
-                        Picker("Předmět", selection: $subjectId) {
-                            Text("Všechny předměty").tag(String?.none)
-                            ForEach(state.subjects, id: \.id) { s in Text(s.name).tag(Optional(s.id)) }
-                        }
-                        .labelsHidden()
-                        .frame(width: 220)
-                        .accessibilityIdentifier("history.subject")
-                        Button { editing = EditedSession(draft: SessionDraft(now: now, clock: store.clock)) } label: {
-                            Label("Ruční zápis", systemImage: "plus")
-                        }
-                        .buttonStyle(.primary)
-                        .accessibilityIdentifier("history.add")
-                    }
-                }
-                if state.groups.isEmpty {
-                    EmptyNote("Žádná sezení", systemImage: "book")
-                } else {
-                    ForEach(state.groups.prefix(limit)) { group in
-                        PageSection(group.title, accessory: { Chip(group.total) }) {
-                            VStack(spacing: 0) {
-                                ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, s in
-                                    SessionLine(row: s, divider: i < group.rows.count - 1) { edit(s.id) }
-                                }
-                            }
-                        }
-                        .accessibilityIdentifier("history.day.\(group.id)")
-                    }
-                    if state.groups.count > limit {
-                        Button("Načíst starší") { limit += 30 }
-                            .accessibilityIdentifier("history.more")
-                    }
+        Group {
+            if let snapshotWidth {
+                page(state, metrics: PageMetrics(width: snapshotWidth), now: now)
+            } else {
+                GeometryReader { proxy in
+                    ScrollView { page(state, metrics: PageMetrics(width: proxy.size.width), now: now) }
                 }
             }
-            .padding(.horizontal, 48)
-            .padding(.vertical, 36)
-            .frame(maxWidth: 1400, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .pageBackground()
         .navigationTitle("Historie")
         .sheet(item: $editing, onDismiss: { toasts.presentAfterSheet() }) { SessionEditor(draft: $0.draft) }
+    }
+
+    private func page(_ state: HistoryState, metrics: PageMetrics, now: Int) -> some View {
+        LazyVStack(alignment: .leading, spacing: 32) {
+            PageHeader("Historie") {
+                HStack(spacing: 8) {
+                    Picker("Předmět", selection: $subjectId) {
+                        Text("Všechny předměty").tag(String?.none)
+                        ForEach(state.subjects, id: \.id) { s in Text(s.name).tag(Optional(s.id)) }
+                    }
+                    .labelsHidden()
+                    .frame(width: 220)
+                    .accessibilityIdentifier("history.subject")
+                    Button { editing = EditedSession(draft: SessionDraft(now: now, clock: store.clock)) } label: {
+                        Label("Ruční zápis", systemImage: "plus")
+                    }
+                    .buttonStyle(.primary)
+                    .accessibilityIdentifier("history.add")
+                }
+            }
+            if state.groups.isEmpty {
+                EmptyNote("Žádná sezení", systemImage: "book")
+            } else {
+                if metrics.size == .wide {
+                    // Na velkém monitoru dny ve dvou sloupcích – čte se po řádcích zleva doprava.
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 56, alignment: .top), count: 2),
+                              alignment: .leading, spacing: 32) {
+                        days(state)
+                    }
+                } else {
+                    days(state)
+                }
+                if state.groups.count > limit {
+                    Button("Načíst starší") { limit += 30 }
+                        .accessibilityIdentifier("history.more")
+                }
+            }
+        }
+        .padding(.horizontal, metrics.padding)
+        .padding(.vertical, 36)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func days(_ state: HistoryState) -> some View {
+        ForEach(state.groups.prefix(limit)) { group in
+            PageSection(group.title, accessory: { Chip(group.total) }) {
+                VStack(spacing: 0) {
+                    ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, s in
+                        SessionLine(row: s, divider: i < group.rows.count - 1) { edit(s.id) }
+                    }
+                }
+            }
+            .accessibilityIdentifier("history.day.\(group.id)")
+        }
     }
 
     private func edit(_ id: String) {

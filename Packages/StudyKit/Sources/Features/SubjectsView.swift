@@ -10,52 +10,70 @@ public struct SubjectsView: View {
     @Environment(AppStore.self) private var store
     @State private var editing: SubjectDraft?
 
+    /// Pevná šířka bez posouvání – jen pro náhledy (ImageRenderer nevykreslí ScrollView).
+    private var snapshotWidth: CGFloat?
+
     public init() {}
+
+    init(snapshotWidth: CGFloat) {
+        self.snapshotWidth = snapshotWidth
+    }
 
     /// V režimu jen čtení by se úpravy neodeslaly – proto se nedají dělat.
     private var canEdit: Bool { store.sync.mode == .readWrite }
 
     public var body: some View {
         let state = SubjectsState(document: store.document, now: Int(Date().timeIntervalSince1970 * 1000), clock: store.clock)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 36) {
-                PageHeader("Předměty", subtitle: canEdit ? nil : "Režim jen pro čtení – úpravy jdou zapnout v Nastavení.") {
-                    Button {
-                        editing = SubjectDraft(newIn: store.document)
-                    } label: {
-                        Label("Nový předmět", systemImage: "plus")
-                    }
-                    .buttonStyle(.primary)
-                    .disabled(!canEdit)
-                    .accessibilityIdentifier("subjects.new")
-                }
-                PageSection("Aktivní", accessory: { Text("\(state.active.count)") }) {
-                    if state.active.isEmpty {
-                        EmptyNote("Zatím žádné předměty", systemImage: "books.vertical")
-                    } else {
-                        rows(state.active)
-                    }
-                }
-                .accessibilityIdentifier("subjects.active")
-                if !state.archived.isEmpty {
-                    PageSection("Archiv", accessory: { Text("\(state.archived.count)") }) { rows(state.archived) }
-                        .accessibilityIdentifier("subjects.archived")
+        Group {
+            if let snapshotWidth {
+                page(state, metrics: PageMetrics(width: snapshotWidth))
+            } else {
+                GeometryReader { proxy in
+                    ScrollView { page(state, metrics: PageMetrics(width: proxy.size.width)) }
                 }
             }
-            .padding(.horizontal, 48)
-            .padding(.vertical, 36)
-            .frame(maxWidth: 1200, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .pageBackground()
         .navigationTitle("Předměty")
         .sheet(item: $editing) { draft in SubjectEditor(draft: draft) }
     }
 
-    private func rows(_ rows: [SubjectsState.Row]) -> some View {
-        VStack(spacing: 0) {
+    private func page(_ state: SubjectsState, metrics: PageMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 36) {
+            PageHeader("Předměty", subtitle: canEdit ? nil : "Režim jen pro čtení – úpravy jdou zapnout v Nastavení.") {
+                Button {
+                    editing = SubjectDraft(newIn: store.document)
+                } label: {
+                    Label("Nový předmět", systemImage: "plus")
+                }
+                .buttonStyle(.primary)
+                .disabled(!canEdit)
+                .accessibilityIdentifier("subjects.new")
+            }
+            PageSection("Aktivní", accessory: { Text("\(state.active.count)") }) {
+                if state.active.isEmpty {
+                    EmptyNote("Zatím žádné předměty", systemImage: "books.vertical")
+                } else {
+                    rows(state.active, columns: metrics.size == .wide ? 2 : 1)
+                }
+            }
+            .accessibilityIdentifier("subjects.active")
+            if !state.archived.isEmpty {
+                PageSection("Archiv", accessory: { Text("\(state.archived.count)") }) { rows(state.archived, columns: metrics.size == .wide ? 2 : 1) }
+                    .accessibilityIdentifier("subjects.archived")
+            }
+        }
+        .padding(.horizontal, metrics.padding)
+        .padding(.vertical, 36)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Předměty pod sebou, na velkém monitoru ve dvou sloupcích (po řádcích zleva doprava).
+    private func rows(_ rows: [SubjectsState.Row], columns: Int) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 56, alignment: .top), count: columns), alignment: .leading, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
-                ListRow(divider: i < rows.count - 1) {
+                // Čára pod řádkem kromě posledního řádku mřížky.
+                ListRow(divider: i < rows.count - (rows.count - 1) % columns - 1) {
                     RoundedRectangle(cornerRadius: 5).fill(Palette.subject(row.subject.color)).frame(width: 14, height: 14)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.subject.name)

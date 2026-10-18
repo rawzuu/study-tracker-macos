@@ -107,7 +107,6 @@ public struct CalendarView: View {
         }
         .padding(.horizontal, 48)
         .padding(.vertical, 36)
-        .frame(maxWidth: 2200, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

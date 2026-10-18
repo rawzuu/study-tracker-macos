@@ -13,26 +13,28 @@ public struct DashboardView: View {
     @State private var dayPlan: DayPlanRequest?
     let openPage: (String) -> Void
 
-    /// Bez posouvání a s pevným „teď“ – jen pro náhledy (ImageRenderer nevykreslí ScrollView).
-    private var snapshotNow: Int?
+    /// Bez posouvání, s pevným „teď“ a šířkou – jen pro náhledy (ImageRenderer nevykreslí ScrollView).
+    private var snapshot: (now: Int, width: CGFloat)?
 
     public init(openPage: @escaping (String) -> Void = { _ in }) {
         self.openPage = openPage
     }
 
-    init(snapshotNow: Int) {
+    init(snapshotNow: Int, width: CGFloat = 1440) {
         self.openPage = { _ in }
-        self.snapshotNow = snapshotNow
+        self.snapshot = (snapshotNow, width)
     }
 
     public var body: some View {
         Group {
-            if let snapshotNow {
-                page(now: snapshotNow)
+            if let snapshot {
+                page(now: snapshot.now, metrics: PageMetrics(width: snapshot.width))
             } else {
                 // Každou minutu se přepočítá „teď“ (dnešek, série, „dnes“ v seznamu).
                 TimelineView(.everyMinute) { context in
-                    ScrollView { page(now: Int(context.date.timeIntervalSince1970 * 1000)) }
+                    GeometryReader { proxy in
+                        ScrollView { page(now: Int(context.date.timeIntervalSince1970 * 1000), metrics: PageMetrics(width: proxy.size.width)) }
+                    }
                 }
             }
         }
@@ -46,7 +48,7 @@ public struct DashboardView: View {
         dayPlan = DayPlanRequest(items: DayPlan.propose(store.document, now: store.nowMs, clock: store.clock))
     }
 
-    private func page(now: Int) -> some View {
+    private func page(now: Int, metrics: PageMetrics) -> some View {
         let state = DashboardState(document: store.document, now: now, clock: store.clock)
         return VStack(alignment: .leading, spacing: 36) {
             PageHeader(state.title, subtitle: "Týden \(state.isoWeek)" + (state.intention.map { " · záměr: \($0)" } ?? "")) {
@@ -72,30 +74,41 @@ public struct DashboardView: View {
             if state.isEmpty && !store.isConnected {
                 ConnectPrompt(openSettings: { openPage("nastaveni") })
             } else {
-                content(state, now: now)
+                content(state, now: now, columns: metrics.columns)
             }
         }
-        .padding(.horizontal, 48)
+        .padding(.horizontal, metrics.padding)
         .padding(.vertical, 36)
-        .frame(maxWidth: 2200, alignment: .leading)
+    }
+
+    /// Karty ve sloupcích. Na notebooku dva (dnešek, plán, zkoušky | co teď, týden, časovač) a pod nimi poslední
+    /// sezení přes celou šířku; na velkém monitoru tři (dnešek, plán, poslední sezení | co teď, zkoušky | týden,
+    /// časovač); v úzkém okně vše pod sebou.
+    @ViewBuilder
+    private func content(_ s: DashboardState, now: Int, columns: Int) -> some View {
+        let order: [DashCard] = columns == 3
+            ? [.today, .next, .week, .plan, .exams, .timer, .recent]
+            : [.today, .next, .plan, .week, .exams, .timer]
+        ColumnsLayout(columns: columns) {
+            ForEach(order, id: \.self) { card($0, s, now: now) }
+        }
+        if columns < 3 { card(.recent, s, now: now) }
     }
 
     @ViewBuilder
-    private func content(_ s: DashboardState, now: Int) -> some View {
-        FlowRow {
-            TodaySection(state: s).frame(minWidth: 460, maxWidth: .infinity)
-            NextUpSection(now: now, openTimer: { openPage("casovac") }).frame(minWidth: 440, maxWidth: .infinity)
+    private func card(_ card: DashCard, _ s: DashboardState, now: Int) -> some View {
+        switch card {
+        case .today: TodaySection(state: s)
+        case .next: NextUpSection(now: now, openTimer: { openPage("casovac") })
+        case .plan: PlanSection(rows: s.todayPlan, start: startBlock, planDay: planDay)
+        case .week: WeekSection(state: s)
+        case .exams: ExamsSection(rows: s.exams)
+        case .timer: DashTimer(openTimer: { openPage("casovac") })
+        case .recent: RecentSection(rows: s.recent, openHistory: { openPage("historie") })
         }
-        FlowRow {
-            PlanSection(rows: s.todayPlan, start: startBlock, planDay: planDay).frame(minWidth: 320, maxWidth: .infinity)
-            WeekSection(state: s).frame(minWidth: 440, maxWidth: .infinity)
-        }
-        FlowRow {
-            ExamsSection(rows: s.exams).frame(minWidth: 320, maxWidth: .infinity)
-            DashTimer(openTimer: { openPage("casovac") }).frame(minWidth: 320, maxWidth: .infinity)
-        }
-        RecentSection(rows: s.recent, openHistory: { openPage("historie") })
     }
+
+    private enum DashCard { case today, next, plan, week, exams, timer, recent }
 
     /// Spustit časovač z bloku plánu: předmět, téma z názvu a odkaz na blok (po uložení se odškrtne).
     private func startBlock(_ b: DashboardState.PlanRow) {
@@ -389,7 +402,9 @@ private struct RecentSection: View {
                         GridRow {
                             Text(s.when).monospacedDigit().foregroundStyle(Palette.text3)
                             SubjectTag(name: s.subject.name, color: s.subject.color)
+                            // Téma dostane zbytek šířky – tabulka vyplní stránku i na velkém monitoru.
                             Text(s.topic.isEmpty ? "—" : s.topic).foregroundStyle(s.topic.isEmpty ? Palette.text3 : Palette.text2).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             Text(s.mode).foregroundStyle(Palette.text3)
                             Text(s.focus.map { "\($0)/5" } ?? "—").monospacedDigit()
                             Text(s.duration).monospacedDigit()
