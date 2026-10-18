@@ -82,7 +82,7 @@ struct RootView: View {
             switch navigator.page ?? .prehled {
             case .prehled: DashboardView(openPage: open)
             case .casovac: TimerView()
-            case .planovac: CalendarView(openPage: open)
+            case .planovac: CalendarView(openPage: open, focus: navigator.calendarFocus)
             case .historie: HistoryView()
             case .predmety: SubjectsView()
             case .nastaveni: SettingsPage()

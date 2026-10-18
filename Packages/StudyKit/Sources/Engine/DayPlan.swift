@@ -24,6 +24,11 @@ public struct DayPlanItem: Sendable, Hashable, Identifiable {
 public struct BusyInterval: Sendable, Hashable {
     public var start: Int
     public var end: Int
+
+    public init(start: Int, end: Int) {
+        self.start = start
+        self.end = end
+    }
 }
 
 /// Ranní plánování (`src/lib/dayplan.ts` na webu): navrhne bloky na zbytek dne.
@@ -66,14 +71,18 @@ public enum DayPlan {
         return clock.atMinutes(day, Int(total))
     }
 
-    /// Obsazené úseky dne (výuka, plán, odučené), seřazené podle začátku.
-    public static func busyIntervals(_ doc: AppDocument, day: Int, excluding exclude: Set<String> = [], clock: StudyClock) -> [BusyInterval] {
-        busyIntervals(doc, sessions: SessionFacts.alive(in: doc), day: day, excluding: exclude, clock: clock)
+    /// Obsazené úseky dne (výuka, plán, odučené a `external` – události z Apple Kalendáře), seřazené podle začátku.
+    public static func busyIntervals(_ doc: AppDocument, day: Int, excluding exclude: Set<String> = [], clock: StudyClock,
+                                     external: [BusyInterval] = []) -> [BusyInterval] {
+        busyIntervals(doc, sessions: SessionFacts.alive(in: doc), day: day, excluding: exclude, external: external, clock: clock)
     }
 
-    static func busyIntervals(_ doc: AppDocument, sessions: [SessionFacts], day: Int, excluding exclude: Set<String>, clock: StudyClock) -> [BusyInterval] {
+    static func busyIntervals(_ doc: AppDocument, sessions: [SessionFacts], day: Int, excluding exclude: Set<String>,
+                              external: [BusyInterval] = [], clock: StudyClock) -> [BusyInterval] {
         let next = clock.addDays(day, 1)
         var out = Timetables.lectures(doc, from: day, to: next).map { BusyInterval(start: $0.event.start, end: $0.event.end) }
+        // Mac: události z ostatních kalendářů, které do dne zasahují (web je nezná).
+        out += external.filter { $0.end > day && $0.start < next }
         for b in doc.alive(PlanBlock.self) where !exclude.contains(b.id) && b.start >= day && b.start < next {
             out.append(BusyInterval(start: b.start, end: b.start + b.durationMin * StudyClock.minute))
         }
@@ -95,8 +104,9 @@ public enum DayPlan {
         return t + len <= to ? t : nil
     }
 
-    /// Návrh bloků na zbytek dne. `extra` = kolikrát uživatel přidal „Další blok“ (+25 min k cíli).
-    public static func propose(_ doc: AppDocument, now: Int, extra: Int = 0, clock: StudyClock) -> [DayPlanItem] {
+    /// Návrh bloků na zbytek dne. `extra` = kolikrát uživatel přidal „Další blok“ (+25 min k cíli),
+    /// `external` = obsazený čas z Apple Kalendáře.
+    public static func propose(_ doc: AppDocument, now: Int, extra: Int = 0, clock: StudyClock, external: [BusyInterval] = []) -> [DayPlanItem] {
         let settings = doc.settings
         let day = clock.startOfDay(now)
         let next = clock.addDays(day, 1)
@@ -144,7 +154,7 @@ public enum DayPlan {
             sim.lastSubject = subjectId
             target -= Double(minutes)
         }
-        return place(doc, items: items, sessions: sessions, now: now, clock: clock)
+        return place(doc, items: items, sessions: sessions, now: now, external: external, clock: clock)
     }
 
     /// Rozmístí položky do volných míst dne:
@@ -152,13 +162,14 @@ public enum DayPlan {
     ///  2. zbytek v pořadí návrhu do nejbližších volných míst – dopoledne tak nezůstane prázdné.
     /// Stejný předmět nikdy těsně za sebou (když jsou v plánu i jiné) a pauza po bloku podle jeho délky.
     /// Co se nevejde, má `start` 0 a není zaškrtnuté. Seřazeno podle začátku.
-    public static func place(_ doc: AppDocument, items: [DayPlanItem], now: Int, clock: StudyClock) -> [DayPlanItem] {
-        place(doc, items: items, sessions: SessionFacts.alive(in: doc), now: now, clock: clock)
+    public static func place(_ doc: AppDocument, items: [DayPlanItem], now: Int, clock: StudyClock, external: [BusyInterval] = []) -> [DayPlanItem] {
+        place(doc, items: items, sessions: SessionFacts.alive(in: doc), now: now, external: external, clock: clock)
     }
 
-    static func place(_ doc: AppDocument, items: [DayPlanItem], sessions: [SessionFacts], now: Int, clock: StudyClock) -> [DayPlanItem] {
+    static func place(_ doc: AppDocument, items: [DayPlanItem], sessions: [SessionFacts], now: Int, external: [BusyInterval] = [],
+                      clock: StudyClock) -> [DayPlanItem] {
         let (day, from, to) = dayBounds(doc.settings, now: now, clock: clock)
-        var busy = busyIntervals(doc, sessions: sessions, day: day, excluding: Set(items.compactMap { $0.carry?.id }), clock: clock)
+        var busy = busyIntervals(doc, sessions: sessions, day: day, excluding: Set(items.compactMap { $0.carry?.id }), external: external, clock: clock)
         let recent = sessions.filter { $0.start > now - 60 * StudyClock.day && $0.mode != "anki" }
         let peakFrom = Stats.focusWindow(recent, clock: clock).map { clock.atMinutes(day, $0.from * 60) }
         let varied = Set(items.map(\.subjectId)).count > 1

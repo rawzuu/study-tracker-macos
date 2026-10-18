@@ -75,9 +75,14 @@ public struct CalendarWeekState: Sendable {
     /// Odučeno tento týden po předmětech, od nejvíc.
     public let legend: [SubjectTime]
     public let hasLectures: Bool
+    /// V týdnu jsou události z ostatních kalendářů (obsazený čas).
+    public let hasExternal: Bool
 
-    /// - Parameter live: běžící blok učení na časovači (kreslí se, dokud běží)
-    public init(document doc: AppDocument, weekStart: Int, layer: CalendarLayer, live: TimerState?, now: Int, clock: StudyClock) {
+    /// - Parameters:
+    ///   - live: běžící blok učení na časovači (kreslí se, dokud běží)
+    ///   - external: události z ostatních kalendářů v Apple Kalendáři (obsazený čas)
+    public init(document doc: AppDocument, weekStart: Int, layer: CalendarLayer, live: TimerState?, external: [ExternalBusy] = [],
+                now: Int, clock: StudyClock) {
         let subjects = SubjectLookup(doc)
         let weekEnd = clock.addDays(weekStart, 7)
         let blocks = doc.alive(PlanBlock.self).filter { $0.start >= weekStart && $0.start < weekEnd }
@@ -92,6 +97,8 @@ public struct CalendarWeekState: Sendable {
             CalendarItem(id: "l-\($0.timetableId)-\($0.event.key)", source: .lecture(timetableId: $0.timetableId, key: $0.event.key),
                          subjectId: "", start: $0.event.start, end: $0.event.end, title: $0.event.title)
         }
+        let busy = layer == .done ? [] : external.filter { $0.end > weekStart && $0.start < weekEnd }
+        items += busy.map { CalendarItem(id: "x-\($0.id)", source: .external(id: $0.id), subjectId: "", start: $0.start, end: $0.end, title: $0.title) }
         if layer != .done {
             for b in blocks {
                 // Hotový blok se zapsaným časem ve „Vše“ nahradí plné sezení – jinak by tam byl dvakrát.
@@ -109,8 +116,10 @@ public struct CalendarWeekState: Sendable {
         items = items.flatMap { CalendarLayout.splitAtMidnight($0, clock: clock) }
         firstHour = CalendarLayout.firstHour(items, clock: clock)
         hasLectures = !lectures.isEmpty
+        hasExternal = !busy.isEmpty
         let locations = Dictionary(lectures.map { ("\($0.timetableId)|\($0.event.key)", $0.event.location) }, uniquingKeysWith: { a, _ in a })
 
+        let calendarOf = Dictionary(busy.map { ($0.id, $0.calendarTitle) }, uniquingKeysWith: { a, _ in a })
         let blockById = Dictionary(blocks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let sessionById = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let today = clock.startOfDay(now)
@@ -129,7 +138,8 @@ public struct CalendarWeekState: Sendable {
                 mix: orderedTimes(daySessions, subjects),
                 exams: exams.filter { $0.date == clock.dayKey(day) }.map { ExamPill(id: $0.id, name: $0.name, subject: subjects[$0.subjectId]) },
                 items: dayItems.map { it in
-                    Self.item(it, lane: lanes[it.id]!, subjects: subjects, block: blockById, session: sessionById, locations: locations, clock: clock)
+                    Self.item(it, lane: lanes[it.id]!, subjects: subjects, block: blockById, session: sessionById, locations: locations,
+                              calendars: calendarOf, clock: clock)
                 }
             )
         }
@@ -140,7 +150,7 @@ public struct CalendarWeekState: Sendable {
     }
 
     private static func item(_ it: CalendarItem, lane: CalendarLayout.Lane, subjects: SubjectLookup, block: [String: PlanBlock],
-                             session: [String: Session], locations: [String: String], clock: StudyClock) -> Item {
+                             session: [String: Session], locations: [String: String], calendars: [String: String], clock: StudyClock) -> Item {
         let subject = subjects[it.subjectId]
         let time = "\(Format.time(it.fullStart, clock: clock))–\(Format.time(it.fullEnd, clock: clock))"
         switch it.source {
@@ -158,6 +168,10 @@ public struct CalendarWeekState: Sendable {
             let location = locations["\(timetableId)|\(key)"] ?? ""
             return Item(item: it, lane: lane, subject: subject, done: false, detail: location.isEmpty ? "výuka" : location, timeLabel: time,
                         tooltip: "Výuka: \(it.title)\(location.isEmpty ? "" : " · \(location)") · \(time)")
+        case .external(let id):
+            let calendar = calendars[id] ?? "Kalendář"
+            return Item(item: it, lane: lane, subject: subject, done: false, detail: calendar, timeLabel: time,
+                        tooltip: "Obsazeno (\(calendar)): \(it.title) · \(time)")
         }
     }
 }

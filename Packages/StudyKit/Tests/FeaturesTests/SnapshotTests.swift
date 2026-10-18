@@ -55,7 +55,8 @@ struct SnapshotTests {
         timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
         timer.start()
         t = now
-        try render(DashboardView(snapshotNow: now, width: screen.size.width).environment(app).environment(timer).environment(Advisor(store: app)).environment(Toasts()),
+        try render(DashboardView(snapshotNow: now, width: screen.size.width).environment(app).environment(timer).environment(Advisor(store: app)).environment(Toasts())
+                    .environment(await calendars(app, now: now)),
                    name: "dashboard-\(screen)", size: CGSize(width: screen.size.width, height: screen == .laptop ? 1400 : 1340))
     }
 
@@ -78,7 +79,8 @@ struct SnapshotTests {
         timer.configure(TimerSetup(subjectId: "demo-lat", topic: "Deklinace"))
         timer.start()
         t = now
-        try render(CalendarView(snapshotNow: now, mode: variant == "week" ? .week : .month).environment(app).environment(timer).environment(Toasts()),
+        try render(CalendarView(snapshotNow: now, mode: variant == "week" ? .week : .month).environment(app).environment(timer).environment(Toasts())
+                    .environment(await calendars(app, now: now)),
                    name: "calendar-\(variant)", size: CGSize(width: 1440, height: variant == "week" ? 1900 : 1500))
     }
 
@@ -91,8 +93,26 @@ struct SnapshotTests {
         // Návrh na dopoledne, ať je v náhledu vždy co ukázat.
         let morning = clock.atMinutes(clock.startOfDay(now), 7 * 60 + 40)
         let items = DayPlan.propose(app.document, now: morning, extra: 1, clock: clock)
-        try render(DayPlanSheet(items: items, scrolls: false).environment(app).environment(Toasts()).background(Palette.bg),
+        try render(DayPlanSheet(items: items, scrolls: false).environment(app).environment(Toasts()).environment(await calendars(app, now: now)).background(Palette.bg),
                    name: "dayplan", size: CGSize(width: 720, height: 640))
+    }
+
+    @Test("Apple Kalendář v Nastavení: vypnuto a zapnuto", arguments: [false, true])
+    func appleCalendar(_ enabled: Bool) async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        let sync = await calendars(app, now: now, access: enabled ? .granted : .notDetermined)
+        if enabled { await sync.enable() }
+        try render(AppleCalendarSettings().environment(app).environment(sync).environment(Toasts()).padding(32).background(Palette.bg),
+                   name: "apple-calendar-\(enabled ? "on" : "off")", size: CGSize(width: 780, height: enabled ? 760 : 300))
+    }
+
+    /// Ukázkové kalendáře s obsazeným časem (trénink dnes 16:00, porada zítra 10:00).
+    private func calendars(_ app: AppStore, now: Int, access: CalendarAccess = .granted) async -> AppleCalendarSync {
+        let sync = AppleCalendarSync(app: app, service: DemoCalendars.service(now: now, clock: app.clock, access: access))
+        await sync.start()
+        return sync
     }
 
     private func render(_ view: some View, name: String, size: CGSize = Screen.laptop.size) throws {

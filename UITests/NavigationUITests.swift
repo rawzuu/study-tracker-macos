@@ -255,6 +255,27 @@ final class NavigationUITests: XCTestCase {
         }
     }
 
+    /// Apple Kalendář v Nastavení (kalendáře v paměti): zapnutí zapíše plán a ukáže stav, ostatní kalendáře
+    /// jsou obsazený čas – odebírané (svátky) ve výchozím stavu ne.
+    @MainActor
+    func testAppleCalendarInSettings() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.nastaveni"].click()
+        let enable = app.buttons["appleCalendar.enable"]
+        reveal(enable, app)
+        enable.click()
+        let status = app.staticTexts["appleCalendar.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5), "po zapnutí je vidět stav synchronizace")
+        XCTAssertTrue(text(of: status).hasPrefix("Naposledy srovnáno"))
+        let work = app.checkBoxes["appleCalendar.busy.demo-prace"]
+        let holidays = app.checkBoxes["appleCalendar.busy.demo-svatky"]
+        reveal(work, app)
+        XCTAssertEqual(work.value as? Int, 1)
+        XCTAssertEqual(holidays.value as? Int, 0)
+        attachScreenshot(app, "Apple Kalendář")
+    }
+
     /// Nová zkouška se objeví v seznamu s odpočtem; smazanou vrátí „Vrátit“ v hlášce.
     @MainActor
     func testExamAddDeleteUndo() {

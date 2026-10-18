@@ -9,6 +9,8 @@ public struct CalendarItem: Identifiable, Hashable, Sendable {
         /// Blok, který právě běží na časovači.
         case live
         case lecture(timetableId: String, key: String)
+        /// Událost z jiného kalendáře v Apple Kalendáři (obsazený čas, jen na Macu).
+        case external(id: String)
     }
 
     /// Skutečný začátek a konec položky, která je rozdělená přes půlnoc.

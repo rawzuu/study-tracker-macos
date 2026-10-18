@@ -4,7 +4,7 @@ import Engine
 import SwiftUI
 
 /// Jedna položka týdenní mřížky (`.cal-item` na webu). Barvu nese jen předmět: odučené sezení je
-/// plné, plán je obrys, výuka z rozvrhu je šedá.
+/// plné, plán je obrys, výuka z rozvrhu je šedá a události z ostatních kalendářů šedě šrafované (obsazeno).
 struct CalendarItemView: View {
     @Environment(\.colorScheme) private var scheme
     let item: CalendarWeekState.Item
@@ -14,7 +14,7 @@ struct CalendarItemView: View {
     let dragging: Bool
     @State private var hovering = false
 
-    private enum Kind { case plan, done, live, lecture }
+    private enum Kind { case plan, done, live, lecture, external }
 
     private var kind: Kind {
         switch item.item.source {
@@ -22,6 +22,7 @@ struct CalendarItemView: View {
         case .session: .done
         case .live: .live
         case .lecture: .lecture
+        case .external: .external
         }
     }
 
@@ -31,7 +32,8 @@ struct CalendarItemView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 3) {
                 if kind == .plan && item.done { Image(systemName: "checkmark").font(.system(size: 8, weight: .heavy)) }
-                Text(kind == .lecture ? item.item.title : item.subject.name).fontWeight(kind == .lecture ? .medium : .semibold)
+                Text(kind == .lecture || kind == .external ? item.item.title : item.subject.name)
+                    .fontWeight(kind == .lecture || kind == .external ? .medium : .semibold)
             }
             .foregroundStyle(titleColor)
             if height >= 34 { Text(item.detail).foregroundStyle(detailColor) }
@@ -53,7 +55,7 @@ struct CalendarItemView: View {
         .help(item.tooltip)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(item.tooltip)
-        .accessibilityAddTraits(kind == .live ? [] : .isButton)
+        .accessibilityAddTraits(kind == .live || kind == .external ? [] : .isButton)
     }
 
     @ViewBuilder private var background: some View {
@@ -62,6 +64,7 @@ struct CalendarItemView: View {
         case .done: color
         case .live: LiveStripes(color: item.subject.color)
         case .lecture: Palette.panel3
+        case .external: BusyHatch()
         }
     }
 
@@ -79,6 +82,8 @@ struct CalendarItemView: View {
         case .lecture:
             shape.strokeBorder(hovering ? Palette.text3 : Palette.lineStrong)
                 .overlay(alignment: .leading) { Rectangle().fill(Palette.text3).frame(width: 2) }
+        case .external:
+            shape.strokeBorder(Palette.line)
         }
     }
 
@@ -88,20 +93,39 @@ struct CalendarItemView: View {
         case .plan: scheme == .light ? Palette.subject(item.subject.color, mixedWith: Palette.lightText, amount: 0.5) : color
         case .done, .live: Color(red: 11 / 255, green: 11 / 255, blue: 11 / 255)
         case .lecture: Palette.text
+        case .external: Palette.text2
         }
     }
 
     private var detailColor: Color {
         switch kind {
         case .plan, .lecture: Palette.text2
+        case .external: Palette.text3
         case .done, .live: .black.opacity(0.66)
         }
     }
 
     private var timeColor: Color {
         switch kind {
-        case .plan, .lecture: Palette.text3
+        case .plan, .lecture, .external: Palette.text3
         case .done, .live: .black.opacity(0.55)
+        }
+    }
+}
+
+/// Obsazený čas z jiného kalendáře: jemné šedé šrafování – barvu v kalendáři nesou jen předměty.
+struct BusyHatch: View {
+    var body: some View {
+        Canvas { ctx, size in
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Palette.panel2))
+            var lines = Path()
+            var x: CGFloat = -size.height
+            while x < size.width {
+                lines.move(to: CGPoint(x: x, y: size.height))
+                lines.addLine(to: CGPoint(x: x + size.height, y: 0))
+                x += 7
+            }
+            ctx.stroke(lines, with: .color(Palette.lineStrong), lineWidth: 1)
         }
     }
 }

@@ -48,6 +48,8 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: cz.rawzuu.studytracker.link
             CFBundleURLSchemes: [studytracker]
+        # Apple Kalendář: zápis plánu do vlastního kalendáře a obsazený čas z ostatních (jen na žádost v Nastavení).
+        NSCalendarsFullAccessUsageDescription: Study Tracker zapisuje tvůj studijní plán do kalendáře „Studijní plán“ a události z ostatních kalendářů bere v ranním plánu jako obsazený čas. Ostatní kalendáře jen čte.
     entitlements:
       path: App/StudyTracker.entitlements
       properties:
@@ -56,6 +58,8 @@ targets:
         com.apple.security.network.client: true
         # Mimo kontejner jen soubory, které uživatel sám vybere (import rozvrhu .ics, export do kalendáře).
         com.apple.security.files.user-selected.read-write: true
+        # Apple Kalendář (EventKit) – jen po zapnutí v Nastavení a se souhlasem v systému.
+        com.apple.security.personal-information.calendars: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker

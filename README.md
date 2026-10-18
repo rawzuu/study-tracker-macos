@@ -108,6 +108,8 @@ V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained tok
 - **Rozvrh:** Kalendář → Rozvrh → vyber export .ics ze školního systému. Nová verze rozvrhu ukáže před uložením, co se změní; proběhlé hodiny, skryté předměty a odpadlé termíny zůstanou.
 - **Export:** Kalendář → Do kalendáře uloží soubor .ics (stálá UID – opakovaný import aktualizuje stejné události).
 - **Odebíraný kalendář:** Nastavení → Odebíraný kalendář publikuje plán do tajného gistu; Apple Kalendář si ho sám stahuje. Mac i web ho po změně plánu aktualizují (se stejným obsahem, takže se navzájem nepřepisují zbytečně).
+- **Apple Kalendář přímo (jen Mac):** Nastavení → Apple Kalendář. Mac zapisuje bloky (od dvou týdnů zpět) a zkoušky do vlastního kalendáře „Studijní plán“ – v iCloudu jsou hned v iPhonu, iPadu i hodinkách, bez čekání na obnovu odebíraného kalendáře. Kalendář je jen kopie `data.json`: po každé změně dat se srovná, úpravy v Kalendáři se přepíšou podle dat a ostatních kalendářů se zápis nikdy nedotkne (každá změna se ověřuje). Událost odkazuje zpátky do aplikace (`studytracker://planovac?blok=…`). Další Mac najde stejný kalendář podle názvu. Odebíraný kalendář z gistu může zůstat jako záloha – v Kalendáři si ho jen skryj, ať bloky nevidíš dvakrát.
+- **Obsazený čas:** události z vybraných kalendářů (ve výchozím stavu vlastní kalendáře, ne odebírané ani narozeniny; bez celodenních, volných a odmítnutých) ranní plán obchází a Kalendář je ukazuje šedě šrafované.
 
 ## Co teď? a ranní plán
 

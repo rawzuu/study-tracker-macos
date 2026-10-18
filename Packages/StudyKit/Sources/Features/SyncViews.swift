@@ -298,7 +298,10 @@ public struct SettingsPage: View {
                     // Na velkém monitoru skupiny vedle sebe, jinak pod sebou.
                     ColumnsLayout(columns: metrics.size == .wide ? 3 : 1, rowSpacing: 36) {
                         SyncSettingsView()
-                        CalendarFeedSettings()
+                        VStack(alignment: .leading, spacing: 36) {
+                            AppleCalendarSettings()
+                            CalendarFeedSettings()
+                        }
                         TimerSoundSettings()
                     }
                 }

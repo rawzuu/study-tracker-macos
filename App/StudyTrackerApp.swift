@@ -1,6 +1,7 @@
 import AppKit
 import OSLog
 import AppModel
+import Core
 import Engine
 import Features
 import SwiftUI
@@ -20,6 +21,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.toasts)
                 .environment(delegate.calendarFeed)
                 .environment(delegate.advisor)
+                .environment(delegate.appleCalendar)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -62,6 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let toasts = Toasts()
     lazy var calendarFeed = CalendarFeedSync(app: store)
     lazy var advisor = Advisor(store: store)
+    // UI testy mají kalendáře v paměti – nikdy nesahají na skutečný Apple Kalendář.
+    lazy var appleCalendar = AppleCalendarSync(app: store, service: Self.uiTesting ? DemoCalendars.service() : EventKitCalendarService())
     private var wakeObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -72,6 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             timer.refresh()
             // Odebíraný kalendář se aktualizuje po změnách plánu (jen když je zapnutý).
             calendarFeed.start()
+            // Apple Kalendář: zápis plánu (když je zapnutý) a obsazený čas z ostatních kalendářů.
+            await appleCalendar.start()
         }
         // Po probuzení Macu dohnat konec bloku nebo pauzy, který proběhl ve spánku.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -83,6 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// `studytracker://casovac…` – otevře časovač a s `start=1` rovnou spustí blok.
     func application(_ application: NSApplication, open urls: [URL]) {
+        // Odkaz z události v Apple Kalendáři: kalendář na týdnu bloku nebo zkoušky.
+        for url in urls {
+            guard let key = CalendarMirror.Key(url: url) else { continue }
+            navigator.page = .planovac
+            navigator.calendarFocus = CalendarFocus(day: focusDay(key) ?? store.nowMs)
+        }
         for url in urls where TimerLink.isTimerPage(url) {
             navigator.page = .casovac
             guard let link = TimerLink(url: url) else { continue }
@@ -92,6 +104,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.log.notice("Odkaz na časovač: \(before.rawValue, privacy: .public) → \(self.timer.state.status.rawValue, privacy: .public)")
         }
         NSApp.activate()
+    }
+
+    private func focusDay(_ key: CalendarMirror.Key) -> Int? {
+        switch key.kind {
+        case .block: store.document.record(PlanBlock.self, id: key.id)?.start
+        case .exam: store.document.record(Exam.self, id: key.id).flatMap { store.clock.parseDayKey($0.date) }
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -124,4 +143,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @Observable
 final class Navigator {
     var page: Page? = .prehled
+    /// Týden, který má Kalendář ukázat (odkaz z Apple Kalendáře).
+    var calendarFocus: CalendarFocus?
 }

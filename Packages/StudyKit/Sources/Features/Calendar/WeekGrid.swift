@@ -287,6 +287,7 @@ private struct DayColumn: View {
         case .session(let id): "cal.session.\(id)"
         case .live: "cal.live"
         case .lecture(_, let key): "cal.lecture.\(key)"
+        case .external(let id): "cal.external.\(id)"
         }
     }
 

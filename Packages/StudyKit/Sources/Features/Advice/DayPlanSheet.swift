@@ -8,6 +8,7 @@ import SwiftUI
 struct DayPlanSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(Toasts.self) private var toasts
+    @Environment(AppleCalendarSync.self) private var appleCalendar
     @Environment(\.dismiss) private var dismiss
     /// Kolikrát se přidal „Další blok“ (+25 min k dennímu cíli).
     @State private var extra = 0
@@ -29,7 +30,7 @@ struct DayPlanSheet: View {
         let bounds = DayPlan.dayBounds(doc.settings, now: now, clock: clock)
         EditorSheet("Plán na dnešek · \(Format.date(now, .weekdayDayMonth, clock: clock))", width: 720) {
             summary(doc: doc, now: now, day: bounds.day)
-            DayAxis(items: items, busy: DayPlan.busyIntervals(doc, day: bounds.day, excluding: carried, clock: clock),
+            DayAxis(items: items, busy: DayPlan.busyIntervals(doc, day: bounds.day, excluding: carried, clock: clock, external: appleCalendar.busyIntervals),
                     range: DayPlan.dayRange(doc.settings, day: bounds.day, clock: clock), to: bounds.to, now: now, clock: clock)
             if items.isEmpty {
                 Text("Na dnešek nic dalšího nenavrhuji – cíl je splněný nebo naplánovaný. Přidat můžeš tlačítkem „Další blok“.")
@@ -117,13 +118,13 @@ struct DayPlanSheet: View {
     // MARK: - Akce
 
     private func propose(extra: Int) {
-        items = DayPlan.propose(store.document, now: store.nowMs, extra: extra, clock: store.clock)
+        items = DayPlan.propose(store.document, now: store.nowMs, extra: extra, clock: store.clock, external: appleCalendar.busyIntervals)
     }
 
     /// Po změně délky nebo odebrání se zbytek rozmístí znovu (`reflow` na webu).
     private func reflow(_ list: [DayPlanItem]) {
         let cleared = list.map { var i = $0; i.start = 0; return i }
-        items = DayPlan.place(store.document, items: cleared, now: store.nowMs, clock: store.clock)
+        items = DayPlan.place(store.document, items: cleared, now: store.nowMs, clock: store.clock, external: appleCalendar.busyIntervals)
     }
 
     private func reflow(resizing key: String, to minutes: Int) {

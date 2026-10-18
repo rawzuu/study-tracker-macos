@@ -10,6 +10,7 @@ public struct DashboardView: View {
     @Environment(TimerStore.self) private var timer
     @Environment(Advisor.self) private var advisor
     @Environment(Toasts.self) private var toasts
+    @Environment(AppleCalendarSync.self) private var appleCalendar
     @State private var dayPlan: DayPlanRequest?
     let openPage: (String) -> Void
 
@@ -45,7 +46,7 @@ public struct DashboardView: View {
 
     /// Otevře ranní plán s čerstvým návrhem.
     private func planDay() {
-        dayPlan = DayPlanRequest(items: DayPlan.propose(store.document, now: store.nowMs, clock: store.clock))
+        dayPlan = DayPlanRequest(items: DayPlan.propose(store.document, now: store.nowMs, clock: store.clock, external: appleCalendar.busyIntervals))
     }
 
     private func page(now: Int, metrics: PageMetrics) -> some View {

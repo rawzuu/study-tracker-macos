@@ -4,12 +4,23 @@ import DesignSystem
 import Engine
 import SwiftUI
 
+/// Požadavek ukázat v kalendáři týden s daným dnem; každý odkaz je nový (i na stejný týden).
+public struct CalendarFocus: Equatable, Sendable {
+    public let day: Int
+    let id = UUID()
+
+    public init(day: Int) {
+        self.day = day
+    }
+}
+
 /// Kalendář (`PlannerPage` na webu): odučený čas (plná barva) a plán (obrys) v týdnu nebo měsíci,
 /// plán vs. realita a nadcházející zkoušky.
 public struct CalendarView: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
     @Environment(Toasts.self) private var toasts
+    @Environment(AppleCalendarSync.self) private var appleCalendar
     let openPage: (String) -> Void
 
     @State private var mode: Mode = .week
@@ -26,8 +37,12 @@ public struct CalendarView: View {
         case week = "Týden", month = "Měsíc"
     }
 
-    public init(openPage: @escaping (String) -> Void = { _ in }) {
+    /// Týden, na který se má kalendář přepnout (odkaz z události v Apple Kalendáři).
+    private var focus: CalendarFocus?
+
+    public init(openPage: @escaping (String) -> Void = { _ in }, focus: CalendarFocus? = nil) {
         self.openPage = openPage
+        self.focus = focus
     }
 
     init(snapshotNow: Int, mode: Mode = .week) {
@@ -49,6 +64,11 @@ public struct CalendarView: View {
         }
         .pageBackground()
         .navigationTitle("Kalendář")
+        .onChange(of: focus, initial: true) { _, focus in
+            guard let focus else { return }
+            mode = .week
+            weekStart = store.clock.startOfWeek(focus.day)
+        }
         .sheet(item: $sheet, onDismiss: { toasts.presentAfterSheet() }) { sheet in
             sheetContent(sheet)
         }
@@ -77,7 +97,8 @@ public struct CalendarView: View {
             VStack(alignment: .leading, spacing: 14) {
                 switch mode {
                 case .week:
-                    let state = CalendarWeekState(document: store.document, weekStart: week, layer: layer, live: timer.state, now: now, clock: clock)
+                    let state = CalendarWeekState(document: store.document, weekStart: week, layer: layer, live: timer.state,
+                                                  external: appleCalendar.busyEvents, now: now, clock: clock)
                     calendarHeader(title: state.title, isCurrent: state.isCurrentWeek, summary: "odučeno \(state.studied) · plán \(state.planned)") {
                         weekStart = clock.addDays(week, $0 * 7)
                     }
@@ -121,7 +142,7 @@ public struct CalendarView: View {
     private func headerButtons(now: Int, week: Int) -> some View {
         let clock = store.clock
         Group {
-            Button { sheet = .init(.dayPlan(DayPlan.propose(store.document, now: store.nowMs, clock: clock))) } label: {
+            Button { sheet = .init(.dayPlan(DayPlan.propose(store.document, now: store.nowMs, clock: clock, external: appleCalendar.busyIntervals))) } label: {
                 Label("Naplánovat den", systemImage: "calendar.day.timeline.left")
             }
             .buttonStyle(.denik(.normal))
@@ -203,7 +224,7 @@ public struct CalendarView: View {
                     if let s = store.document.record(Session.self, id: id) { sheet = .init(.session(SessionDraft(editing: s, clock: clock))) }
                 case .lecture(let timetableId, let key):
                     sheet = .init(.lecture(timetableId: timetableId, key: key))
-                case .live:
+                case .live, .external:
                     break
                 }
             },
@@ -328,6 +349,13 @@ private struct WeekLegend: View {
                         .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Palette.lineStrong))
                         .overlay(alignment: .leading) { Rectangle().fill(Palette.text3).frame(width: 2) }
                 }
+            }
+            if state.hasExternal {
+                key("obsazeno") {
+                    BusyHatch().clipShape(RoundedRectangle(cornerRadius: 2))
+                        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Palette.line))
+                }
+                .help("Události z ostatních kalendářů v Apple Kalendáři – ranní plán se jim vyhne.")
             }
             Rectangle().fill(Palette.lineStrong).frame(width: 1, height: 14)
             if state.legend.isEmpty {

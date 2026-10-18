@@ -96,3 +96,28 @@ public enum DemoData {
         return doc
     }
 }
+
+/// Ukázkové kalendáře pro UI testy a náhledy (v paměti – skutečného Apple Kalendáře se nedotknou).
+public enum DemoCalendars {
+    public static let calendars = [
+        CalendarInfo(id: "demo-prace", title: "Práce", account: "iCloud", color: "#5b8def", kind: .cloud),
+        CalendarInfo(id: "demo-osobni", title: "Osobní", account: "iCloud", color: "#57b877", kind: .cloud),
+        CalendarInfo(id: "demo-svatky", title: "Státní svátky", account: "Jiné", color: "#c46cd8", kind: .subscription),
+    ]
+
+    /// Trénink dnes 16:00–17:30 a porada zítra 10:00–11:00.
+    public static func busy(now: Int, clock: StudyClock) -> [ExternalBusy] {
+        let today = clock.startOfDay(now), tomorrow = clock.addDays(today, 1)
+        return [
+            ExternalBusy(id: "demo-trenink", title: "Trénink", start: clock.atMinutes(today, 16 * 60), end: clock.atMinutes(today, 17 * 60 + 30),
+                         calendarId: "demo-osobni", calendarTitle: "Osobní", color: "#57b877"),
+            ExternalBusy(id: "demo-porada", title: "Porada", start: clock.atMinutes(tomorrow, 10 * 60), end: clock.atMinutes(tomorrow, 11 * 60),
+                         calendarId: "demo-prace", calendarTitle: "Práce", color: "#5b8def"),
+        ]
+    }
+
+    public static func service(now: Int = Int(Date().timeIntervalSince1970 * 1000), clock: StudyClock = .current,
+                               access: CalendarAccess = .notDetermined) -> InMemoryCalendarService {
+        InMemoryCalendarService(access: access, calendars: calendars, busy: busy(now: now, clock: clock))
+    }
+}
