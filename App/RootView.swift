@@ -25,16 +25,22 @@ struct RootView: View {
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
         } detail: {
-            detail
-                .toolbar {
-                    ToolbarItem(placement: .automatic) { SyncStatusButton() }
+            // Hláška je pod obsahem, ne přes něj: na macOS 26 by rolovací oblast stránky (NSScrollView)
+            // pod plovoucí hláškou přebrala klik na „Vrátit“.
+            VStack(spacing: 0) {
+                detail.frame(maxHeight: .infinity)
+                if let toast = toasts.current {
+                    ToastView(toast: toast)
+                        .id(toast.id)
+                        .frame(maxWidth: .infinity)
+                        .background(Palette.bg)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                // Hlášky nad obsahem stránky (ne nad celým rozdělením okna – tam by na macOS 26
-                // tlačítko „Vrátit“ nemuselo dostat klik).
-                .overlay(alignment: .bottom) {
-                    if let toast = toasts.current { ToastView(toast: toast).id(toast.id).transition(.opacity) }
-                }
-                .animation(.easeOut(duration: 0.15), value: toasts.current?.id)
+            }
+            .animation(.easeOut(duration: 0.15), value: toasts.current?.id)
+            .toolbar {
+                ToolbarItem(placement: .automatic) { SyncStatusButton() }
+            }
         }
         .preferredColorScheme(colorScheme)
         .tint(Palette.accent)
@@ -143,7 +149,8 @@ private struct ToastView: View {
         .padding(.vertical, toast.undo == nil ? 10 : 4)
         .background(Palette.panel3, in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.lineStrong))
-        .padding(.bottom, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 18)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("toast")
         .onHover { hovering = $0 }
