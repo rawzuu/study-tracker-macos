@@ -194,7 +194,9 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(block.waitForExistence(timeout: 3), "blok je v kalendáři")
         attachScreenshot(app, "Kalendář s blokem")
 
-        // Hotovo u bloku bez zapsaného času nabídne zápis odučeného.
+        // Hotovo u bloku bez zapsaného času nabídne zápis odučeného. Večer je blok „teď“ v mřížce
+        // pod okrajem malé obrazovky CI – nejdřív se k němu posunout.
+        reveal(block, app)
         block.click()
         app.buttons["block.done"].click()
         let logSave = app.buttons["session.save"]
@@ -350,11 +352,14 @@ final class NavigationUITests: XCTestCase {
     /// Posouvá se oblast, ve které prvek je – první posuvná oblast okna je postranní panel.
     @MainActor private func reveal(_ element: XCUIElement, _ app: XCUIApplication) {
         XCTAssertTrue(element.waitForExistence(timeout: 3))
-        let page = app.scrollViews.containing(.any, identifier: element.identifier).firstMatch
-        let area = page.exists ? page : app.windows.firstMatch
-        for delta in [-150.0, 150.0] {
-            for _ in 0..<10 where !element.isHittable {
-                area.scroll(byDeltaX: 0, deltaY: delta)
+        // Nejdřív vnitřní posuvná oblast (mřížka kalendáře), pak stránka, nakonec okno.
+        let areas = app.scrollViews.containing(.any, identifier: element.identifier).allElementsBoundByIndex.reversed()
+            + [app.windows.firstMatch]
+        for area in areas where !element.isHittable {
+            for delta in [-150.0, 150.0] {
+                for _ in 0..<10 where !element.isHittable {
+                    area.scroll(byDeltaX: 0, deltaY: delta)
+                }
             }
         }
         XCTAssertTrue(element.isHittable, "prvek je vidět")
