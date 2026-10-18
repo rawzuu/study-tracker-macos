@@ -19,6 +19,11 @@ extension WidgetSnapshot {
             week: (0..<7).map { $0 < weekday ? [3_600, 0, 4_800, 2_100, 6_300, 6_000][$0 % 6] : $0 == weekday ? 85 * 60 : 0 },
             todayIndex: weekday,
             streak: 5,
+            subjectWeek: [
+                .init(subjectId: "anat", sec: 3 * 3600 + 10 * 60, goalSec: 5 * 3600),
+                .init(subjectId: "fyz", sec: 3600 + 50 * 60, goalSec: 4 * 3600),
+                .init(subjectId: "bio", sec: 3600 + 30 * 60, goalSec: 4 * 3600),
+            ],
             subjects: [
                 "anat": .init(name: "Anatomie", color: "#c98a5b"),
                 "fyz": .init(name: "Fyziologie", color: "#7da0c9"),

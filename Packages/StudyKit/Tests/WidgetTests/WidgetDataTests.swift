@@ -11,6 +11,7 @@ private func snapshot(timer: WidgetSnapshot.TimerInfo = .idle) -> WidgetSnapshot
     WidgetSnapshot(
         generatedAt: 9 * hour, days: [0, day, 2 * day], goalSec: 7200, studiedSec: 3000, weekSec: 9000, weekGoalSec: 36000,
         week: [1000, 2000, 3000, 0, 0, 0, 0], todayIndex: 2, streak: 4,
+        subjectWeek: [.init(subjectId: "a", sec: 5000, goalSec: 18000)],
         subjects: ["a": .init(name: "Anatomie", color: "#c98a5b")],
         plan: [
             .init(id: "done", subjectId: "a", title: "", topic: "", start: 10 * hour, end: 10 * hour + 50 * minute, done: true),
@@ -54,6 +55,13 @@ struct WidgetMomentTests {
         #expect(WidgetMoment(s, at: 12 * hour + 10 * minute).studiedSec == 3000 + 600)
         let over = WidgetMoment(s, at: 13 * hour)
         #expect(over.studiedSec == 3000 + 1500 && over.phaseOver)
+        #expect(WidgetMoment(s, at: 12 * hour + 10 * minute).subjectWeek.first?.sec == 5000 + 600, "i do týdne předmětu")
+        // Pondělí po neděli bez aplikace: nový týden od nuly.
+        var sunday = snapshot()
+        sunday.todayIndex = 6
+        let monday = WidgetMoment(sunday, at: day + hour)
+        #expect(monday.weekSec == 0 && monday.subjectWeek.first?.sec == 0 && monday.week == Array(repeating: 0, count: 7))
+        #expect(WidgetMoment(snapshot(), at: day + hour).subjectWeek.first?.sec == 5000, "jinak týden běží dál")
     }
 
     @Test("Časová osa: minuty během bloku, začátky a konce bloků, půlnoc")

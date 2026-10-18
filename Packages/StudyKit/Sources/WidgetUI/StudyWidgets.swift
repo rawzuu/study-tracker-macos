@@ -95,20 +95,20 @@ public struct TodayWidgetView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         TodaySummary(s: s, m: m, size: 30)
                         Spacer(minLength: 6)
-                        footer(s, m)
+                        NextLine(s: s, m: m)
                     }
                 } else {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 0) {
                             TodaySummary(s: s, m: m, size: 34)
                             Spacer(minLength: 6)
-                            footer(s, m)
+                            NextLine(s: s, m: m)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Divider()
                         Group {
                             if m.timer.isActive || m.timer.status == .ready {
-                                TimerPanel(s: s, m: m, clockSize: 28, compactButtons: true)
+                                TimerPanel(s: s, m: m, clockSize: 30)
                             } else {
                                 NextUpPanel(s: s, titleSize: 14, titleLines: 2, showsReason: false)
                             }
@@ -118,25 +118,6 @@ public struct TodayWidgetView: View {
                 }
             } else {
                 NoData()
-            }
-        }
-    }
-
-    /// Co je v plánu teď nebo jako další.
-    @ViewBuilder
-    private func footer(_ s: WidgetSnapshot, _ m: WidgetMoment) -> some View {
-        Themed { t in
-            if let b = m.current ?? m.next {
-                let subject = s.subject(b.subjectId)
-                HStack(spacing: 6) {
-                    Text(m.current?.id == b.id ? "teď" : WidgetFormat.time(b.start))
-                        .font(.system(size: 11.5, weight: m.current?.id == b.id ? .bold : .regular, design: .serif).monospacedDigit())
-                        .foregroundStyle(m.current?.id == b.id ? t.accent : t.text2)
-                    SubjectMark(color: subject.color, size: 7)
-                    Text(subject.name).font(.system(size: 11.5, weight: .medium)).foregroundStyle(t.text).lineLimit(1)
-                }
-            } else if !m.plan.isEmpty {
-                Label("Plán na dnes hotový", systemImage: "checkmark").font(.system(size: 11)).foregroundStyle(t.rest)
             }
         }
     }
@@ -168,7 +149,7 @@ public struct TimerWidgetView: View {
                 let active = m.timer.isActive || m.timer.status == .ready
                 if family == .systemSmall {
                     if active {
-                        TimerPanel(s: s, m: m, clockSize: 34, compactButtons: true)
+                        TimerPanel(s: s, m: m, clockSize: 38)
                     } else {
                         NextUpPanel(s: s, titleSize: 14, titleLines: 3, showsReason: false)
                     }
@@ -176,7 +157,7 @@ public struct TimerWidgetView: View {
                     HStack(alignment: .top, spacing: 16) {
                         Group {
                             if active {
-                                TimerPanel(s: s, m: m, clockSize: 44)
+                                TimerPanel(s: s, m: m, clockSize: 40)
                             } else {
                                 NextUpPanel(s: s, titleSize: 16, titleLines: 2)
                             }
@@ -186,12 +167,9 @@ public struct TimerWidgetView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             TodaySummary(s: s, m: m, size: 24)
                             Spacer(minLength: 6)
-                            if let next = m.next {
-                                Caption("Další v plánu")
-                                PlanLine(block: next, s: s, m: m, compact: true)
-                            }
+                            NextLine(s: s, m: m)
                         }
-                        .frame(width: 128, alignment: .leading)
+                        .frame(width: 132, alignment: .leading)
                     }
                 }
             } else {
@@ -225,18 +203,12 @@ public struct PlanWidgetView: View {
         WidgetFrame(page: "planovac") {
             if let s = entry.snapshot, let m = entry.moment {
                 if family == .systemLarge {
-                    VStack(alignment: .leading, spacing: 12) {
-                        PlanList(s: s, m: m, limit: 6)
-                        let tomorrow = WidgetMoment(s, at: m.day + 86_400_000 + 1).plan
-                        if !tomorrow.isEmpty {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Caption("Zítra").padding(.bottom, 4)
-                                ForEach(tomorrow.prefix(2)) { PlanLine(block: $0, s: s, m: m) }
-                            }
-                        }
-                        Spacer(minLength: 0)
+                    VStack(alignment: .leading, spacing: 0) {
+                        PlanList(s: s, m: m, limit: 6, strip: true)
+                        TomorrowList(s: s, m: m, limit: 2).padding(.top, 12)
+                        Spacer(minLength: 8)
                         if let first = m.exams.first {
-                            Divider()
+                            Divider().padding(.bottom, 10)
                             ExamLine(exam: first.exam, daysLeft: first.daysLeft, s: s)
                         }
                     }
@@ -341,31 +313,37 @@ public struct OverviewWidgetView: View {
             if let s = entry.snapshot, let m = entry.moment {
                 if family == .systemExtraLarge {
                     HStack(alignment: .top, spacing: 20) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            TodaySummary(s: s, m: m, size: 40)
-                            Spacer(minLength: 0)
-                            Caption("Tento týden")
-                            WeekBars(m: m)
-                            Themed { t in
-                                Text(WidgetFormat.duration(m.weekSec) + (s.weekGoalSec > 0 ? " z \(WidgetFormat.duration(s.weekGoalSec))" : ""))
-                                    .font(.system(size: 11)).monospacedDigit().foregroundStyle(t.text3)
+                        VStack(alignment: .leading, spacing: 0) {
+                            TodaySummary(s: s, m: m, size: 36)
+                            Spacer(minLength: 12)
+                            if !m.subjectWeek.isEmpty {
+                                Caption("Předměty · týden")
+                                SubjectWeekList(s: s, m: m, limit: 3).padding(.top, 8)
+                                Spacer(minLength: 12)
                             }
+                            WeekHeader(s: s, m: m)
+                            WeekBars(m: m, height: 44).padding(.top, 8)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Divider()
-                        PlanList(s: s, m: m, limit: 7).frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 0) {
+                            PlanList(s: s, m: m, limit: 6, strip: true)
+                            Spacer(minLength: 8)
+                            TomorrowList(s: s, m: m, limit: 1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         Divider()
-                        VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 0) {
                             if m.timer.isActive || m.timer.status == .ready {
-                                TimerPanel(s: s, m: m, clockSize: 40)
+                                TimerPanel(s: s, m: m, clockSize: 46, fills: false)
                             } else {
-                                NextUpPanel(s: s, titleSize: 17, titleLines: 2)
+                                NextUpPanel(s: s, titleSize: 17, titleLines: 2, showsAlternative: true, buttonFollowsContent: true)
                             }
+                            Spacer(minLength: 12)
                             if !m.exams.isEmpty {
-                                Divider()
+                                Caption("Zkoušky").padding(.bottom, 6)
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Caption("Zkoušky")
-                                    ForEach(Array(m.exams.prefix(2).enumerated()), id: \.offset) { _, e in
+                                    ForEach(Array(m.exams.prefix(3).enumerated()), id: \.offset) { _, e in
                                         ExamLine(exam: e.exam, daysLeft: e.daysLeft, s: s)
                                     }
                                 }
@@ -374,23 +352,28 @@ public struct OverviewWidgetView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .top, spacing: 16) {
-                            TodaySummary(s: s, m: m, size: 28).frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 0) {
+                                TodaySummary(s: s, m: m, size: 28)
+                                Spacer(minLength: 8)
+                                NextLine(s: s, m: m)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             Divider()
                             Group {
                                 if m.timer.isActive || m.timer.status == .ready {
-                                    TimerPanel(s: s, m: m, clockSize: 26, compactButtons: true)
+                                    TimerPanel(s: s, m: m, clockSize: 28)
                                 } else {
                                     NextUpPanel(s: s, titleSize: 14, titleLines: 2, showsReason: false)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .fixedSize(horizontal: false, vertical: true)
-                        Divider()
-                        PlanList(s: s, m: m, limit: 4)
-                        Spacer(minLength: 0)
+                        .frame(height: 142)
+                        Divider().padding(.vertical, 12)
+                        PlanList(s: s, m: m, limit: 3, strip: true)
+                        Spacer(minLength: 8)
                         if let first = m.exams.first {
                             ExamLine(exam: first.exam, daysLeft: first.daysLeft, s: s)
                         }
@@ -398,6 +381,42 @@ public struct OverviewWidgetView: View {
                 }
             } else {
                 NoData()
+            }
+        }
+    }
+}
+
+// MARK: - Společné části velkých widgetů
+
+/// Zítřejší bloky plánu (velké widgety).
+private struct TomorrowList: View {
+    let s: WidgetSnapshot
+    let m: WidgetMoment
+    let limit: Int
+
+    var body: some View {
+        let tomorrow = WidgetMoment(s, at: m.day + 86_400_000 + 1)
+        if !tomorrow.plan.isEmpty {
+            VStack(alignment: .leading, spacing: 1) {
+                Caption("Zítra · \(WidgetFormat.day(tomorrow.day))").padding(.bottom, 4)
+                ForEach(tomorrow.plan.prefix(limit)) { PlanLine(block: $0, s: s, m: tomorrow) }
+            }
+        }
+    }
+}
+
+/// „Tento týden“ se součtem a týdenním cílem.
+private struct WeekHeader: View {
+    let s: WidgetSnapshot
+    let m: WidgetMoment
+
+    var body: some View {
+        Themed { t in
+            HStack {
+                Caption("Tento týden")
+                Spacer(minLength: 4)
+                Text(WidgetFormat.duration(m.weekSec) + (s.weekGoalSec > 0 ? " z \(WidgetFormat.duration(s.weekGoalSec))" : ""))
+                    .font(.system(size: 10.5)).monospacedDigit().foregroundStyle(t.text3).lineLimit(1)
             }
         }
     }

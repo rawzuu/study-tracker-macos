@@ -44,6 +44,12 @@ struct WidgetBridgeTests {
         #expect(s.plan.allSatisfy { $0.start >= today && $0.start < clock.addDays(today, 2) })
         #expect(!s.exams.isEmpty && s.exams.map(\.day) == s.exams.map(\.day).sorted())
         #expect(!s.nextUp.isEmpty && s.timer == .idle)
+        // Předměty v týdnu: jen aktivní s cílem nebo s učením, předměty s cílem první, nejvýš šest.
+        let active = app.document.alive(Subject.self).filter { !$0.archived }
+        #expect(!s.subjectWeek.isEmpty && s.subjectWeek.count <= 6)
+        #expect(s.subjectWeek.allSatisfy { w in active.contains { $0.id == w.subjectId } && (w.goalSec > 0 || w.sec > 0) })
+        #expect(s.subjectWeek.map { $0.goalSec > 0 } == s.subjectWeek.map { $0.goalSec > 0 }.sorted { $0 && !$1 })
+        #expect(s.subjectWeek.reduce(0) { $0 + $1.sec } <= s.weekSec)
         #expect(reloads.count == 1)
         bridge.update()
         #expect(reloads.count == 1, "beze změny se widgety nepřekreslují")
@@ -89,13 +95,28 @@ struct WidgetSnapshots {
         let cal = Calendar.current
         let at = Int(cal.date(bySettingHour: 15, minute: 10, second: 0, of: Date(timeIntervalSince1970: Double(now) / 1000))!.timeIntervalSince1970 * 1000)
         let idle = StudyEntry(date: Date(timeIntervalSince1970: Double(at) / 1000), snapshot: .sample(now: at))
-        let busy = StudyEntry(date: idle.date, snapshot: .sample(now: at, timer: WidgetSnapshot.sampleTimer(now: at)))
+        let running = WidgetSnapshot.sampleTimer(now: at)
+        let busy = StudyEntry(date: idle.date, snapshot: .sample(now: at, timer: running))
+        var paused = running
+        paused.status = .paused
+        paused.accumulated = running.elapsed(at: at)
+        paused.segmentStart = nil
+        var rest = running
+        rest.isWork = false
+        rest.phaseDurationMs = 5 * 60_000
+        rest.segmentStart = at - 100_000
+        var ready = running
+        ready.status = .ready
+        ready.segmentStart = nil
+        let states = [("paused", paused), ("break", rest), ("ready", ready)].map { ($0, StudyEntry(date: idle.date, snapshot: .sample(now: at, timer: $1))) }
         for (family, size) in Self.sizes {
             let tag = "\(family)".replacingOccurrences(of: "system", with: "").lowercased()
             if [.systemSmall, .systemMedium].contains(family) {
                 try render(TodayWidgetView(entry: idle, family: family), "today-\(tag)", size)
                 try render(TimerWidgetView(entry: busy, family: family), "timer-\(tag)", size)
                 try render(TimerWidgetView(entry: idle, family: family), "timer-idle-\(tag)", size)
+                for (name, entry) in states { try render(TimerWidgetView(entry: entry, family: family), "timer-\(name)-\(tag)", size) }
+                try render(TodayWidgetView(entry: busy, family: family), "today-busy-\(tag)", size)
                 try render(ExamsWidgetView(entry: idle, family: family), "exams-\(tag)", size)
             }
             if [.systemMedium, .systemLarge].contains(family) {
@@ -104,6 +125,7 @@ struct WidgetSnapshots {
             if [.systemLarge, .systemExtraLarge].contains(family) {
                 try render(OverviewWidgetView(entry: idle, family: family), "overview-\(tag)", size)
                 try render(OverviewWidgetView(entry: busy, family: family), "overview-busy-\(tag)", size)
+                try render(OverviewWidgetView(entry: states[0].1, family: family), "overview-paused-\(tag)", size)
             }
         }
         try render(TodayWidgetView(entry: StudyEntry(date: .now, snapshot: nil), family: .systemSmall), "nodata-small", CGSize(width: 170, height: 170))
@@ -120,6 +142,7 @@ struct WidgetSnapshots {
                 .padding(12)
                 .background(scheme == .dark ? Color(white: 0.28) : Color(white: 0.82))
                 .environment(\.colorScheme, scheme)
+                .environment(\.widgetStaticClock, true)
             let renderer = ImageRenderer(content: card)
             renderer.scale = 2
             var image: CGImage?

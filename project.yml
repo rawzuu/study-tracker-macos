@@ -15,8 +15,8 @@ settings:
     ARCHS: arm64
     DEAD_CODE_STRIPPING: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    MARKETING_VERSION: 0.6.0
-    CURRENT_PROJECT_VERSION: 6
+    MARKETING_VERSION: 0.6.1
+    CURRENT_PROJECT_VERSION: 7
   configs:
     Release:
       SWIFT_COMPILATION_MODE: wholemodule
@@ -75,6 +75,8 @@ targets:
         ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # Ikona z Icon Composeru (Liquid Glass); pro macOS 15 z ní Xcode vyrobí klasickou ikonu.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:
         # Vývojové sestavení (Xcode ⌘R, UI testy) má vlastní identifikátor, a tedy vlastní data,
         # nastavení, Klíčenku i kontejner widgetů – nikdy nesáhne na data nainstalované aplikace.

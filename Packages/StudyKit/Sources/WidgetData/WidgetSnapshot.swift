@@ -4,7 +4,7 @@ import Foundation
 /// zdrojem pravdy zůstává `data.json`). Widget z něj sám dopočítá stav pro libovolný okamžik:
 /// běžící odpočet, přechod na další den, další blok plánu, dny do zkoušky – i když aplikace neběží.
 public struct WidgetSnapshot: Codable, Sendable, Equatable {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public var version = WidgetSnapshot.currentVersion
     /// Kdy aplikace souhrn sestavila (ms).
@@ -21,6 +21,8 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// Index dneška v `week` (0 = pondělí).
     public var todayIndex: Int
     public var streak: Int
+    /// Předměty tento týden: odučeno proti týdennímu cíli (aktivní s cílem nebo s učením, nejvýš šest).
+    public var subjectWeek: [SubjectWeek]
     public var subjects: [String: SubjectStyle]
     /// Bloky plánu na dnešek a zítřek podle začátku.
     public var plan: [Block]
@@ -33,8 +35,8 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     public var appRunning: Bool
 
     public init(generatedAt: Int, days: [Int], goalSec: Int, studiedSec: Int, weekSec: Int, weekGoalSec: Int, week: [Int], todayIndex: Int,
-                streak: Int, subjects: [String: SubjectStyle], plan: [Block], exams: [ExamItem], timer: TimerInfo, nextUp: [NextUp],
-                appRunning: Bool = true) {
+                streak: Int, subjectWeek: [SubjectWeek] = [], subjects: [String: SubjectStyle], plan: [Block], exams: [ExamItem],
+                timer: TimerInfo, nextUp: [NextUp], appRunning: Bool = true) {
         self.generatedAt = generatedAt
         self.days = days
         self.goalSec = goalSec
@@ -44,6 +46,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         self.week = week
         self.todayIndex = todayIndex
         self.streak = streak
+        self.subjectWeek = subjectWeek
         self.subjects = subjects
         self.plan = plan
         self.exams = exams
@@ -60,6 +63,18 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
         public init(name: String, color: String) {
             self.name = name
             self.color = color
+        }
+    }
+
+    public struct SubjectWeek: Codable, Sendable, Equatable {
+        public var subjectId: String
+        public var sec: Int
+        public var goalSec: Int
+
+        public init(subjectId: String, sec: Int, goalSec: Int) {
+            self.subjectId = subjectId
+            self.sec = sec
+            self.goalSec = goalSec
         }
     }
 
@@ -237,6 +252,7 @@ public struct WidgetMoment: Sendable, Equatable {
     public let week: [Int]
     public let todayIndex: Int
     public let weekSec: Int
+    public let subjectWeek: [WidgetSnapshot.SubjectWeek]
 
     public init(_ s: WidgetSnapshot, at t: Int) {
         at = t
@@ -262,11 +278,18 @@ public struct WidgetMoment: Sendable, Equatable {
         }
         week = rolled && s.todayIndex == 6 ? Array(repeating: 0, count: 7) : s.week
         todayIndex = rolled ? (s.todayIndex + 1) % 7 : s.todayIndex
-        weekSec = rolled && s.todayIndex == 6 ? 0 : s.weekSec
+        let newWeek = rolled && s.todayIndex == 6
+        weekSec = newWeek ? 0 : s.weekSec
+        // Běžící blok se do týdne předmětu počítá živě (jako do dneška).
+        subjectWeek = s.subjectWeek.map { w in
+            var w = w
+            w.sec = (newWeek ? 0 : w.sec) + (w.subjectId == s.timer.subjectId ? live : 0)
+            return w
+        }
     }
 
     public static func == (a: WidgetMoment, b: WidgetMoment) -> Bool {
-        a.at == b.at && a.day == b.day && a.studiedSec == b.studiedSec && a.timer == b.timer && a.plan == b.plan
+        a.at == b.at && a.day == b.day && a.studiedSec == b.studiedSec && a.timer == b.timer && a.plan == b.plan && a.subjectWeek == b.subjectWeek
             && a.exams.map(\.exam) == b.exams.map(\.exam) && a.exams.map(\.daysLeft) == b.exams.map(\.daysLeft) && a.phaseOver == b.phaseOver
     }
 

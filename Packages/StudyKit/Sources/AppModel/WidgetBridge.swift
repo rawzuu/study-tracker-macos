@@ -70,6 +70,13 @@ public final class WidgetBridge {
             .sorted { $0.start < $1.start }
             .map { WidgetSnapshot.Block(id: $0.id, subjectId: $0.subjectId, title: $0.title, topic: blockTopics($0.title).first ?? "",
                                         start: $0.start, end: $0.start + $0.durationMin * StudyClock.minute, done: $0.done) }
+        let weekSessions = Stats.inRange(sessions, from: week, to: now + 1)
+        let bySubject = Stats.bySubject(weekSessions)
+        let subjectWeek = activeSubjects
+            .map { WidgetSnapshot.SubjectWeek(subjectId: $0.id, sec: bySubject[$0.id] ?? 0, goalSec: $0.weeklyGoalMin * 60) }
+            .filter { $0.goalSec > 0 || $0.sec > 0 }
+            .sorted { ($0.goalSec > 0) != ($1.goalSec > 0) ? $0.goalSec > 0 : $0.sec != $1.sec ? $0.sec > $1.sec : $0.subjectId < $1.subjectId }
+            .prefix(6)
         let exams = ExamCountdown.upcoming(doc, now: now, clock: clock).prefix(6).compactMap { e in
             clock.parseDayKey(e.date).map { WidgetSnapshot.ExamItem(id: e.id, subjectId: e.subjectId, name: e.name, day: $0, time: e.time) }
         }
@@ -89,11 +96,12 @@ public final class WidgetBridge {
             days: [today, clock.addDays(today, 1), dayAfter],
             goalSec: settings.dailyGoalMin * 60,
             studiedSec: Stats.totalSec(Stats.inRange(sessions, from: today, to: now + 1)),
-            weekSec: Stats.totalSec(Stats.inRange(sessions, from: week, to: now + 1)),
+            weekSec: Stats.totalSec(weekSessions),
             weekGoalSec: activeSubjects.reduce(0) { $0 + $1.weeklyGoalMin * 60 },
             week: (0..<7).map { i in Stats.totalSec(Stats.inRange(sessions, from: clock.addDays(week, i), to: clock.addDays(week, i + 1))) },
             todayIndex: clock.weekdayIndex(now),
             streak: Stats.streaks(sessions, restDays: settings.streakRestDays, minMin: settings.streakMinMin, now: now, clock: clock).current,
+            subjectWeek: Array(subjectWeek),
             subjects: subjects,
             plan: plan,
             exams: Array(exams),

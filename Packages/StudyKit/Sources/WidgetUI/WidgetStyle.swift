@@ -63,33 +63,89 @@ extension EnvironmentValues {
     @Entry public var widgetActions: WidgetActions = .preview
 }
 
-/// Tlačítko příkazu pro aplikaci (pozastavit, hotovo, začít…).
-struct CommandButton: View {
+/// Hlavní tlačítko widgetu: široké a barevné. Popisek se nikdy neusekne – když se nevejde, použije
+/// se kratší varianta a nakonec jen ikona (úzký widget, větší písmo v systému).
+struct PrimaryButton: View {
+    enum Tint { case accent, rest }
+
+    @Environment(\.widgetActions) private var actions
+    let command: WidgetCommand
+    let title: String
+    var short: String?
+    let symbol: String
+    var tint = Tint.accent
+
+    var body: some View {
+        Themed { t in
+            actions.make(command, AnyView(
+                content
+                    .foregroundStyle(t.fullColor ? t.accentInk : t.text)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 30)
+                    .background(fill(t), in: Capsule())
+                    .widgetAccentable()
+                    .contentShape(Capsule())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(title)
+            ))
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let short {
+            ViewThatFits(in: .horizontal) {
+                label(title)
+                label(short)
+                icon.padding(.horizontal, 8)
+            }
+        } else {
+            ViewThatFits(in: .horizontal) {
+                label(title)
+                icon.padding(.horizontal, 8)
+            }
+        }
+    }
+
+    private func label(_ text: String) -> some View {
+        HStack(spacing: 5) {
+            icon
+            Text(text).font(.system(size: 12, weight: .semibold)).lineLimit(1).fixedSize()
+        }
+        .padding(.horizontal, 10)
+    }
+
+    private var icon: some View {
+        Image(systemName: symbol).font(.system(size: 11, weight: .bold))
+    }
+
+    /// V tlumeném režimu plochy (bez barev) nese tlačítko jen jemný podklad – text zůstane čitelný.
+    private func fill(_ t: WidgetTheme) -> Color {
+        guard t.fullColor else { return .primary.opacity(0.16) }
+        return tint == .rest ? t.rest : t.accent
+    }
+}
+
+/// Vedlejší tlačítko: kruh s ikonou (hotovo, konec) vedle hlavního.
+struct IconButton: View {
     @Environment(\.widgetActions) private var actions
     let command: WidgetCommand
     let title: String
     let symbol: String
-    var prominent = false
-    var iconOnly = false
 
     var body: some View {
-        actions.make(command, AnyView(label))
-    }
-
-    private var label: some View {
         Themed { t in
-            HStack(spacing: 5) {
-                Image(systemName: symbol).font(.system(size: iconOnly ? 13 : 11, weight: .semibold))
-                if !iconOnly { Text(title).font(.system(size: 12, weight: .semibold)).lineLimit(1) }
-            }
-            .foregroundStyle(prominent && t.fullColor ? t.accentInk : t.text)
-            .padding(.horizontal, iconOnly ? 0 : 11)
-            .frame(width: iconOnly ? 32 : nil, height: 28)
-            .frame(maxWidth: iconOnly ? nil : .infinity)
-            .background(prominent ? t.accent : t.panel, in: Capsule())
-            .overlay(Capsule().strokeBorder(prominent ? .clear : t.line))
-            .widgetAccentable(prominent)
-            .accessibilityLabel(title)
+            actions.make(command, AnyView(
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(t.text)
+                    .frame(width: 30, height: 30)
+                    .background(t.panel, in: Circle())
+                    .overlay(Circle().strokeBorder(t.line))
+                    .contentShape(Circle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(title)
+            ))
         }
     }
 }
@@ -178,8 +234,15 @@ struct SubjectMark: View {
     }
 }
 
+extension EnvironmentValues {
+    /// Náhledy mimo WidgetKit: živé hodiny (`Text(timerInterval:)`) se tam nevykreslí, ukáže se pevný čas.
+    @Entry var widgetStaticClock = false
+}
+
 /// Odpočet nebo uplynulý čas běžící fáze – číslice běží živě samy, widget se kvůli nim nepřekresluje.
+/// Pozastavený čas je tlumený.
 struct LiveClock: View {
+    @Environment(\.widgetStaticClock) private var staticClock
     let timer: WidgetSnapshot.TimerInfo
     let at: Int
     let size: CGFloat
@@ -187,7 +250,9 @@ struct LiveClock: View {
     var body: some View {
         Themed { t in
             Group {
-                if timer.status == .running, let end = timer.phaseEnd, end > at {
+                if staticClock {
+                    Text(WidgetFormat.clock(ms: timer.remaining(at: at) ?? timer.elapsed(at: at)))
+                } else if timer.status == .running, let end = timer.phaseEnd, end > at {
                     Text(timerInterval: WidgetFormat.date(at)...WidgetFormat.date(end), countsDown: true)
                 } else if timer.status == .running, timer.countsUp, let start = timer.virtualStart {
                     Text(WidgetFormat.date(start), style: .timer)
@@ -196,7 +261,7 @@ struct LiveClock: View {
                 }
             }
             .font(.system(size: size, weight: .regular, design: .serif).monospacedDigit())
-            .foregroundStyle(timer.isWork ? t.text : t.rest)
+            .foregroundStyle(timer.status == .paused ? t.text3 : timer.isWork ? t.text : t.rest)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .contentTransition(.numericText())
