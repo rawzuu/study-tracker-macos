@@ -97,6 +97,22 @@ struct SnapshotTests {
                    name: "dayplan", size: CGSize(width: 720, height: 640))
     }
 
+    @Test("Horní lišta: v klidu a s běžícím blokem", arguments: [false, true])
+    func menuBar(_ running: Bool) async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        var t = now - 14 * 60_000
+        let timer = TimerStore(app: app) { t }
+        if running {
+            timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
+            timer.start()
+        }
+        t = now
+        try render(MenuBarPanel(openPage: { _ in }).environment(app).environment(timer).environment(Advisor(store: app)),
+                   name: "menubar-\(running ? "running" : "idle")", size: CGSize(width: 340, height: 420))
+    }
+
     @Test("Apple Kalendář v Nastavení: vypnuto a zapnuto", arguments: [false, true])
     func appleCalendar(_ enabled: Bool) async throws {
         let now = Int(Date().timeIntervalSince1970 * 1000)

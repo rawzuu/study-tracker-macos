@@ -137,3 +137,28 @@ struct TimerStoreTests {
         #expect(timer.state.status == .running)
     }
 }
+
+@MainActor
+@Suite("Horní lišta")
+struct MenuBarStatusTests {
+    @Test("V klidu jen ikona; běžící blok odpočítává, pauza drží čas")
+    func states() async throws {
+        let app = try await makeApp(defaults: freshDefaults())
+        let clock = TestClock()
+        let timer = TimerStore(app: app, effects: nil) { clock.t }
+        let status = MenuBarStatus(timer: timer)
+        status.render(at: clock.t)
+        #expect(status.title == nil && status.symbol == "graduationcap")
+
+        timer.configure(TimerSetup(subjectId: "anat", modeId: "pomodoro"))
+        timer.start()
+        clock.t += 61_000
+        status.render(at: clock.t)
+        #expect(status.title == "23:59" && status.symbol == "book")
+
+        timer.pause()
+        clock.t += 5 * minute
+        status.render(at: clock.t)
+        #expect(status.title == "23:59" && status.symbol == "pause.circle", "pauza čas nezmění")
+    }
+}

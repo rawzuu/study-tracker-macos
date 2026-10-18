@@ -302,7 +302,10 @@ public struct SettingsPage: View {
                             AppleCalendarSettings()
                             CalendarFeedSettings()
                         }
-                        TimerSoundSettings()
+                        VStack(alignment: .leading, spacing: 36) {
+                            TimerSoundSettings()
+                            MenuBarSettings()
+                        }
                     }
                 }
                 .padding(.horizontal, metrics.padding)

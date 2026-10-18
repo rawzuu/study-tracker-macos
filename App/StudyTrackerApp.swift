@@ -9,6 +9,8 @@ import SwiftUI
 @main
 struct StudyTrackerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @AppStorage(MenuBarPanel.shownKey) private var menuBarShown = true
+    @AppStorage(MenuBarPanel.timeKey) private var menuBarTime = true
 
     var body: some Scene {
         // Jedno hlavní okno (jako jedna stránka na webu): odkaz studytracker://… ani znovuotevření
@@ -41,6 +43,18 @@ struct StudyTrackerApp: App {
             }
         }
 
+        // Horní lišta: odpočet a ovládání bez otevírání okna (vypíná se v Nastavení).
+        MenuBarExtra(isInserted: $menuBarShown) {
+            MenuBarPanel(openPage: { delegate.navigator.page = Page(rawValue: $0) ?? .prehled })
+                .environment(delegate.store)
+                .environment(delegate.timer)
+                .environment(delegate.advisor)
+                .preferredColorScheme(delegate.colorScheme)
+        } label: {
+            MenuBarLabel(showsTime: menuBarTime).environment(delegate.menuBar)
+        }
+        .menuBarExtraStyle(.window)
+
         Settings {
             ScrollView {
                 SyncSettingsView().padding(28)
@@ -64,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let toasts = Toasts()
     lazy var calendarFeed = CalendarFeedSync(app: store)
     lazy var advisor = Advisor(store: store)
+    lazy var menuBar = MenuBarStatus(timer: timer)
     // UI testy mají kalendáře v paměti – nikdy nesahají na skutečný Apple Kalendář.
     lazy var appleCalendar = AppleCalendarSync(app: store, service: Self.uiTesting ? DemoCalendars.service() : EventKitCalendarService())
     private var wakeObserver: NSObjectProtocol?
@@ -104,6 +119,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.log.notice("Odkaz na časovač: \(before.rawValue, privacy: .public) → \(self.timer.state.status.rawValue, privacy: .public)")
         }
         NSApp.activate()
+    }
+
+    /// Téma ze synchronizovaného nastavení (výchozí tmavé, jako na webu) – i pro okénko z horní lišty.
+    var colorScheme: ColorScheme? {
+        switch store.document.settings.theme {
+        case .dark: .dark
+        case .light: .light
+        case .system: nil
+        }
     }
 
     private func focusDay(_ key: CalendarMirror.Key) -> Int? {

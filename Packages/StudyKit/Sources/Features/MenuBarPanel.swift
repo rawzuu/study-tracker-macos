@@ -1,0 +1,277 @@
+import AppKit
+import AppModel
+import Core
+import DesignSystem
+import Engine
+import SwiftUI
+
+/// Ikona v horní liště: symbol stavu a odpočet běžícího bloku (`MenuBarStatus`).
+public struct MenuBarLabel: View {
+    @Environment(MenuBarStatus.self) private var status
+    let showsTime: Bool
+
+    public init(showsTime: Bool) {
+        self.showsTime = showsTime
+    }
+
+    public var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: status.symbol)
+            if showsTime, let title = status.title {
+                Text(title).monospacedDigit()
+            }
+        }
+        .accessibilityLabel(status.title.map { "Study Tracker, \($0)" } ?? "Study Tracker")
+    }
+}
+
+/// Okénko z horní lišty: dnešek, běžící blok s ovládáním, nebo „Co teď?“ a další blok plánu –
+/// všechno bez otevírání hlavního okna.
+public struct MenuBarPanel: View {
+    @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
+    @Environment(Advisor.self) private var advisor
+    @Environment(\.openWindow) private var openWindow
+    let openPage: (String) -> Void
+
+    public init(openPage: @escaping (String) -> Void) {
+        self.openPage = openPage
+    }
+
+    public var body: some View {
+        let now = store.nowMs
+        let state = DashboardState(document: store.document, now: now, clock: store.clock)
+        VStack(alignment: .leading, spacing: 0) {
+            today(state)
+                .padding(.bottom, 14)
+            Divider().overlay(Palette.line)
+            Group {
+                if timer.state.status == .idle {
+                    nextUp(now: now)
+                } else {
+                    running
+                }
+            }
+            .padding(.vertical, 14)
+            if let next = nextBlock(state) {
+                Divider().overlay(Palette.line)
+                planRow(next).padding(.vertical, 10)
+            }
+            Divider().overlay(Palette.line)
+            footer.padding(.top, 10)
+        }
+        .padding(16)
+        .frame(width: 340)
+        .background(Palette.bg)
+        .tint(Palette.accent)
+    }
+
+    // MARK: - Dnešek
+
+    private func today(_ s: DashboardState) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("DNES").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
+                DurationText(Format.duration(s.todaySec), size: 22)
+                if s.goalSec > 0 {
+                    Text(s.todaySec >= s.goalSec ? "cíl splněn" : "ze \(Format.duration(s.goalSec))").font(Typo.small).foregroundStyle(Palette.text3)
+                }
+                Spacer()
+                if s.streak.current > 0 {
+                    Text("série \(s.streak.current)").font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3)
+                }
+            }
+            if s.goalSec > 0 {
+                ProgressLine(min(1, Double(s.todaySec) / Double(s.goalSec)), color: Palette.accent).frame(height: 4)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("menubar.today")
+    }
+
+    // MARK: - Běžící blok
+
+    private var running: some View {
+        let state = timer.state
+        let subject = state.subjectId.isEmpty ? nil : store.document.record(Subject.self, id: state.subjectId)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Circle().fill(Palette.subject(subject?.color ?? "#9aa3ad")).frame(width: 8, height: 8)
+                Text(subject?.name ?? "Bez předmětu").fontWeight(.medium)
+                if !state.topic.isEmpty { Text("/ \(state.topic)").foregroundStyle(Palette.text3).lineLimit(1) }
+            }
+            .font(.system(size: 13))
+            HStack(alignment: .lastTextBaseline, spacing: 10) {
+                if state.status == .running, let start = state.segmentStart {
+                    TimelineView(.periodic(from: Date(timeIntervalSince1970: Double(start) / 1000), by: 1)) { context in
+                        clock(Int(context.date.timeIntervalSince1970 * 1000))
+                    }
+                } else {
+                    clock(timer.currentTime())
+                }
+                Text(phaseLabel).font(Typo.small).foregroundStyle(Palette.text3)
+            }
+            TimerControls(size: .small)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("menubar.timer")
+    }
+
+    private func clock(_ now: Int) -> some View {
+        let state = timer.state
+        return Text(Format.clock(ms: state.remaining(at: now) ?? state.elapsed(at: now)))
+            .font(Typo.serifNumber(40))
+            .foregroundStyle(state.phase == .work ? Palette.text : Palette.breakColor)
+    }
+
+    private var phaseLabel: String {
+        let s = timer.state
+        let phase = switch s.status {
+        case .paused: "pozastaveno"
+        case .ready: s.phase == .work ? "připraveno na další blok" : "připravená pauza"
+        default: s.phase == .work ? "učení" : "pauza"
+        }
+        return "\(phase) · \(timer.mode.name)"
+    }
+
+    // MARK: - Co teď?
+
+    @ViewBuilder
+    private func nextUp(now: Int) -> some View {
+        let recs = advisor.recommendations(now: now).filter { $0.subjectId != nil }
+        if let top = recs.first {
+            let subject = SubjectInfo(top.subjectId, in: store.document)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("CO TEĎ?").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        ColorMark(color: subject.color)
+                        Text(subject.name).font(.system(size: 12.5)).foregroundStyle(Palette.text2)
+                    }
+                    Text(top.title).font(.system(size: 19, design: .serif)).foregroundStyle(Palette.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let reason = top.reasons.first {
+                        Text(reason).font(Typo.small).foregroundStyle(Palette.text3)
+                    }
+                }
+                Button { start(top) } label: { Label("Začít · \(top.minutes) min", systemImage: "play.fill") }
+                    .buttonStyle(.primary)
+                    .accessibilityIdentifier("menubar.start")
+                if recs.count > 1 {
+                    VStack(spacing: 0) {
+                        ForEach(recs.dropFirst().prefix(2)) { r in alternative(r) }
+                    }
+                }
+            }
+        } else {
+            Text("Zatím není co doporučit – přidej předměty, cíle nebo zkoušky.")
+                .font(Typo.small).foregroundStyle(Palette.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func alternative(_ r: Recommendation) -> some View {
+        let subject = SubjectInfo(r.subjectId, in: store.document)
+        return Button { start(r) } label: {
+            HStack(spacing: 8) {
+                ColorMark(color: subject.color)
+                (Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.text) + Text("  \(r.title)").foregroundStyle(Palette.text3))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("\(r.minutes) min").monospacedDigit().foregroundStyle(Palette.text3)
+            }
+            .font(.system(size: 12.5))
+            .frame(minHeight: 30)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(r.reasons.joined(separator: " · "))
+    }
+
+    /// Doporučení rovnou spustí – z lišty se nikam nepřepíná.
+    private func start(_ r: Recommendation) {
+        guard let subjectId = r.subjectId else { return }
+        timer.setup(TimerSetup(subjectId: subjectId, topic: r.topic, modeId: r.modeId, planBlockId: r.planBlockId))
+        timer.start()
+    }
+
+    // MARK: - Plán
+
+    /// První neodškrtnutý blok dnešního plánu (kromě toho, který právě běží).
+    private func nextBlock(_ s: DashboardState) -> DashboardState.PlanRow? {
+        s.todayPlan.first { !$0.done && $0.id != timer.state.planBlockId }
+    }
+
+    private func planRow(_ b: DashboardState.PlanRow) -> some View {
+        HStack(spacing: 10) {
+            Text(b.time).font(.system(size: 13, design: .serif)).monospacedDigit().foregroundStyle(Palette.text)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    ColorMark(color: b.subject.color)
+                    Text(b.subject.name).font(.system(size: 12.5, weight: .medium))
+                }
+                if !b.title.isEmpty { Text(b.title).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("\(b.durationMin) min").font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3)
+            Button {
+                timer.setup(TimerSetup(subjectId: b.subject.id, topic: b.topic, planBlockId: b.id))
+                timer.start()
+            } label: { Image(systemName: "play.fill") }
+                .buttonStyle(.denik(.normal, size: .small))
+                .disabled(!timer.state.canSwitch)
+                .help("Začít blok z plánu")
+                .accessibilityLabel("Začít blok z plánu")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("menubar.plan")
+    }
+
+    // MARK: - Patička
+
+    private var footer: some View {
+        HStack {
+            Button { open("prehled") } label: { Label("Otevřít Study Tracker", systemImage: "macwindow") }
+                .buttonStyle(.denik(.ghost, size: .small))
+            Spacer()
+            Button { open("casovac") } label: { Image(systemName: "timer") }
+                .buttonStyle(.denik(.ghost, size: .small))
+                .help("Časovač")
+                .accessibilityLabel("Časovač")
+        }
+    }
+
+    private func open(_ page: String) {
+        openPage(page)
+        openWindow(id: "main")
+        NSApp.activate()
+    }
+}
+
+/// Horní lišta v Nastavení – jen pro tento Mac.
+struct MenuBarSettings: View {
+    @AppStorage(MenuBarPanel.shownKey) private var shown = true
+    @AppStorage(MenuBarPanel.timeKey) private var time = true
+
+    var body: some View {
+        PageSection("Horní lišta") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Ukazovat Study Tracker v horní liště", isOn: $shown)
+                    .toggleStyle(.switch)
+                    .accessibilityIdentifier("settings.menuBar")
+                Toggle("S odpočtem běžícího bloku", isOn: $time)
+                    .toggleStyle(.switch)
+                    .disabled(!shown)
+                Text("Z lišty spustíš doporučený blok nebo blok z plánu, pozastavíš ho a uložíš – bez otevírání okna. Když okno zavřeš, lišta dál běží.")
+                    .font(Typo.small).foregroundStyle(Palette.text3).fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: 720, alignment: .leading)
+        }
+    }
+}
+
+extension MenuBarPanel {
+    /// Klíče v UserDefaults (nastavení jen pro tento Mac).
+    public static let shownKey = "st.menuBar"
+    public static let timeKey = "st.menuBar.time"
+}
