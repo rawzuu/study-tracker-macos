@@ -29,6 +29,12 @@ struct RootView: View {
                 .toolbar {
                     ToolbarItem(placement: .automatic) { SyncStatusButton() }
                 }
+                // Hlášky nad obsahem stránky (ne nad celým rozdělením okna – tam by na macOS 26
+                // tlačítko „Vrátit“ nemuselo dostat klik).
+                .overlay(alignment: .bottom) {
+                    if let toast = toasts.current { ToastView(toast: toast).id(toast.id).transition(.opacity) }
+                }
+                .animation(.easeOut(duration: 0.15), value: toasts.current?.id)
         }
         .preferredColorScheme(colorScheme)
         .tint(Palette.accent)
@@ -38,10 +44,6 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { timer.pendingRating != nil }, set: { if !$0 { timer.skipRating() } })) {
             if let id = timer.pendingRating { AfterBlockSheet(sessionId: id) }
         }
-        .overlay(alignment: .bottom) {
-            if let toast = toasts.current { ToastView(toast: toast).id(toast.id).transition(.opacity) }
-        }
-        .animation(.easeOut(duration: 0.15), value: toasts.current?.id)
         // Hlášky časovače (krátký blok se neukládá) jdou stejnou cestou jako ostatní.
         .onChange(of: timer.notice) { _, notice in
             guard let notice else { return }
