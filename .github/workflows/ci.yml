@@ -14,7 +14,7 @@ jobs:
   test:
     name: Build a testy
     runs-on: macos-26
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -35,7 +35,8 @@ jobs:
           xcodegen generate
 
       # Sdílený CI stroj občas přebere popředí jinou aplikací („not foreground“) – neúspěšný UI test
-      # se proto jednou zopakuje. Skutečná chyba selže i podruhé.
+      # se proto jednou zopakuje. Skutečná chyba selže i podruhé. Zaseknutý test spadne po 3 minutách
+      # (jinak by vyčerpal celý limit úlohy); průběh testů jde do logu hned.
       - name: Build a UI testy
         run: |
           set -o pipefail
@@ -44,8 +45,10 @@ jobs:
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/dd -resultBundlePath build/UITests.xcresult \
             -retry-tests-on-failure -test-iterations 2 \
+            -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 300 \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            | tail -80
+            | tee build/xcodebuild.log \
+            | grep --line-buffered -E "Test Case .*(started|passed|failed)|error:|\*\* (TEST|BUILD)"
 
       - name: Souhrn UI testů (i zopakované)
         if: always()
@@ -53,7 +56,7 @@ jobs:
           xcrun xcresulttool get test-results tests --path build/UITests.xcresult | python3 Tools/ci/ui-test-summary.py
 
       - name: Výsledky UI testů
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v5
         with:
           name: UITests.xcresult
