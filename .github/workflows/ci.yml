@@ -40,6 +40,7 @@ jobs:
       - name: Build a UI testy
         run: |
           set -o pipefail
+          mkdir -p build
           xcodebuild test \
             -project StudyTracker.xcodeproj -scheme StudyTracker \
             -destination 'platform=macOS,arch=arm64' \
