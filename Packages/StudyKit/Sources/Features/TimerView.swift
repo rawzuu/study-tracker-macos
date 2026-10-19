@@ -127,7 +127,6 @@ public struct TimerView: View {
             .buttonStyle(.study(.ghost, size: .small))
             .help(zen ? "Ukončit zen režim" : "Zen režim – jen kruh, bez nastavení")
         }
-        .accessibilityIdentifier("timer.today")
     }
 
     // MARK: - Kruh a ovládání

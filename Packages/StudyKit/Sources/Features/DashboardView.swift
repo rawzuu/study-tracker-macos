@@ -609,21 +609,22 @@ private struct DashTimer: View {
     var body: some View {
         let state = timer.state
         if !state.isStudying {
-            Button(action: openTimer) {
-                HStack(spacing: 10) {
-                    PageGlyphView(.timer, size: 15)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(status(state)).foregroundStyle(Palette.text)
-                        Text(detail(state)).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                    Text(clock(state)).font(Typo.number(13.5)).foregroundStyle(state.phase == .work ? Palette.text : Palette.breakColor)
-                        .accessibilityIdentifier("dash.timer.time")
+            // Klik kamkoli otevře časovač; čas zůstává samostatný text (čtou ho testy i VoiceOver).
+            HStack(spacing: 10) {
+                PageGlyphView(.timer, size: 15)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(status(state)).foregroundStyle(Palette.text)
+                    Text(detail(state)).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
                 }
-                .contentShape(Rectangle())
+                Spacer(minLength: 8)
+                Text(clock(state)).font(Typo.number(13.5)).foregroundStyle(state.phase == .work ? Palette.text : Palette.breakColor)
+                    .accessibilityIdentifier("dash.timer.time")
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: openTimer)
+            .help("Otevřít časovač")
             .accessibilityElement(children: .contain)
+            .accessibilityAction(named: "Otevřít časovač", openTimer)
             .accessibilityIdentifier("dash.timer")
         }
     }

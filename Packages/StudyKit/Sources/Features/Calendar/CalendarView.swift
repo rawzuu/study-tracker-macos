@@ -183,7 +183,7 @@ public struct CalendarView: View {
                 Button { shift(1) } label: { Image(systemName: "chevron.right") }
                     .buttonStyle(.study(.normal, size: .small)).help("Další").accessibilityLabel("Další")
             }
-            Text(title).font(Typo.sectionTitle).lineLimit(1).accessibilityIdentifier("calendar.range")
+            Text(title).font(Typo.sectionTitle).lineLimit(1).fixedSize().accessibilityIdentifier("calendar.range")
             if !isCurrent {
                 Button("Dnes") {
                     weekStart = nil
@@ -193,7 +193,11 @@ public struct CalendarView: View {
             }
             Spacer(minLength: 12)
             if let summary {
-                Text(summary).font(Typo.small).monospacedDigit().foregroundStyle(Palette.text2)
+                // V užším okně souhrn ustoupí – nadpis týdne a přepínače mají přednost.
+                ViewThatFits(in: .horizontal) {
+                    Text(summary).font(Typo.small).monospacedDigit().foregroundStyle(Palette.text2).lineLimit(1).fixedSize()
+                    Color.clear.frame(width: 0, height: 0)
+                }
             }
             Picker("Zobrazit", selection: $layer) {
                 ForEach(CalendarLayer.allCases, id: \.self) { Text($0.title).tag($0) }
