@@ -334,8 +334,8 @@ private struct NewEntrySheet: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.lineStrong))
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .background(Palette.panel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(key == .plan ? "choose.plan" : "choose.log")

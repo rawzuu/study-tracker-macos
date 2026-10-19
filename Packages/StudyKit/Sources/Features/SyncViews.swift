@@ -265,7 +265,7 @@ public struct SyncSettingsView: View {
         .tint(Palette.text)
         .fixedSize(horizontal: false, vertical: true)
         .padding(14)
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.lineStrong))
+        .background(Palette.panel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func connect() {
