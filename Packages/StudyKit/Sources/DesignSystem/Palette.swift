@@ -32,20 +32,12 @@ public enum Palette {
     public static let warn = dynamic(dark: 0xF08A4B, light: 0xC7581E)
     /// „Teď“, termín do tří dní, mazání.
     public static let danger = dynamic(dark: 0xFF6B63, light: 0xD93F3A)
-    public static let heat0 = dynamic(dark: 0x2A2B2F, light: 0xF0F1F3)
     /// Obsazený čas z jiných kalendářů (šrafování).
     public static let hatch = dynamic(dark: 0xFFFFFF, light: 0x000000, alpha: (0.055, 0.045))
 
     /// Barva předmětu z dat (`#rrggbb`); neplatná hodnota → šedá jako na webu.
     public static func subject(_ hex: String) -> Color {
         Color(nsColor: NSColor(hex: hex) ?? NSColor(rgb: 0x9AA3AD))
-    }
-
-    /// Barva předmětu smíchaná s jinou barvou (`color-mix(in srgb, var(--c) …, …)` na webu);
-    /// `amount` = podíl druhé barvy.
-    public static func subject(_ hex: String, mixedWith other: UInt32, amount: Double) -> Color {
-        let base = NSColor(hex: hex) ?? NSColor(rgb: 0x9AA3AD)
-        return Color(nsColor: base.blended(withFraction: amount, of: NSColor(rgb: other)) ?? base)
     }
 
     /// Pevná barva pro daný vzhled (widgety a náhledy kreslí mimo okno aplikace, kde se dynamická barva
@@ -58,9 +50,6 @@ public enum Palette {
         }
         return Color(nsColor: resolved)
     }
-
-    /// Text světlého vzhledu – s ním se v kalendáři ztmavují názvy předmětů na světlém pozadí.
-    public static let lightText: UInt32 = 0x1D1D1F
 
     private static func dynamic(dark: UInt32, light: UInt32, alpha: (Double, Double) = (1, 1)) -> Color {
         let d = NSColor(rgb: dark, alpha: alpha.0)
