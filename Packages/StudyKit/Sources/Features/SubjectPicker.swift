@@ -21,7 +21,7 @@ struct SubjectPicker: View {
             .labelsHidden()
             .accessibilityIdentifier(identifier)
             Button { newSubject = SubjectDraft(newIn: store.document) } label: { Image(systemName: "plus") }
-                .buttonStyle(.denik(.normal, size: .small))
+                .buttonStyle(.study(.normal, size: .small))
                 .help("Nový předmět")
                 .accessibilityLabel("Nový předmět")
         }

@@ -39,44 +39,52 @@ public struct SubjectsView: View {
     }
 
     private func page(_ state: SubjectsState, metrics: PageMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 36) {
-            PageHeader("Předměty", subtitle: canEdit ? nil : "Režim jen pro čtení – úpravy jdou zapnout v Nastavení.") {
+        VStack(alignment: .leading, spacing: 30) {
+            PageHeader("Předměty", subtitle: canEdit ? "Týdenní cíle, celkový čas a archiv" : "Režim jen pro čtení – úpravy jdou zapnout v Nastavení.",
+                       glyph: .subjects) {
                 Button {
                     editing = SubjectDraft(newIn: store.document)
                 } label: {
                     Label("Nový předmět", systemImage: "plus")
                 }
-                .buttonStyle(.primary)
+                .buttonStyle(.study(.normal, size: .small))
                 .disabled(!canEdit)
                 .accessibilityIdentifier("subjects.new")
             }
-            PageSection("Aktivní", accessory: { Text("\(state.active.count)") }) {
+            VStack(alignment: .leading, spacing: 0) {
+                ListHeading("Aktivní", meta: "\(state.active.count)")
                 if state.active.isEmpty {
                     EmptyNote("Zatím žádné předměty", systemImage: "books.vertical")
                 } else {
                     rows(state.active, columns: metrics.size == .wide ? 2 : 1)
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("subjects.active")
             if !state.archived.isEmpty {
-                PageSection("Archiv", accessory: { Text("\(state.archived.count)") }) { rows(state.archived, columns: metrics.size == .wide ? 2 : 1) }
-                    .accessibilityIdentifier("subjects.archived")
+                VStack(alignment: .leading, spacing: 0) {
+                    ListHeading("Archiv", meta: "\(state.archived.count)")
+                    rows(state.archived, columns: metrics.size == .wide ? 2 : 1)
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("subjects.archived")
             }
         }
-        .padding(.horizontal, metrics.padding)
-        .padding(.vertical, 36)
+        .padding(.leading, metrics.size == .compact ? metrics.padding : 64)
+        .padding(.trailing, metrics.size == .compact ? metrics.padding : 48)
+        .padding(.vertical, 48)
+        .frame(maxWidth: metrics.size == .regular ? 1080 : .infinity, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Předměty pod sebou, na velkém monitoru ve dvou sloupcích (po řádcích zleva doprava).
     private func rows(_ rows: [SubjectsState.Row], columns: Int) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 56, alignment: .top), count: columns), alignment: .leading, spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
-                // Čára pod řádkem kromě posledního řádku mřížky.
-                ListRow(divider: i < rows.count - (rows.count - 1) % columns - 1) {
-                    RoundedRectangle(cornerRadius: 5).fill(Palette.subject(row.subject.color)).frame(width: 14, height: 14)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 64, alignment: .top), count: columns), alignment: .leading, spacing: 0) {
+            ForEach(rows) { row in
+                ListRow(divider: false) {
+                    ProgressPie(row.fraction, color: Palette.subject(row.subject.color), size: 17)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(row.subject.name)
+                        Text(row.subject.name).font(.system(size: 14))
                         Text(row.summary).font(Typo.small).foregroundStyle(Palette.text3)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,7 +92,7 @@ public struct SubjectsView: View {
                         VStack(alignment: .trailing, spacing: 4) {
                             Text("Tento týden \(Format.duration(row.weekSec)) z \(Format.duration(row.goalSec))")
                                 .font(Typo.small).monospacedDigit().foregroundStyle(Palette.text2)
-                            ProgressLine(row.fraction, color: Palette.subject(row.subject.color)).frame(width: 180)
+                            ProgressLine(row.fraction, color: Palette.subject(row.subject.color)).frame(width: 160)
                         }
                     }
                     if canEdit, let subject = store.document.record(Subject.self, id: row.id) {

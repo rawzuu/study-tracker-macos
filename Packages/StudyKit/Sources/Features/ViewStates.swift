@@ -41,6 +41,8 @@ public struct SessionRow: Identifiable, Hashable, Sendable {
     public let mode: String
     /// „Téma · Pomodoro · 2× vyrušení · poznámka“
     public let detail: String
+    /// Totéž bez tématu: „Pomodoro · 2× vyrušení · poznámka“ (téma je v názvu řádku).
+    public let extra: String
     public let recall: String?
     public let focus: Int?
     public let duration: String
@@ -55,9 +57,9 @@ public struct SessionRow: Identifiable, Hashable, Sendable {
         when = "\(day) \(Format.time(s.start, clock: clock))"
         topic = s.topic
         mode = Format.modeName(s.mode, presets: presets)
-        detail = [s.topic, mode, s.interruptions > 0 ? "\(s.interruptions)× vyrušení" : "", s.note]
-            .filter { !$0.isEmpty }
-            .joined(separator: " · ")
+        let rest = [mode, s.interruptions > 0 ? "\(s.interruptions)× vyrušení" : "", s.note].filter { !$0.isEmpty }
+        detail = ([s.topic].filter { !$0.isEmpty } + rest).joined(separator: " · ")
+        extra = rest.joined(separator: " · ")
         recall = s.recall.flatMap { $0.isEmpty ? nil : $0 }
         focus = s.focus.flatMap { $0 == 0 ? nil : $0 }
         duration = Format.duration(s.durationSec)

@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **v0.6.1 – M4 a integrace s macOS hotové.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Přehled, Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Na Přehledu radí „Co teď?“ a ráno navrhne plán dne. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.7.0 – nový vzhled „Seznam“.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Dnes (den jako seznam bloků s volnými chvílemi a návrhy), Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Na Přehledu radí „Co teď?“ a ráno navrhne plán dne. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -22,7 +22,7 @@ Packages/StudyKit/      Swift Package s moduly aplikace
   Sources/Sync/         SyncEngine (actor): stáhnout → sloučit → nahrát se sha, režim jen čtení
   Sources/AppModel/     AppStore (@Observable), AppEnvironment (DI), připojení zálohy, časovač,
                         odebíraný kalendář, hlášky s „Vrátit“
-  Sources/DesignSystem/ barvy a prvky vzhledu „Deník“
+  Sources/DesignSystem/ barvy a prvky vzhledu „Seznam“
   Sources/Features/     obrazovky (SwiftUI) a jejich stavy (čisté funkce s testy)
   Sources/WidgetData/   souhrn pro widgety a příkazy z jejich tlačítek (jen Foundation)
   Sources/WidgetUI/     vzhled a časová osa widgetů (bez dat, sítě a databáze – malá paměť)
@@ -140,7 +140,7 @@ Na plochu a do Centra oznámení: **Dnešek** (malý, střední), **Časovač** 
 - Aplikace zapisuje do sdíleného kontejneru (app group) malý souhrn – jen odvozený výřez z dat, zdrojem pravdy zůstává `data.json`. Zapisuje a překresluje widgety jen při skutečné změně (WidgetKit má denní limit překreslení).
 - Widget si stav dopočítá sám: odpočet běží živě (systémový časovač, žádné překreslování), během bloku se kruh posune každou minutu, na začátku a konci bloků a o půlnoci se přepne sám – i když aplikace neběží.
 - Tlačítka: když aplikace běží, pošlou příkaz rovnou (soubor v kontejneru + Darwin oznámení), widget hned ukáže očekávaný stav a do vteřiny skutečný; když neběží, aplikaci otevřou odkazem a příkaz provedou po načtení dat.
-- Vzhled Deník ve světlém i tmavém režimu a v tlumeném režimu plochy (vibrant). Náhledy: `ST_SNAPSHOT_DIR=… swift test --filter WidgetSnapshots`.
+- Vzhled Seznam ve světlém i tmavém režimu a v tlumeném režimu plochy (vibrant). Náhledy: `ST_SNAPSHOT_DIR=… swift test --filter WidgetSnapshots`.
 - Vývojové sestavení má vlastní kontejner a vlastní widgety („Study Tracker (vývoj)“); po lokálním buildu ho odregistruj (`Tools/dev/unregister-dev.sh`), ať se v galerii widgetů neplete.
 
 ## Horní lišta

@@ -4,8 +4,8 @@ import DesignSystem
 import Engine
 import SwiftUI
 
-/// Karta „Co teď?“ na přehledu (`NextUp` na webu): hlavní doporučení s důvody, další možnosti
-/// a na požádání „Proč“ – signály, ze kterých je skóre.
+/// „Co teď?“ nad seznamem dne: hlavní doporučení jako karta (předmět, název, důvody, Začít), pod ním
+/// další možnosti a na požádání „Proč“ – signály, ze kterých je skóre.
 struct NextUpSection: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
@@ -17,28 +17,37 @@ struct NextUpSection: View {
     var body: some View {
         let advice = advisor.advice(now: now)
         let recs = advice.recommendations
-        PageSection("Co teď?", accessory: {
-            if !recs.isEmpty {
-                Button { why.toggle() } label: {
-                    Label("Proč", systemImage: "chevron.down").labelStyle(TrailingIcon(rotated: why))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Co teď?").font(Typo.heading).foregroundStyle(Palette.accent).accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 12)
+                if !recs.isEmpty {
+                    Button { withAnimation(.easeOut(duration: 0.18)) { why.toggle() } } label: {
+                        Label("Proč", systemImage: "chevron.down").labelStyle(TrailingIcon(rotated: why))
+                    }
+                    .buttonStyle(.study(.ghost, size: .small))
+                    .accessibilityIdentifier("next.why")
                 }
-                .buttonStyle(.denik(.ghost, size: .small))
-                .accessibilityIdentifier("next.why")
             }
-        }) {
             if let top = recs.first {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 0) {
                     main(top, note: advice.note)
-                    if recs.count > 1 { alternatives(Array(recs.dropFirst().prefix(3))) }
-                    if why { WhyTable(recs: Array(recs.prefix(6))) }
+                    if recs.count > 1 { alternatives(Array(recs.dropFirst().prefix(3))).padding(.top, 14) }
+                    if why { WhyTable(recs: Array(recs.prefix(6))).padding(.top, 16) }
                 }
-                .padding(.top, 4)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Palette.line))
+                .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+                .padding(.horizontal, -16)
             } else {
                 EmptyNote("Zatím není co doporučit", systemImage: "sparkles") {
                     Text("Přidej předměty, cíle nebo zkoušky – doporučení se objeví tady.")
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dash.next")
     }
 
@@ -49,72 +58,64 @@ struct NextUpSection: View {
         let subject = SubjectInfo(top.subjectId, in: store.document)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                ColorMark(color: subject.color)
-                Text(subject.name).foregroundStyle(Palette.text2) + Text(" · \(top.activity.label)").foregroundStyle(Palette.text3)
+                SubjectCapsule(name: subject.name, color: subject.color)
+                Text(top.activity.label).font(Typo.small).foregroundStyle(Palette.text3)
             }
-            .font(.system(size: 13))
-            .padding(.bottom, 6)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("next.subject")
             Text(top.title)
-                .font(.system(size: 30, design: .serif))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Palette.text)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
                 .accessibilityIdentifier("next.title")
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(top.reasons.prefix(3), id: \.self) { reason in
-                    Text(reason)
-                        .padding(.vertical, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(alignment: .bottom) { Rectangle().fill(Palette.line).frame(height: 1) }
-                }
-            }
-            .font(.system(size: 13.5))
-            .foregroundStyle(Palette.text2)
-            .frame(maxWidth: 560, alignment: .leading)
-            .padding(.top, 12)
+            Text(top.reasons.prefix(3).joined(separator: " · "))
+                .font(.system(size: 13))
+                .foregroundStyle(Palette.text2)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
             if let note {
                 Text(note)
-                    .font(.system(size: 15, design: .serif).italic())
+                    .font(.system(size: 13))
                     .foregroundStyle(Palette.text2)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
+                    .padding(.top, 8)
             }
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 if top.activity == .anki {
                     Label("Otevři Anki – čas se započítá při dalším načtení z Anki.", systemImage: "rectangle.stack")
                         .font(Typo.small).foregroundStyle(Palette.text2)
                 } else if busy {
-                    Button("Časovač běží – otevřít", action: openTimer).buttonStyle(.denik(.normal))
+                    Button("Časovač běží – otevřít", action: openTimer).buttonStyle(.study(.normal, size: .small))
                     Text("Doporučení spustíš po ukončení bloku.").font(Typo.small).foregroundStyle(Palette.text3)
                 } else {
                     Button { start(top) } label: { Label("Začít · \(top.minutes) min", systemImage: "play.fill") }
-                        .buttonStyle(.primary)
+                        .buttonStyle(.study(.primary, size: .small))
                         .accessibilityIdentifier("next.start")
                     Text(modeName(top.modeId)).font(Typo.small).foregroundStyle(Palette.text3)
                 }
             }
-            .padding(.top, 14)
+            .padding(.top, 12)
         }
     }
 
     private func alternatives(_ recs: [Recommendation]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Nebo").font(Typo.small).foregroundStyle(Palette.text3).padding(.bottom, 2)
+            Rectangle().fill(Palette.line).frame(height: 1).padding(.bottom, 6)
             ForEach(recs) { r in
                 let subject = SubjectInfo(r.subjectId, in: store.document)
                 Button { start(r) } label: {
                     HStack(spacing: 10) {
+                        Text("Nebo").font(Typo.small).foregroundStyle(Palette.text3).frame(width: 32, alignment: .leading)
                         ColorMark(color: subject.color)
-                        (Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.text) + Text("  \(r.title)").foregroundStyle(Palette.text3))
+                        (Text(subject.name).foregroundStyle(Palette.text) + Text("  \(r.title)").foregroundStyle(Palette.text3))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("\(r.minutes) min").font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3)
                     }
-                    .font(.system(size: 13.5))
-                    .frame(minHeight: 40)
+                    .font(.system(size: 13))
+                    .frame(minHeight: 30)
                     .contentShape(Rectangle())
-                    .overlay(alignment: .bottom) { Rectangle().fill(Palette.line).frame(height: 1) }
                 }
                 .buttonStyle(.plain)
                 .disabled(busy || r.activity == .anki)
@@ -183,6 +184,7 @@ private struct WhyTable: View {
         }
         .padding(.top, 14)
         .overlay(alignment: .top) { Rectangle().fill(Palette.line).frame(height: 1) }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("next.whyTable")
     }
 }
@@ -193,8 +195,8 @@ private struct SignalBar: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            Rectangle().fill(Palette.lineStrong)
-            Rectangle().fill(negative ? Palette.danger : Palette.text2).frame(width: 46 * min(1, max(0, value)))
+            Capsule().fill(Palette.panel2)
+            Capsule().fill(negative ? Palette.danger : Palette.accent).frame(width: 46 * min(1, max(0, value)))
         }
         .frame(width: 46, height: 3)
         .accessibilityElement()
@@ -212,21 +214,22 @@ struct NextUpInline: View {
         if timer.state.canSwitch, let top = advisor.recommendations(now: store.nowMs).first(where: { $0.subjectId != nil }) {
             let subject = SubjectInfo(top.subjectId, in: store.document)
             HStack(spacing: 10) {
-                (Text("DOPORUČUJI  ").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
-                    + Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.subject(subject.color))
-                    + Text(" · \(top.title) · \(top.minutes) min").foregroundStyle(Palette.text2))
+                Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Palette.accent)
+                (Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.text)
+                    + Text("  \(top.title) · \(top.minutes) min").foregroundStyle(Palette.text2))
                     .font(.system(size: 13))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button("Použít") {
                     timer.setup(TimerSetup(subjectId: top.subjectId, topic: top.topic, modeId: top.modeId, planBlockId: top.planBlockId))
                 }
-                .buttonStyle(.denik(.normal, size: .small))
+                .buttonStyle(.study(.normal, size: .small))
                 .accessibilityIdentifier("timer.useRecommendation")
             }
-            .padding(.vertical, 9)
-            .padding(.horizontal, 14)
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.lineStrong))
+            .padding(.vertical, 8)
+            .padding(.leading, 14)
+            .padding(.trailing, 8)
+            .background(Palette.panel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("timer.recommendation")
         }
@@ -244,12 +247,24 @@ extension SubjectInfo {
     }
 }
 
-/// Malý čtverec barvy předmětu.
+/// Barevná tečka předmětu.
 struct ColorMark: View {
     let color: String
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 2).fill(Palette.subject(color)).frame(width: 8, height: 8)
+        Circle().fill(Palette.subject(color)).frame(width: 7, height: 7)
+    }
+}
+
+/// Části vedle sebe; když se nevejdou, pod sebou.
+struct FlowRow<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 56) { content }
+            VStack(alignment: .leading, spacing: 40) { content }
+        }
     }
 }
 

@@ -34,6 +34,7 @@ struct TodaySummary: View {
             let met = m.goalSec > 0 && m.studiedSec >= m.goalSec
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
+                    DayGlyph(day: Calendar.current.component(.day, from: WidgetFormat.date(m.day)))
                     Caption("Dnes")
                     Spacer(minLength: 4)
                     if s.streak > 0 && !m.isStale { StreakBadge(days: s.streak) }
@@ -66,7 +67,7 @@ struct NextLine: View {
                 let subject = s.subject(b.subjectId)
                 let isNow = m.current?.id == b.id
                 VStack(alignment: .leading, spacing: 3) {
-                    Caption(isNow ? "Teď v plánu" : "Další · \(WidgetFormat.time(b.start))", color: isNow ? t.accent : nil)
+                    Caption(isNow ? "Teď v plánu" : "Další · \(WidgetFormat.time(b.start))", color: isNow ? t.accent : t.text3)
                     HStack(spacing: 6) {
                         SubjectMark(color: subject.color, size: 7)
                         Text(subject.name).font(.system(size: 12, weight: .medium)).foregroundStyle(t.text).layoutPriority(1)
@@ -198,7 +199,7 @@ struct NextUpPanel: View {
                         Text(subject.name).font(.system(size: 11.5)).foregroundStyle(t.text2).lineLimit(1)
                     }
                     .padding(.top, 7)
-                    Text(top.title).font(.system(size: titleSize, design: .serif)).foregroundStyle(t.text)
+                    Text(top.title).font(.system(size: titleSize, weight: .semibold)).foregroundStyle(t.text)
                         .lineLimit(titleLines).fixedSize(horizontal: false, vertical: true).padding(.top, 3)
                     if showsReason && !top.reason.isEmpty {
                         Text(top.reason).font(.system(size: 11)).foregroundStyle(t.text3).lineLimit(1).padding(.top, 3)
@@ -244,30 +245,27 @@ struct PlanLine: View {
         Themed { t in
             let subject = s.subject(block.subjectId)
             let isNow = m.current?.id == block.id
-            HStack(spacing: 8) {
-                Text(WidgetFormat.time(block.start))
-                    .font(.system(size: 12.5, design: .serif).monospacedDigit())
-                    .foregroundStyle(block.done ? t.text3 : t.text)
-                    .frame(width: 36, alignment: .leading)
-                RoundedRectangle(cornerRadius: 1.5).fill(t.subject(subject.color)).frame(width: 3, height: 22)
-                    .opacity(block.done ? 0.4 : 1).widgetAccentable()
+            HStack(spacing: 9) {
+                ItemCheck(state: block.done ? .done : isNow ? .running(Double(m.at - block.start) / Double(max(1, block.end - block.start))) : .open)
+                    .accessibilityLabel(block.done ? "hotovo" : isNow ? "teď" : "čeká")
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(subject.name).font(.system(size: 12, weight: .medium)).foregroundStyle(block.done ? t.text3 : t.text)
+                    Text(block.title.isEmpty ? subject.name : block.title).font(.system(size: 12.5, weight: isNow ? .semibold : .regular))
+                        .foregroundStyle(block.done ? t.text3 : t.text)
                     if !block.title.isEmpty {
-                        Text(block.title).font(.system(size: 10.5)).foregroundStyle(t.text3)
+                        HStack(spacing: 4) {
+                            SubjectMark(color: subject.color, size: 5).opacity(block.done ? 0.6 : 1)
+                            Text(subject.name)
+                        }
+                        .font(.system(size: 10.5)).foregroundStyle(t.text3)
                     }
                 }
                 .lineLimit(1)
                 Spacer(minLength: 4)
-                if !compact {
-                    if block.done {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(t.rest)
-                            .accessibilityLabel("hotovo")
-                    } else if isNow {
-                        Text("TEĎ").font(.system(size: 9.5, weight: .bold)).kerning(0.6).foregroundStyle(t.accent).widgetAccentable()
-                    } else {
-                        Text("\((block.end - block.start) / 60_000) min").font(.system(size: 10.5)).monospacedDigit().foregroundStyle(t.text3)
-                    }
+                if isNow && !compact {
+                    Text("teď").font(.system(size: 10.5, weight: .bold)).foregroundStyle(t.accent).widgetAccentable()
+                } else {
+                    Text(compact ? WidgetFormat.time(block.start) : "\(WidgetFormat.time(block.start)) · \((block.end - block.start) / 60_000) min")
+                        .font(.system(size: 10.5)).monospacedDigit().foregroundStyle(block.done ? t.text3 : t.text2)
                 }
             }
             .frame(height: 28)
@@ -401,8 +399,8 @@ struct ExamLine: View {
             HStack(spacing: 10) {
                 VStack(spacing: -2) {
                     Text(daysLeft == 0 ? "dnes" : "\(daysLeft)")
-                        .font(daysLeft == 0 ? .system(size: 12, weight: .bold) : .system(size: 20, design: .serif).monospacedDigit())
-                        .foregroundStyle(daysLeft <= 3 ? t.warn : t.text)
+                        .font(daysLeft == 0 ? .system(size: 12, weight: .bold) : .system(size: 18, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(daysLeft <= 3 ? t.danger : daysLeft <= 10 ? t.warn : t.text)
                     if daysLeft > 0 {
                         Text(WidgetFormat.plural(daysLeft, "den", "dny", "dní")).font(.system(size: 9.5)).foregroundStyle(t.text3)
                     }
@@ -435,9 +433,9 @@ struct WeekBars: View {
             HStack(alignment: .bottom, spacing: 5) {
                 ForEach(0..<7, id: \.self) { i in
                     VStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 2.5)
-                            .fill(i == m.todayIndex ? t.accent : goal > 0 && m.week[i] >= goal ? t.rest.opacity(0.7) : t.text3.opacity(0.45))
-                            .frame(height: max(2, height * CGFloat(m.week[i]) / top))
+                        Capsule()
+                            .fill(i == m.todayIndex ? t.accent : goal > 0 && m.week[i] >= goal ? t.rest.opacity(0.7) : t.track)
+                            .frame(width: 8, height: max(3, height * CGFloat(m.week[i]) / top))
                             .widgetAccentable(i == m.todayIndex)
                         Text(WidgetFormat.weekdaysShort[i]).font(.system(size: 9, weight: i == m.todayIndex ? .bold : .regular))
                             .foregroundStyle(i == m.todayIndex ? t.text : t.text3)
@@ -504,7 +502,7 @@ struct NoData: View {
             VStack(alignment: .leading, spacing: 6) {
                 Caption("Study Tracker")
                 Spacer()
-                Text("Otevři Study Tracker").font(.system(size: 15, design: .serif)).foregroundStyle(t.text)
+                Text("Otevři Study Tracker").font(.system(size: 15, weight: .semibold)).foregroundStyle(t.text)
                 Text("Widget se naplní daty po prvním spuštění aplikace.").font(.system(size: 11)).foregroundStyle(t.text3)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -66,9 +66,9 @@ struct SyncBanner: View {
         let today = store.clock.dayKey(now)
         if let text = message(now: now), dismissedDay != today {
             Banner(text, systemImage: "exclamationmark.triangle", tone: .warn) {
-                Button("Nastavení", action: openSettings).controlSize(.small)
-                Button { dismissedDay = today } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless)
+                Button("Nastavení", action: openSettings).buttonStyle(.study(.normal, size: .small))
+                Button { dismissedDay = today } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
+                    .buttonStyle(.study(.ghost, size: .small))
                     .accessibilityLabel("Skrýt")
             }
             .accessibilityIdentifier("dash.syncBanner")
@@ -293,10 +293,10 @@ public struct SettingsPage: View {
         GeometryReader { proxy in
             let metrics = PageMetrics(width: proxy.size.width)
             ScrollView {
-                VStack(alignment: .leading, spacing: 36) {
-                    PageHeader("Nastavení", subtitle: "Ostatní nastavení přibude v milníku M6.")
+                VStack(alignment: .leading, spacing: 32) {
+                    PageHeader("Nastavení", subtitle: "Synchronizace, kalendáře, zvuky a horní lišta", glyph: .settings)
                     // Na velkém monitoru skupiny vedle sebe, jinak pod sebou.
-                    ColumnsLayout(columns: metrics.size == .wide ? 3 : 1, rowSpacing: 36) {
+                    ColumnsLayout(columns: metrics.size == .wide ? 3 : 1, spacing: 64, rowSpacing: 40) {
                         SyncSettingsView()
                         VStack(alignment: .leading, spacing: 36) {
                             AppleCalendarSettings()
@@ -308,8 +308,10 @@ public struct SettingsPage: View {
                         }
                     }
                 }
-                .padding(.horizontal, metrics.padding)
-                .padding(.vertical, 36)
+                .padding(.leading, metrics.size == .compact ? metrics.padding : 64)
+                .padding(.trailing, metrics.size == .compact ? metrics.padding : 48)
+                .padding(.vertical, 48)
+                .frame(maxWidth: metrics.size == .regular ? 860 : .infinity, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }

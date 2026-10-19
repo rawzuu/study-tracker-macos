@@ -104,6 +104,22 @@ public enum DayPlan {
         return t + len <= to ? t : nil
     }
 
+    /// Volná místa mezi obsazenými úseky (s pauzou 10 min kolem nich jako u `findSlot`), nejméně
+    /// `minutes` dlouhá, v rozmezí `from`–`to`.
+    public static func freeTime(_ busy: [BusyInterval], from: Int, to: Int, minutes: Int) -> [BusyInterval] {
+        let len = minutes * StudyClock.minute
+        var out: [BusyInterval] = []
+        var t = from
+        for b in busy.sorted(by: { $0.start < $1.start }) {
+            let end = min(b.start - gap, to)
+            if end - t >= len { out.append(BusyInterval(start: t, end: end)) }
+            t = max(t, b.end + gap)
+            if t >= to { return out }
+        }
+        if to - t >= len { out.append(BusyInterval(start: t, end: to)) }
+        return out
+    }
+
     /// Návrh bloků na zbytek dne. `extra` = kolikrát uživatel přidal „Další blok“ (+25 min k cíli),
     /// `external` = obsazený čas z Apple Kalendáře.
     public static func propose(_ doc: AppDocument, now: Int, extra: Int = 0, clock: StudyClock, external: [BusyInterval] = []) -> [DayPlanItem] {

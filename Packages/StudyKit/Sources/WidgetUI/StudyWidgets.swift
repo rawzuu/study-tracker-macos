@@ -250,7 +250,7 @@ public struct ExamsWidgetView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Caption("Zkoušky")
                             Spacer()
-                            Text("Žádná zkouška v plánu.").font(.system(size: 13, design: .serif)).foregroundStyle(t.text2)
+                            Text("Žádná zkouška v plánu.").font(.system(size: 13, weight: .medium)).foregroundStyle(t.text2)
                         }
                     } else if family == .systemSmall, let first = m.exams.first {
                         let subject = s.subject(first.exam.subjectId)
@@ -258,8 +258,8 @@ public struct ExamsWidgetView: View {
                             Caption("Zkouška")
                             Spacer(minLength: 0)
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text("\(first.daysLeft)").font(.system(size: 54, design: .serif).monospacedDigit())
-                                    .foregroundStyle(first.daysLeft <= 3 ? t.warn : t.text).widgetAccentable()
+                                Text("\(first.daysLeft)").font(.system(size: 50, weight: .semibold).monospacedDigit())
+                                    .foregroundStyle(first.daysLeft <= 3 ? t.danger : first.daysLeft <= 10 ? t.warn : t.text).widgetAccentable()
                                 Text(first.daysLeft == 0 ? "dnes" : WidgetFormat.plural(first.daysLeft, "den", "dny", "dní"))
                                     .font(.system(size: 14)).foregroundStyle(t.text2)
                             }

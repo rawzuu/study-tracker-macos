@@ -137,30 +137,37 @@ private struct DayHeader: View {
     let openExam: (String) -> Void
 
     var body: some View {
-        VStack(spacing: 3) {
-            Text(day.weekday).font(.system(size: 12, weight: .medium)).foregroundStyle(day.isToday ? Palette.text : Palette.text3)
-            Text("\(day.number)")
-                .font(.system(size: 18))
-                .frame(width: 32, height: 32)
-                .foregroundStyle(day.isToday ? Palette.bg : Palette.text)
-                .background(day.isToday ? Palette.text : .clear, in: RoundedRectangle(cornerRadius: 7))
-            Text(day.total ?? " ").font(.system(size: 10.5)).monospacedDigit().foregroundStyle(Palette.text2).frame(minHeight: 14)
-            SubjectMix(times: day.mix).frame(height: 3).frame(maxWidth: .infinity).padding(.horizontal, 12)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(day.weekday.lowercased()).font(.system(size: 12, weight: day.isToday ? .semibold : .regular))
+                    .foregroundStyle(day.isToday ? Palette.danger : Palette.text2)
+                Text("\(day.number)")
+                    .font(.system(size: 16, weight: day.isToday ? .semibold : .medium)).monospacedDigit()
+                    .foregroundStyle(day.isToday ? .white : Palette.text)
+                    .padding(.horizontal, day.isToday ? 7 : 0)
+                    .frame(minWidth: day.isToday ? 26 : nil, minHeight: 24)
+                    .background(day.isToday ? Palette.danger : .clear, in: Capsule())
+            }
+            Text(day.total ?? "–").font(.system(size: 11)).monospacedDigit()
+                .foregroundStyle(day.total == nil ? Palette.text3 : day.isToday ? Palette.text : Palette.text2)
+            SubjectMix(times: day.mix).frame(height: 3).frame(maxWidth: .infinity).padding(.trailing, 10).padding(.top, 2)
             ForEach(day.exams) { e in
                 Button { openExam(e.id) } label: {
-                    Text(e.name).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Palette.panel2, in: RoundedRectangle(cornerRadius: 4))
-                        .overlay(alignment: .leading) { Rectangle().fill(Palette.subject(e.subject.color)).frame(width: 3) }
-                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Palette.subject(e.subject.color)))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    HStack(spacing: 5) {
+                        Image(systemName: "flag.fill").font(.system(size: 8)).foregroundStyle(Palette.danger)
+                        Text(e.name).font(.system(size: 11, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 6).frame(height: 20)
+                    .background(Palette.subject(e.subject.color).opacity(0.18), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .help(e.name)
             }
         }
-        .padding(.horizontal, 3)
+        .padding(.leading, 8)
+        .padding(.trailing, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 }
@@ -193,7 +200,7 @@ private struct HourLabels: View {
         ZStack(alignment: .topTrailing) {
             ForEach(first..<WeekMetrics.lastHour, id: \.self) { h in
                 Text("\(h):00")
-                    .font(.system(size: 11)).monospacedDigit().foregroundStyle(Palette.text3)
+                    .font(.system(size: 10.5)).monospacedDigit().foregroundStyle(Palette.text3)
                     // Popisek na lince hodiny; první je pod horním okrajem.
                     .offset(y: h == first ? 0 : CGFloat(h - first) * WeekMetrics.hourHeight - 7)
                     .padding(.trailing, 10)
@@ -218,13 +225,13 @@ private struct DayColumn: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in
-                for i in 0..<(WeekMetrics.lastHour - firstHour) {
+                for i in 1..<(WeekMetrics.lastHour - firstHour) {
                     let y = CGFloat(i) * WeekMetrics.hourHeight
-                    ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(Palette.line))
+                    ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(Palette.line.opacity(0.8)))
                 }
                 ctx.fill(Path(CGRect(x: 0, y: 0, width: 1, height: size.height)), with: .color(Palette.line))
             }
-            .background(day.isToday ? Palette.text.opacity(0.025) : .clear)
+            .background(day.isToday ? Palette.panel : .clear)
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { p in
                 actions.emptySlot(BlockDrag.slotStart(y: p.y, day: day.start, firstHour: firstHour, clock: clock))
@@ -263,7 +270,7 @@ private struct DayColumn: View {
         let h = height(item)
         if let blockId = item.item.blockId {
             let dragging = drag?.blockId == blockId
-            CalendarItemView(item: item, height: h, timeLabel: dragging ? dragLabel(item) : nil, dragging: dragging)
+            CalendarItemView(item: item, height: h, now: now, timeLabel: dragging ? dragLabel(item) : nil, dragging: dragging)
                 .pointerStyle(dragging ? .grabActive : .grabIdle)
                 .gesture(moveGesture(item, blockId: blockId))
                 .overlay(alignment: .bottom) {
@@ -274,7 +281,7 @@ private struct DayColumn: View {
                 .accessibilityAction { actions.open(item.item) }
                 .accessibilityIdentifier("cal.block.\(blockId)")
         } else {
-            CalendarItemView(item: item, height: h, timeLabel: nil, dragging: false)
+            CalendarItemView(item: item, height: h, now: now, timeLabel: nil, dragging: false)
                 .onTapGesture { actions.open(item.item) }
                 .accessibilityAction { actions.open(item.item) }
                 .accessibilityIdentifier(identifier(item.item))
@@ -361,8 +368,8 @@ private struct ResizeHandle: View {
 
 private struct NowLine: View {
     var body: some View {
-        Rectangle().fill(Palette.danger).frame(height: 1.5)
-            .overlay(alignment: .leading) { Circle().fill(Palette.danger).frame(width: 7, height: 7).offset(x: -3) }
+        Rectangle().fill(Palette.danger).frame(height: 2)
+            .overlay(alignment: .leading) { Circle().fill(Palette.danger).frame(width: 9, height: 9).offset(x: -4.5) }
             .accessibilityHidden(true)
     }
 }

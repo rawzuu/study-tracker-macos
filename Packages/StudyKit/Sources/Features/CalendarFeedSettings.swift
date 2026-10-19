@@ -44,7 +44,7 @@ struct CalendarFeedSettings: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(Palette.panel2, in: RoundedRectangle(cornerRadius: 6))
-                Button { copy(webcal) } label: { Label("Kopírovat", systemImage: "doc.on.doc") }.buttonStyle(.denik(.normal, size: .small))
+                Button { copy(webcal) } label: { Label("Kopírovat", systemImage: "doc.on.doc") }.buttonStyle(.study(.normal, size: .small))
             }
             HStack(spacing: 8) {
                 Button { webcal.map { _ = NSWorkspace.shared.open($0) } } label: { Label("Přidat do Apple Kalendáře", systemImage: "calendar.badge.plus") }
@@ -52,10 +52,10 @@ struct CalendarFeedSettings: View {
                 Button { Task { await feedSync.publishNow(); if let e = feedSync.status?.error { error = e } else { toasts.show("Kalendář aktualizován") } } } label: {
                     Label("Aktualizovat teď", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.denik(.normal))
+                .buttonStyle(.study(.normal))
                 .disabled(feedSync.busy || store.syncMode == .readOnly)
                 if let url = IcsExport.feedURL(owner: feed.owner, gistId: feed.gistId) {
-                    Link("Zobrazit soubor", destination: url).buttonStyle(.denik(.ghost))
+                    Link("Zobrazit soubor", destination: url).buttonStyle(.study(.ghost))
                 }
             }
             Text(statusText).font(Typo.small).foregroundStyle(Palette.text3).fixedSize(horizontal: false, vertical: true)
@@ -64,7 +64,7 @@ struct CalendarFeedSettings: View {
                 Text("Připomenutí před blokem").foregroundStyle(Palette.text2)
                 AlarmPicker(minutes: Binding(get: { feed.alarmMin }, set: { feedSync.setAlarm($0) }))
             }
-            Button("Vypnout") { confirmsDisable = true }.buttonStyle(.denik(.danger))
+            Button("Vypnout") { confirmsDisable = true }.buttonStyle(.study(.danger))
         }
         .confirmationDialog("Vypnout odebíraný kalendář?", isPresented: $confirmsDisable) {
             Button("Vypnout", role: .destructive) { feedSync.disable() }

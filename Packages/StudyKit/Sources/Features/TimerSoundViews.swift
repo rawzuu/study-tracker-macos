@@ -52,7 +52,7 @@ struct NoiseSection: View {
                                 timer.previewNoise()
                                 previewing = true
                             }
-                            .buttonStyle(.denik(.normal, size: .small))
+                            .buttonStyle(.study(.normal, size: .small))
                             .disabled(previewing)
                             .task(id: previewing) {
                                 guard previewing else { return }
@@ -101,7 +101,7 @@ public struct TimerSoundSettings: View {
                         .frame(maxWidth: 260)
                         .accessibilityLabel("Hlasitost zvonku")
                         Button { timer.effects?.previewChime(volume: dragging ?? settings.volume) } label: { Image(systemName: "speaker.wave.2") }
-                            .buttonStyle(.denik(.ghost, size: .small))
+                            .buttonStyle(.study(.ghost, size: .small))
                             .help("Přehrát ukázku")
                             .accessibilityLabel("Přehrát ukázku")
                     }

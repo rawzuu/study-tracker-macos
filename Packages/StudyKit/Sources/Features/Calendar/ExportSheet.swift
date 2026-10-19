@@ -36,7 +36,7 @@ struct ExportSheet: View {
             Text(summary(blocks: blocks, exams: exams, now: now)).font(Typo.small).foregroundStyle(Palette.text3)
         } footer: {
             Spacer()
-            Button("Zrušit") { dismiss() }.buttonStyle(.denik(.ghost)).keyboardShortcut(.cancelAction)
+            Button("Zrušit") { dismiss() }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
             Button("Uložit .ics (\(blocks.count + exams.count))") {
                 let ics = IcsExport.build(blocks: blocks, exams: exams, subjects: store.document.records(Subject.self), alarmMin: alarm,
                                           now: now, clock: store.clock)

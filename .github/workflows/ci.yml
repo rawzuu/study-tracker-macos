@@ -56,12 +56,14 @@ jobs:
         run: |
           xcrun xcresulttool get test-results tests --path build/UITests.xcresult | python3 Tools/ci/ui-test-summary.py
 
+      # Vždy – se snímky obrazovek z UI testů jde zkontrolovat vzhled skutečných oken.
       - name: Výsledky UI testů
-        if: failure() || cancelled()
+        if: always()
         uses: actions/upload-artifact@v5
         with:
           name: UITests.xcresult
           path: build/UITests.xcresult
+          retention-days: 7
 
   parity:
     name: Parita s webem (WEB_REF)

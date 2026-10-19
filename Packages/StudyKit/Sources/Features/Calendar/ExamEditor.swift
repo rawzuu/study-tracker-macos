@@ -43,10 +43,10 @@ struct ExamEditor: View {
             }
         } footer: {
             if draft.original != nil {
-                Button("Smazat") { confirmDelete = true }.buttonStyle(.denik(.danger)).accessibilityIdentifier("exam.delete")
+                Button("Smazat") { confirmDelete = true }.buttonStyle(.study(.danger)).accessibilityIdentifier("exam.delete")
             }
             Spacer()
-            Button("Zrušit") { dismiss() }.buttonStyle(.denik(.ghost)).keyboardShortcut(.cancelAction)
+            Button("Zrušit") { dismiss() }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
             Button("Uložit", action: save)
                 .buttonStyle(.primary)
                 .keyboardShortcut(.defaultAction)

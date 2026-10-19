@@ -39,30 +39,28 @@ public struct HistoryView: View {
     }
 
     private func page(_ state: HistoryState, metrics: PageMetrics, now: Int) -> some View {
-        LazyVStack(alignment: .leading, spacing: 32) {
-            PageHeader("Historie") {
-                HStack(spacing: 8) {
-                    Picker("Předmět", selection: $subjectId) {
-                        Text("Všechny předměty").tag(String?.none)
-                        ForEach(state.subjects, id: \.id) { s in Text(s.name).tag(Optional(s.id)) }
-                    }
-                    .labelsHidden()
-                    .frame(width: 220)
-                    .accessibilityIdentifier("history.subject")
-                    Button { editing = EditedSession(draft: SessionDraft(now: now, clock: store.clock)) } label: {
-                        Label("Ruční zápis", systemImage: "plus")
-                    }
-                    .buttonStyle(.primary)
-                    .accessibilityIdentifier("history.add")
+        LazyVStack(alignment: .leading, spacing: 30) {
+            PageHeader("Historie", subtitle: subtitle(state), glyph: .history) {
+                Picker("Předmět", selection: $subjectId) {
+                    Text("Všechny předměty").tag(String?.none)
+                    ForEach(state.subjects, id: \.id) { s in Text(s.name).tag(Optional(s.id)) }
                 }
+                .labelsHidden()
+                .frame(width: 200)
+                .accessibilityIdentifier("history.subject")
+                Button { editing = EditedSession(draft: SessionDraft(now: now, clock: store.clock)) } label: {
+                    Label("Ruční zápis", systemImage: "plus")
+                }
+                .buttonStyle(.study(.normal, size: .small))
+                .accessibilityIdentifier("history.add")
             }
             if state.groups.isEmpty {
                 EmptyNote("Žádná sezení", systemImage: "book")
             } else {
                 if metrics.size == .wide {
                     // Na velkém monitoru dny ve dvou sloupcích – čte se po řádcích zleva doprava.
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 56, alignment: .top), count: 2),
-                              alignment: .leading, spacing: 32) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 64, alignment: .top), count: 2),
+                              alignment: .leading, spacing: 30) {
                         days(state)
                     }
                 } else {
@@ -70,24 +68,32 @@ public struct HistoryView: View {
                 }
                 if state.groups.count > limit {
                     Button("Načíst starší") { limit += 30 }
+                        .buttonStyle(.study(.normal, size: .small))
                         .accessibilityIdentifier("history.more")
                 }
             }
         }
-        .padding(.horizontal, metrics.padding)
-        .padding(.vertical, 36)
+        .padding(.leading, metrics.size == .compact ? metrics.padding : 64)
+        .padding(.trailing, metrics.size == .compact ? metrics.padding : 48)
+        .padding(.vertical, 48)
+        .frame(maxWidth: metrics.size == .regular ? 1080 : .infinity, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func subtitle(_ state: HistoryState) -> String {
+        let n = state.groups.reduce(0) { $0 + $1.rows.count }
+        return "\(n) \(Format.plural(n, "sezení", "sezení", "sezení")) · \(state.groups.count) \(Format.plural(state.groups.count, "den", "dny", "dní"))"
     }
 
     private func days(_ state: HistoryState) -> some View {
         ForEach(state.groups.prefix(limit)) { group in
-            PageSection(group.title, accessory: { Chip(group.total) }) {
-                VStack(spacing: 0) {
-                    ForEach(Array(group.rows.enumerated()), id: \.element.id) { i, s in
-                        SessionLine(row: s, divider: i < group.rows.count - 1) { edit(s.id) }
-                    }
+            VStack(alignment: .leading, spacing: 0) {
+                ListHeading(group.title, meta: group.total)
+                ForEach(group.rows) { s in
+                    SessionLine(row: s) { edit(s.id) }
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("history.day.\(group.id)")
         }
     }
@@ -104,17 +110,23 @@ private struct EditedSession: Identifiable {
     let draft: SessionDraft
 }
 
+/// Sezení jako odškrtnutá položka: téma, předmět, podrobnosti, soustředění, délka a čas.
 private struct SessionLine: View {
     let row: SessionRow
-    let divider: Bool
     let edit: () -> Void
+    @State private var hovering = false
 
     var body: some View {
-        ListRow(divider: divider) {
-            Text(row.timeRange).font(Typo.small).monospacedDigit().foregroundStyle(Palette.text2).frame(width: 96, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                SubjectTag(name: row.subject.name, color: row.subject.color)
-                if !row.detail.isEmpty { Text(row.detail).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(2) }
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            BlockCheck(.done, color: Palette.subject(row.subject.color)).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 3 }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(row.topic.isEmpty ? row.subject.name : row.topic).font(.system(size: 14)).lineLimit(1)
+                    if !row.topic.isEmpty { SubjectCapsule(name: row.subject.name, color: row.subject.color) }
+                }
+                if !row.extra.isEmpty {
+                    Text(row.extra).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(2)
+                }
                 if let recall = row.recall {
                     Text(recall).font(Typo.small).italic().foregroundStyle(Palette.text2)
                         .padding(.leading, 8)
@@ -125,12 +137,17 @@ private struct SessionLine: View {
             if let focus = row.focus {
                 Chip("\(focus)/5").help(Format.focusLabels[min(5, max(1, focus))])
             }
-            Text(row.duration).fontWeight(.semibold).monospacedDigit().frame(minWidth: 70, alignment: .trailing)
+            Text(row.timeRange).font(.system(size: 12.5)).monospacedDigit().foregroundStyle(Palette.text3)
+            Text(row.duration).font(.system(size: 13, weight: .semibold)).monospacedDigit().frame(minWidth: 64, alignment: .trailing)
             Button(action: edit) { Image(systemName: "pencil") }
-                .buttonStyle(.denik(.ghost, size: .small))
+                .buttonStyle(.study(.ghost, size: .small))
+                .opacity(hovering ? 1 : 0.35)
                 .help("Upravit")
                 .accessibilityLabel("Upravit")
         }
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: "Upravit", edit)
         .accessibilityIdentifier("session.\(row.id)")

@@ -71,8 +71,9 @@ public struct MenuBarPanel: View {
     private func today(_ s: DashboardState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("DNES").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
-                DurationText(Format.duration(s.todaySec), size: 22)
+                PageGlyphView(.today(day: store.clock.calendar.component(.day, from: store.clock.date(store.nowMs))), size: 15)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 2 }
+                DurationText(Format.duration(s.todaySec), size: 20)
                 if s.goalSec > 0 {
                     Text(s.todaySec >= s.goalSec ? "cíl splněn" : "ze \(Format.duration(s.goalSec))").font(Typo.small).foregroundStyle(Palette.text3)
                 }
@@ -82,7 +83,7 @@ public struct MenuBarPanel: View {
                 }
             }
             if s.goalSec > 0 {
-                ProgressLine(min(1, Double(s.todaySec) / Double(s.goalSec)), color: Palette.accent).frame(height: 4)
+                ProgressLine(min(1, Double(s.todaySec) / Double(s.goalSec)), color: s.todaySec >= s.goalSec ? Palette.success : Palette.accent)
             }
         }
         .accessibilityElement(children: .combine)
@@ -95,12 +96,10 @@ public struct MenuBarPanel: View {
         let state = timer.state
         let subject = state.subjectId.isEmpty ? nil : store.document.record(Subject.self, id: state.subjectId)
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
-                Circle().fill(Palette.subject(subject?.color ?? "#9aa3ad")).frame(width: 8, height: 8)
-                Text(subject?.name ?? "Bez předmětu").fontWeight(.medium)
-                if !state.topic.isEmpty { Text("/ \(state.topic)").foregroundStyle(Palette.text3).lineLimit(1) }
+            HStack(spacing: 8) {
+                Text(state.topic.isEmpty ? subject?.name ?? "Bez předmětu" : state.topic).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                SubjectCapsule(name: subject?.name ?? "Bez předmětu", color: subject?.color ?? "#9aa3ad")
             }
-            .font(.system(size: 13))
             HStack(alignment: .lastTextBaseline, spacing: 10) {
                 if state.status == .running, let start = state.segmentStart {
                     TimelineView(.periodic(from: Date(timeIntervalSince1970: Double(start) / 1000), by: 1)) { context in
@@ -120,8 +119,8 @@ public struct MenuBarPanel: View {
     private func clock(_ now: Int) -> some View {
         let state = timer.state
         return Text(Format.clock(ms: state.remaining(at: now) ?? state.elapsed(at: now)))
-            .font(Typo.serifNumber(40))
-            .foregroundStyle(state.phase == .work ? Palette.text : Palette.breakColor)
+            .font(.system(size: 40, weight: .light).monospacedDigit())
+            .foregroundStyle(state.status == .paused ? Palette.text2 : state.phase == .work ? Palette.text : Palette.breakColor)
     }
 
     private var phaseLabel: String {
@@ -142,20 +141,17 @@ public struct MenuBarPanel: View {
         if let top = recs.first {
             let subject = SubjectInfo(top.subjectId, in: store.document)
             VStack(alignment: .leading, spacing: 10) {
-                Text("CO TEĎ?").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 7) {
-                        ColorMark(color: subject.color)
-                        Text(subject.name).font(.system(size: 12.5)).foregroundStyle(Palette.text2)
-                    }
-                    Text(top.title).font(.system(size: 19, design: .serif)).foregroundStyle(Palette.text)
+                Text("Co teď?").font(Typo.heading).foregroundStyle(Palette.accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    SubjectCapsule(name: subject.name, color: subject.color)
+                    Text(top.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.text)
                         .fixedSize(horizontal: false, vertical: true)
                     if let reason = top.reasons.first {
                         Text(reason).font(Typo.small).foregroundStyle(Palette.text3)
                     }
                 }
                 Button { start(top) } label: { Label("Začít · \(top.minutes) min", systemImage: "play.fill") }
-                    .buttonStyle(.primary)
+                    .buttonStyle(.study(.primary, size: .small))
                     .accessibilityIdentifier("menubar.start")
                 if recs.count > 1 {
                     VStack(spacing: 0) {
@@ -204,7 +200,8 @@ public struct MenuBarPanel: View {
 
     private func planRow(_ b: DashboardState.PlanRow) -> some View {
         HStack(spacing: 10) {
-            Text(b.time).font(.system(size: 13, design: .serif)).monospacedDigit().foregroundStyle(Palette.text)
+            BlockCheck(.open)
+            Text(b.time).font(.system(size: 12.5)).monospacedDigit().foregroundStyle(Palette.text2)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     ColorMark(color: b.subject.color)
@@ -218,7 +215,7 @@ public struct MenuBarPanel: View {
                 timer.setup(TimerSetup(subjectId: b.subject.id, topic: b.topic, planBlockId: b.id))
                 timer.start()
             } label: { Image(systemName: "play.fill") }
-                .buttonStyle(.denik(.normal, size: .small))
+                .buttonStyle(.study(.normal, size: .small))
                 .disabled(!timer.state.canSwitch)
                 .help("Začít blok z plánu")
                 .accessibilityLabel("Začít blok z plánu")
@@ -232,10 +229,10 @@ public struct MenuBarPanel: View {
     private var footer: some View {
         HStack {
             Button { open("prehled") } label: { Label("Otevřít Study Tracker", systemImage: "macwindow") }
-                .buttonStyle(.denik(.ghost, size: .small))
+                .buttonStyle(.study(.ghost, size: .small))
             Spacer()
             Button { open("casovac") } label: { Image(systemName: "timer") }
-                .buttonStyle(.denik(.ghost, size: .small))
+                .buttonStyle(.study(.ghost, size: .small))
                 .help("Časovač")
                 .accessibilityLabel("Časovač")
         }

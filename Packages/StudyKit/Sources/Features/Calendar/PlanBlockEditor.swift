@@ -59,20 +59,20 @@ struct PlanBlockEditor: View {
             FormField("Poznámka") { TextArea(text: $draft.note) }
         } footer: {
             if let block = current {
-                Button("Smazat") { delete(block) }.buttonStyle(.denik(.danger))
+                Button("Smazat") { delete(block) }.buttonStyle(.study(.danger))
             }
             Spacer()
             if let block = current {
                 if !block.done && timer.state.canSwitch {
                     Button { start(block) } label: { Label("Spustit", systemImage: "play.fill") }
-                        .buttonStyle(.denik(.normal))
+                        .buttonStyle(.study(.normal))
                         .accessibilityIdentifier("block.start")
                 }
                 Button { toggleDone(block) } label: { Label(block.done ? "Nehotovo" : "Hotovo", systemImage: "checkmark") }
-                    .buttonStyle(.denik(.normal))
+                    .buttonStyle(.study(.normal))
                     .accessibilityIdentifier("block.done")
             } else {
-                Button("Zrušit") { dismiss() }.buttonStyle(.denik(.ghost)).keyboardShortcut(.cancelAction)
+                Button("Zrušit") { dismiss() }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
             }
             Button("Uložit", action: save)
                 .buttonStyle(.primary)

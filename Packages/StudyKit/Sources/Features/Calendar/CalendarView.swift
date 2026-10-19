@@ -79,14 +79,14 @@ public struct CalendarView: View {
     private func page(now: Int) -> some View {
         let clock = store.clock
         let week = weekStart ?? clock.startOfWeek(now)
-        return VStack(alignment: .leading, spacing: 32) {
+        return VStack(alignment: .leading, spacing: 28) {
             // Tlačítka vedle nadpisu, a když se nevejdou (užší okno), pod ním.
             ViewThatFits(in: .horizontal) {
-                PageHeader("Kalendář", subtitle: subtitle) {
+                PageHeader("Kalendář", subtitle: subtitle(now: now), glyph: .calendar) {
                     HStack(spacing: 8) { headerButtons(now: now, week: week) }.fixedSize()
                 }
                 VStack(alignment: .leading, spacing: 16) {
-                    PageHeader("Kalendář", subtitle: subtitle)
+                    PageHeader("Kalendář", subtitle: subtitle(now: now), glyph: .calendar)
                     WrapLayout(spacing: 8, lineSpacing: 8) { headerButtons(now: now, week: week) }
                 }
             }
@@ -126,15 +126,14 @@ public struct CalendarView: View {
                     .frame(minWidth: 380, maxWidth: .infinity)
             }
         }
-        .padding(.horizontal, 48)
-        .padding(.vertical, 36)
+        .padding(.leading, 64)
+        .padding(.trailing, 48)
+        .padding(.vertical, 48)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var subtitle: String {
-        let done = store.document.settings.blockDoneLogs ? ", nebo tlačítkem Hotovo u bloku" : ""
-        return "Plná barva = odučený čas, obrys = plán. Čas se zapíše z časovače\(done). Klikni do prázdna pro nový záznam, "
-            + "plán přesouvej tažením a délku měň tažením za spodní okraj."
+    private func subtitle(now: Int) -> String {
+        "Týden \(store.clock.isoWeek(weekStart ?? now)) · klikni do prázdna pro nový záznam, plán přesouvej tažením"
     }
 
     /// Tlačítka v záhlaví – vedle sebe, nebo v užším okně zalomená do řádků.
@@ -143,28 +142,33 @@ public struct CalendarView: View {
         let clock = store.clock
         Group {
             Button { sheet = .init(.dayPlan(DayPlan.propose(store.document, now: store.nowMs, clock: clock, external: appleCalendar.busyIntervals))) } label: {
-                Label("Naplánovat den", systemImage: "calendar.day.timeline.left")
+                Label("Ranní plán", systemImage: "sunrise")
             }
-            .buttonStyle(.denik(.normal))
+            .buttonStyle(.study(.normal, size: .small))
             .accessibilityIdentifier("calendar.planDay")
-            Button { sheet = .init(.export) } label: { Label("Do kalendáře", systemImage: "square.and.arrow.up") }
-                .buttonStyle(.denik(.normal))
-                .accessibilityIdentifier("calendar.export")
-            Button { sheet = .init(.timetable) } label: { Label("Rozvrh", systemImage: "building.columns") }
-                .buttonStyle(.denik(.normal))
-                .accessibilityIdentifier("calendar.timetable")
-            Button { sheet = .init(.exam(ExamDraft(newAt: now, clock: clock))) } label: { Label("Zkouška", systemImage: "graduationcap") }
-                .buttonStyle(.denik(.normal))
+            Button { sheet = .init(.exam(ExamDraft(newAt: now, clock: clock))) } label: { Label("Zkouška", systemImage: "flag") }
+                .buttonStyle(.study(.normal, size: .small))
                 .accessibilityIdentifier("calendar.addExam")
-            Button { sheet = .init(.session(SessionDraft(newAt: now - StudyClock.hour, now: now, clock: clock))) } label: {
-                Label("Zapsat odučené", systemImage: "square.and.pencil")
+            Menu {
+                Button { sheet = .init(.session(SessionDraft(newAt: now - StudyClock.hour, now: now, clock: clock))) } label: {
+                    Label("Zapsat odučené", systemImage: "square.and.pencil")
+                }
+                .accessibilityIdentifier("calendar.logSession")
+                Button { sheet = .init(.timetable) } label: { Label("Rozvrh výuky", systemImage: "building.columns") }
+                    .accessibilityIdentifier("calendar.timetable")
+                Button { sheet = .init(.export) } label: { Label("Do Apple Kalendáře…", systemImage: "square.and.arrow.up") }
+                    .accessibilityIdentifier("calendar.export")
+            } label: {
+                Label("Další", systemImage: "ellipsis.circle")
             }
-            .buttonStyle(.denik(.normal))
-            .accessibilityIdentifier("calendar.logSession")
+            .menuStyle(.button)
+            .buttonStyle(.study(.normal, size: .small))
+            .fixedSize()
+            .accessibilityIdentifier("calendar.more")
             Button { sheet = .init(.block(PlanBlockDraft(newAt: max(now, week + 9 * StudyClock.hour), clock: clock))) } label: {
                 Label("Naplánovat", systemImage: "plus")
             }
-            .buttonStyle(.primary)
+            .buttonStyle(.study(.primary, size: .small))
             .accessibilityIdentifier("calendar.addBlock")
         }
         .labelStyle(.titleAndIcon)
@@ -175,9 +179,9 @@ public struct CalendarView: View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
                 Button { shift(-1) } label: { Image(systemName: "chevron.left") }
-                    .buttonStyle(.denik(.normal, size: .small)).help("Předchozí").accessibilityLabel("Předchozí")
+                    .buttonStyle(.study(.normal, size: .small)).help("Předchozí").accessibilityLabel("Předchozí")
                 Button { shift(1) } label: { Image(systemName: "chevron.right") }
-                    .buttonStyle(.denik(.normal, size: .small)).help("Další").accessibilityLabel("Další")
+                    .buttonStyle(.study(.normal, size: .small)).help("Další").accessibilityLabel("Další")
             }
             Text(title).font(Typo.sectionTitle).lineLimit(1).accessibilityIdentifier("calendar.range")
             if !isCurrent {
@@ -185,7 +189,7 @@ public struct CalendarView: View {
                     weekStart = nil
                     monthStart = nil
                 }
-                .buttonStyle(.denik(.ghost, size: .small))
+                .buttonStyle(.study(.ghost, size: .small))
             }
             Spacer(minLength: 12)
             if let summary {
@@ -307,7 +311,7 @@ private struct NewEntrySheet: View {
                 }
             } footer: {
                 Spacer()
-                Button("Zrušit") { dismiss() }.buttonStyle(.denik(.ghost)).keyboardShortcut(.cancelAction)
+                Button("Zrušit") { dismiss() }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
             }
         }
     }
@@ -341,29 +345,29 @@ private struct WeekLegend: View {
 
     var body: some View {
         WrapLayout(spacing: 16, lineSpacing: 8) {
-            key("odučeno") { RoundedRectangle(cornerRadius: 2).fill(Palette.text2) }
-            key("plán") { RoundedRectangle(cornerRadius: 2).strokeBorder(Palette.text2, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])) }
+            key("odučeno") { RoundedRectangle(cornerRadius: 3).fill(Palette.text2.opacity(0.45)) }
+            key("plán") {
+                RoundedRectangle(cornerRadius: 3).fill(Palette.text2.opacity(0.12))
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Palette.text2.opacity(0.6)))
+            }
+            key("zmeškáno") { RoundedRectangle(cornerRadius: 3).strokeBorder(Palette.text3, style: StrokeStyle(lineWidth: 1, dash: [3, 2])) }
             if state.hasLectures {
-                key("výuka") {
-                    RoundedRectangle(cornerRadius: 2).fill(Palette.panel3)
-                        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Palette.lineStrong))
-                        .overlay(alignment: .leading) { Rectangle().fill(Palette.text3).frame(width: 2) }
-                }
+                key("výuka") { RoundedRectangle(cornerRadius: 3).fill(Palette.panel3) }
             }
             if state.hasExternal {
                 key("obsazeno") {
-                    BusyHatch().clipShape(RoundedRectangle(cornerRadius: 2))
-                        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Palette.line))
+                    BusyHatch().clipShape(RoundedRectangle(cornerRadius: 3))
+                        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Palette.line))
                 }
                 .help("Události z ostatních kalendářů v Apple Kalendáři – ranní plán se jim vyhne.")
             }
-            Rectangle().fill(Palette.lineStrong).frame(width: 1, height: 14)
+            Rectangle().fill(Palette.line).frame(width: 1, height: 14)
             if state.legend.isEmpty {
                 Text("Tento týden zatím nic odučeno.").foregroundStyle(Palette.text3)
             } else {
                 ForEach(state.legend) { t in
                     HStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 2).fill(Palette.subject(t.subject.color)).frame(width: 10, height: 10)
+                        Circle().fill(Palette.subject(t.subject.color)).frame(width: 7, height: 7)
                         Text(t.subject.name).foregroundStyle(Palette.text)
                         Text(Format.duration(t.sec)).monospacedDigit().foregroundStyle(Palette.text3)
                     }
@@ -423,7 +427,7 @@ private struct ExamsListSection: View {
 
     var body: some View {
         PageSection("Zkoušky", accessory: {
-            Button(action: add) { Label("Přidat", systemImage: "plus") }.buttonStyle(.denik(.ghost, size: .small))
+            Button(action: add) { Label("Přidat", systemImage: "plus") }.buttonStyle(.study(.ghost, size: .small))
         }) {
             if rows.isEmpty {
                 EmptyNote("Žádné nadcházející zkoušky", systemImage: "graduationcap") {

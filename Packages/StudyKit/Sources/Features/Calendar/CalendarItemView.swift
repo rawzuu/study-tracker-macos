@@ -3,12 +3,14 @@ import DesignSystem
 import Engine
 import SwiftUI
 
-/// Jedna položka týdenní mřížky (`.cal-item` na webu). Barvu nese jen předmět: odučené sezení je
-/// plné, plán je obrys, výuka z rozvrhu je šedá a události z ostatních kalendářů šedě šrafované (obsazeno).
+/// Jedna položka týdenní mřížky. Barvu nese jen předmět: odučené je syté, plán světlé s obrysem,
+/// zmeškaný plán čárkovaně, běžící blok s výrazným obrysem, výuka šedá a události z ostatních
+/// kalendářů šedě šrafované (obsazeno).
 struct CalendarItemView: View {
     @Environment(\.colorScheme) private var scheme
     let item: CalendarWeekState.Item
     let height: CGFloat
+    let now: Int
     /// Čas při tažení (nový začátek nebo konec) místo běžného popisku.
     let timeLabel: String?
     let dragging: Bool
@@ -26,31 +28,34 @@ struct CalendarItemView: View {
         }
     }
 
+    /// Blok plánu, který už proběhl a není hotový.
+    private var missed: Bool { kind == .plan && !item.done && item.item.fullEnd <= now }
+
     private var color: Color { Palette.subject(item.subject.color) }
+    /// Sytost výplně odučeného a hotového (na tmavém pozadí víc).
+    private var strong: Double { scheme == .dark ? 0.36 : 0.26 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 3) {
                 if kind == .plan && item.done { Image(systemName: "checkmark").font(.system(size: 8, weight: .heavy)) }
                 Text(kind == .lecture || kind == .external ? item.item.title : item.subject.name)
-                    .fontWeight(kind == .lecture || kind == .external ? .medium : .semibold)
+                    .fontWeight(kind == .external ? .medium : .semibold)
             }
-            .foregroundStyle(titleColor)
-            if height >= 34 { Text(item.detail).foregroundStyle(detailColor) }
-            if height >= 50 { Text(timeLabel ?? item.timeLabel).font(.system(size: 10.5)).monospacedDigit().foregroundStyle(timeColor) }
+            .foregroundStyle(missed ? Palette.text3 : kind == .external ? Palette.text2 : Palette.text)
+            if height >= 34 { Text(missed ? "zmeškáno · \(item.detail)" : item.detail).foregroundStyle(missed ? Palette.text3 : Palette.text2) }
+            if height >= 50 { Text(timeLabel ?? item.timeLabel).font(.system(size: 10.5)).monospacedDigit().foregroundStyle(Palette.text3) }
         }
         .font(.system(size: 11.5))
         .lineLimit(1)
         .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background { background }
-        .overlay { border }
-        .clipShape(RoundedRectangle(cornerRadius: 5))
-        .opacity(kind == .plan && item.done && !dragging ? 0.6 : 1)
-        .shadow(color: .black.opacity(dragging ? 0.35 : kind == .done ? 0.25 : 0), radius: dragging ? 10 : 0, y: 1)
-        .brightness(kind == .done && hovering ? 0.05 : 0)
-        .contentShape(RoundedRectangle(cornerRadius: 5))
+        .background { background.clipShape(shape) }
+        .overlay { border(shape) }
+        .shadow(color: .black.opacity(dragging ? 0.3 : 0), radius: dragging ? 10 : 0, y: 2)
+        .contentShape(shape)
         .onHover { hovering = $0 }
         .help(item.tooltip)
         .accessibilityElement(children: .ignore)
@@ -60,55 +65,26 @@ struct CalendarItemView: View {
 
     @ViewBuilder private var background: some View {
         switch kind {
-        case .plan: dragging ? Palette.panel2 : color.opacity(hovering ? 0.14 : 0.07)
-        case .done: color
-        case .live: LiveStripes(color: item.subject.color)
+        case .plan:
+            if dragging { Palette.panel2 } else if missed { Color.clear } else { color.opacity(item.done ? strong : hovering ? 0.18 : 0.11) }
+        case .done: color.opacity(hovering ? strong + 0.06 : strong)
+        case .live: color.opacity(strong)
         case .lecture: Palette.panel3
         case .external: BusyHatch()
         }
     }
 
-    @ViewBuilder private var border: some View {
-        let shape = RoundedRectangle(cornerRadius: 5)
+    @ViewBuilder private func border(_ shape: RoundedRectangle) -> some View {
         switch kind {
         case .plan:
-            if item.done {
-                shape.strokeBorder(color.opacity(0.35), lineWidth: 1.5)
-            } else {
-                shape.strokeBorder(color.opacity(0.75), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+            if missed {
+                shape.strokeBorder(Palette.text3.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            } else if !item.done {
+                shape.strokeBorder(color.opacity(0.6), lineWidth: 1)
             }
-        case .done, .live:
-            shape.strokeBorder(Palette.subject(item.subject.color, mixedWith: 0x000000, amount: 0.3))
-        case .lecture:
-            shape.strokeBorder(hovering ? Palette.text3 : Palette.lineStrong)
-                .overlay(alignment: .leading) { Rectangle().fill(Palette.text3).frame(width: 2) }
-        case .external:
-            shape.strokeBorder(Palette.line)
-        }
-    }
-
-    private var titleColor: Color {
-        switch kind {
-        // Na světlém pozadí je barva předmětu na text moc světlá – ztmaví se textem (jako na webu).
-        case .plan: scheme == .light ? Palette.subject(item.subject.color, mixedWith: Palette.lightText, amount: 0.5) : color
-        case .done, .live: Color(red: 11 / 255, green: 11 / 255, blue: 11 / 255)
-        case .lecture: Palette.text
-        case .external: Palette.text2
-        }
-    }
-
-    private var detailColor: Color {
-        switch kind {
-        case .plan, .lecture: Palette.text2
-        case .external: Palette.text3
-        case .done, .live: .black.opacity(0.66)
-        }
-    }
-
-    private var timeColor: Color {
-        switch kind {
-        case .plan, .lecture, .external: Palette.text3
-        case .done, .live: .black.opacity(0.55)
+        case .live: shape.strokeBorder(color, lineWidth: 1.5)
+        case .external: shape.strokeBorder(Palette.line)
+        case .done, .lecture: EmptyView()
         }
     }
 }
@@ -117,39 +93,14 @@ struct CalendarItemView: View {
 struct BusyHatch: View {
     var body: some View {
         Canvas { ctx, size in
-            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Palette.panel2))
             var lines = Path()
             var x: CGFloat = -size.height
             while x < size.width {
                 lines.move(to: CGPoint(x: x, y: size.height))
                 lines.addLine(to: CGPoint(x: x + size.height, y: 0))
-                x += 7
+                x += 8
             }
-            ctx.stroke(lines, with: .color(Palette.lineStrong), lineWidth: 1)
-        }
-    }
-}
-
-/// Běžící blok: šikmé pruhy v barvě předmětu. Na webu se pruhy pohybují; tady stojí,
-/// aby kalendář s běžícím blokem nepřekresloval okno 60× za sekundu.
-private struct LiveStripes: View {
-    let color: String
-
-    var body: some View {
-        Canvas { ctx, size in
-            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Palette.subject(color)))
-            let light = Palette.subject(color, mixedWith: 0xFFFFFF, amount: 0.18)
-            var x: CGFloat = -size.height
-            while x < size.width {
-                var p = Path()
-                p.move(to: CGPoint(x: x, y: size.height))
-                p.addLine(to: CGPoint(x: x + 6, y: size.height))
-                p.addLine(to: CGPoint(x: x + 6 + size.height, y: 0))
-                p.addLine(to: CGPoint(x: x + size.height, y: 0))
-                p.closeSubpath()
-                ctx.fill(p, with: .color(light))
-                x += 12
-            }
+            ctx.stroke(lines, with: .color(Palette.lineStrong.opacity(0.8)), lineWidth: 3)
         }
     }
 }

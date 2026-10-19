@@ -20,9 +20,8 @@ final class NavigationUITests: XCTestCase {
         let app = launch()
         let title = app.staticTexts["page.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
-        // Přehled má jako nadpis dnešní datum („Sobota 17. října“).
-        XCTAssertFalse(text(of: title).isEmpty)
-        attachScreenshot(app, "Přehled")
+        XCTAssertEqual(text(of: title), "Dnes")
+        attachScreenshot(app, "Dnes")
         // Opakování na Macu není (rozhodnutí uživatele).
         XCTAssertFalse(app.staticTexts["nav.opakovani"].exists)
 
@@ -36,9 +35,15 @@ final class NavigationUITests: XCTestCase {
 
         app.staticTexts["nav.planovac"].click()
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Kalendář")
+        attachScreenshot(app, "Kalendář")
 
         app.staticTexts["nav.casovac"].click()
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
+        attachScreenshot(app, "Časovač")
+
+        app.staticTexts["nav.nastaveni"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Nastavení")
+        attachScreenshot(app, "Nastavení")
     }
 
     @MainActor
@@ -156,7 +161,7 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["dash.timer"].exists)
         XCTAssertEqual(text(of: app.staticTexts["dash.timer.time"]), "25:00")
-        attachScreenshot(app, "Přehled s časovačem")
+        attachScreenshot(app, "Dnes s časovačem")
 
         // Blok z plánu „Opakování: Ledviny, Srdce“ připraví časovač s předmětem a tématem.
         let start = app.buttons["plan.start.demo-plan"]

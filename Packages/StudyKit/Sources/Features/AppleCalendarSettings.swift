@@ -26,7 +26,7 @@ struct AppleCalendarSettings: View {
                            ? "Study Tracker má ke kalendářům jen zápis – na úpravy a mazání bloků potřebuje plný přístup."
                            : "Study Tracker nemá přístup ke kalendářům.",
                            systemImage: "lock", tone: .warn) {
-                        Button("Otevřít Nastavení systému") { openPrivacySettings() }.buttonStyle(.denik(.normal, size: .small))
+                        Button("Otevřít Nastavení systému") { openPrivacySettings() }.buttonStyle(.study(.normal, size: .small))
                     }
                 case .notDetermined, .granted:
                     if prefs.enabled && sync.access == .granted { enabled(prefs) } else { setup }
@@ -70,7 +70,7 @@ struct AppleCalendarSettings: View {
             .accessibilityIdentifier("appleCalendar.enable")
             if sync.access == .notDetermined {
                 Button("Jen brát události z kalendářů jako obsazený čas") { Task { await sync.requestAccess() } }
-                    .buttonStyle(.denik(.ghost, size: .small))
+                    .buttonStyle(.study(.ghost, size: .small))
                     .accessibilityIdentifier("appleCalendar.busyOnly")
             }
             Text(sync.access == .notDetermined ? "macOS se jednou zeptá na plný přístup ke kalendářům." : "Kalendář se založí v iCloudu (když ho na Macu používáš).")
@@ -112,14 +112,14 @@ struct AppleCalendarSettings: View {
             }
             HStack(spacing: 8) {
                 Button { Task { await sync.syncNow() } } label: { Label("Synchronizovat teď", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.denik(.normal))
+                    .buttonStyle(.study(.normal))
                     .disabled(sync.syncing)
                     .accessibilityIdentifier("appleCalendar.syncNow")
                 Button { openCalendarApp() } label: { Label("Otevřít Kalendář", systemImage: "calendar") }
-                    .buttonStyle(.denik(.ghost))
+                    .buttonStyle(.study(.ghost))
                 Spacer()
                 Button("Vypnout") { confirmsDisable = true }
-                    .buttonStyle(.denik(.danger))
+                    .buttonStyle(.study(.danger))
                     .accessibilityIdentifier("appleCalendar.disable")
             }
         }

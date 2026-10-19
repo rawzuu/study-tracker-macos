@@ -52,14 +52,14 @@ struct SessionEditor: View {
         } footer: {
             if draft.isNew, let block = draft.planBlock {
                 Button { checkOnly(block) } label: { Label("Jen odškrtnout", systemImage: "checkmark") }
-                    .buttonStyle(.denik(.normal))
+                    .buttonStyle(.study(.normal))
                     .accessibilityIdentifier("session.checkOnly")
             }
             if draft.original != nil {
-                Button("Smazat") { confirmDelete = true }.buttonStyle(.denik(.danger))
+                Button("Smazat") { confirmDelete = true }.buttonStyle(.study(.danger))
             }
             Spacer()
-            Button("Zrušit") { dismiss() }.buttonStyle(.denik(.ghost)).keyboardShortcut(.cancelAction)
+            Button("Zrušit") { dismiss() }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
             Button("Uložit", action: save)
                 .buttonStyle(.primary)
                 .keyboardShortcut(.defaultAction)

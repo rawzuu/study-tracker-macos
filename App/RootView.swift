@@ -1,5 +1,7 @@
 import AppModel
+import Core
 import DesignSystem
+import Engine
 import Features
 import SwiftUI
 
@@ -12,18 +14,8 @@ struct RootView: View {
     var body: some View {
         @Bindable var navigator = navigator
         NavigationSplitView {
-            List(selection: $navigator.page) {
-                ForEach(Page.Group.allCases, id: \.self) { group in
-                    SwiftUI.Section(group.rawValue) {
-                        ForEach(visiblePages.filter { $0.group == group }) { page in
-                            Text(page.title)
-                                .tag(page)
-                                .accessibilityIdentifier("nav.\(page.rawValue)")
-                        }
-                    }
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
+            Sidebar(pages: visiblePages, selection: $navigator.page)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 228, max: 280)
         } detail: {
             // Hláška je pruh pod obsahem stránky – nic nepřekrývá a obsah se na chvíli jen zkrátí zespodu.
             VStack(spacing: 0) {
@@ -96,6 +88,125 @@ struct RootView: View {
     }
 }
 
+/// Postranní panel: stránky s barevnými ikonami ve skupinách bez nadpisů, předměty s koláčkem
+/// týdenního cíle a nastavení dole.
+private struct Sidebar: View {
+    @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
+    let pages: [Page]
+    @Binding var selection: Page?
+
+    var body: some View {
+        let now = store.nowMs
+        let day = store.clock.calendar.component(.day, from: store.clock.date(now))
+        List(selection: $selection) {
+            Section {
+                ForEach(pages.filter { $0.group == .learning }) { row($0, day: day) }
+            }
+            Section {
+                ForEach(pages.filter { $0.group == .overview }) { row($0, day: day) }
+            }
+            Section {
+                if pages.contains(.predmety) { row(.predmety, day: day) }
+                ForEach(subjects(now: now)) { s in
+                    Button { selection = .predmety } label: {
+                        Label {
+                            Text(s.name).lineLimit(1)
+                        } icon: {
+                            ProgressPie(s.fraction, color: Palette.subject(s.color), size: 13)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help(s.help)
+                    .accessibilityIdentifier("nav.subject.\(s.id)")
+                }
+            }
+            if pages.contains(.nastaveni) {
+                Section { row(.nastaveni, day: day) }
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
+    private func row(_ page: Page, day: Int) -> some View {
+        Label {
+            HStack(spacing: 6) {
+                Text(page.title).accessibilityIdentifier("nav.\(page.rawValue)")
+                Spacer(minLength: 4)
+                trailing(page)
+            }
+        } icon: {
+            PageGlyphView(page.glyph(day: day), size: 16)
+        }
+        .tag(page)
+    }
+
+    @ViewBuilder
+    private func trailing(_ page: Page) -> some View {
+        switch page {
+        case .prehled:
+            let open = openBlocksToday
+            if open > 0 { Text("\(open)").font(.system(size: 12)).monospacedDigit().foregroundStyle(Palette.text2) }
+        case .casovac:
+            if timer.state.isStudying || timer.state.status == .running {
+                SidebarClock()
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    /// Bloky plánu na dnešek, které ještě nejsou hotové.
+    private var openBlocksToday: Int {
+        let today = store.clock.startOfDay(store.nowMs)
+        let tomorrow = store.clock.addDays(today, 1)
+        return store.document.alive(PlanBlock.self).filter { !$0.done && $0.start >= today && $0.start < tomorrow }.count
+    }
+
+    private struct SubjectRow: Identifiable {
+        let id: String
+        let name: String
+        let color: String
+        let fraction: Double
+        let help: String
+    }
+
+    /// Aktivní předměty s postupem k týdennímu cíli.
+    private func subjects(now: Int) -> [SubjectRow] {
+        let week = Stats.bySubject(Stats.inRange(store.document.alive(Session.self), from: store.clock.startOfWeek(now), to: now + 1))
+        return store.document.alive(Subject.self).filter { !$0.archived }.map { s in
+            let sec = week[s.id, default: 0], goal = s.weeklyGoalMin * 60
+            return SubjectRow(id: s.id, name: s.name, color: s.color, fraction: goal > 0 ? Double(sec) / Double(goal) : 0,
+                              help: goal > 0 ? "Tento týden \(Format.duration(sec)) z \(Format.duration(goal))" : "Tento týden \(Format.duration(sec))")
+        }
+    }
+}
+
+/// Živý čas běžícího bloku v postranním panelu (překresluje se jen tento text).
+private struct SidebarClock: View {
+    @Environment(TimerStore.self) private var timer
+
+    var body: some View {
+        let state = timer.state
+        Group {
+            if state.status == .running, let start = state.segmentStart {
+                TimelineView(.periodic(from: Date(timeIntervalSince1970: Double(start) / 1000), by: 1)) { context in
+                    text(Int(context.date.timeIntervalSince1970 * 1000))
+                }
+            } else {
+                text(timer.currentTime())
+            }
+        }
+    }
+
+    private func text(_ now: Int) -> some View {
+        let s = timer.state
+        return Text(Format.clock(ms: s.remaining(at: now) ?? s.elapsed(at: now)))
+            .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+            .foregroundStyle(s.phase == .work ? Palette.accent : Palette.breakColor)
+    }
+}
+
 /// Data na Macu se nepodařilo otevřít. Nic se nemaže – stačí aktualizovat aplikaci nebo napsat autorovi.
 private struct FailureView: View {
     let message: String
@@ -118,7 +229,7 @@ private struct PlaceholderPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            PageHeader(page.title, subtitle: "Připravuje se – milník \(page.milestone).")
+            PageHeader(page.title, subtitle: "Připravuje se – milník \(page.milestone).", glyph: page.glyph(day: 1))
         }
         .padding(.horizontal, 48)
         .padding(.vertical, 36)
@@ -139,7 +250,7 @@ private struct ToastView: View {
             Text(toast.text).font(Typo.body)
             if toast.undo != nil {
                 Button("Vrátit") { toasts.undo() }
-                    .buttonStyle(.denik(.ghost, size: .small))
+                    .buttonStyle(.study(.ghost, size: .small))
                     // ⌘Z jako „Odvolat“ – jen dokud je hláška vidět
                     .keyboardShortcut("z", modifiers: .command)
                     .help("Vrátit (⌘Z)")

@@ -1,48 +1,115 @@
 import SwiftUI
 
-/// Písmo: nadpisy a velká čísla patkovým písmem (New York – systémová patková písmo macOS,
-/// na webu záložní k Newsreader), text systémovým.
+/// Písmo: všude systémové (SF Pro), čísla s pevnou šířkou číslic. Hierarchii dělá velikost a řez,
+/// ne jiné písmo.
 public enum Typo {
-    public static let pageTitle = Font.system(size: 40, weight: .regular, design: .serif)
-    public static let sectionTitle = Font.system(size: 21, weight: .regular, design: .serif)
-    public static func serifNumber(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .regular, design: .serif).monospacedDigit()
+    public static let pageTitle = Font.system(size: 28, weight: .bold)
+    public static let sectionTitle = Font.system(size: 15, weight: .semibold)
+    /// Nadpis skupiny v seznamu („Dopoledne“) – v barvě akcentu.
+    public static let heading = Font.system(size: 14, weight: .bold)
+    public static func number(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        .system(size: size, weight: weight).monospacedDigit()
     }
     public static let body = Font.system(size: 13.5)
     public static let small = Font.system(size: 12)
 }
 
-/// Hlavička stránky: velký patkový nadpis a podtitulek.
-public struct PageHeader<Trailing: View>: View {
-    let title: String
-    let subtitle: String?
-    let trailing: Trailing
+/// Ikony stránek – stejné v postranním panelu i v hlavičce stránky. Každá stránka má svou barvu.
+public enum PageGlyph: Sendable {
+    case today(day: Int)
+    case calendar, timer, history, subjects, settings
+    /// Ostatní stránky (přehledy) – šedý symbol.
+    case symbol(String)
 
-    public init(_ title: String, subtitle: String? = nil, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
-        self.title = title
-        self.subtitle = subtitle
-        self.trailing = trailing()
-    }
-
-    public var body: some View {
-        HStack(alignment: .lastTextBaseline, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(Typo.pageTitle)
-                    .foregroundStyle(Palette.text)
-                    .accessibilityIdentifier("page.title")
-                    .accessibilityAddTraits(.isHeader)
-                if let subtitle {
-                    Text(subtitle).font(Typo.body).foregroundStyle(Palette.text2)
-                }
-            }
-            Spacer(minLength: 16)
-            trailing
+    public var color: Color {
+        switch self {
+        case .today: Palette.accent
+        case .calendar: Palette.danger
+        case .timer: Palette.breakColor
+        case .history: Palette.success
+        case .subjects: Palette.focus
+        case .settings, .symbol: Palette.text2
         }
     }
 }
 
-/// Sekce bez rámečku: patkový nadpis a pod ním tenká linka (`.card` ve vzhledu Deník).
+/// Ikona stránky; `today` je kalendářový list s dnešním dnem.
+public struct PageGlyphView: View {
+    let glyph: PageGlyph
+    let size: CGFloat
+
+    public init(_ glyph: PageGlyph, size: CGFloat = 16) {
+        self.glyph = glyph
+        self.size = size
+    }
+
+    public var body: some View {
+        Group {
+            switch glyph {
+            case .today(let day):
+                ZStack(alignment: .top) {
+                    RoundedRectangle(cornerRadius: size * 0.2, style: .continuous).fill(Palette.accent)
+                    UnevenRoundedRectangle(topLeadingRadius: size * 0.2, topTrailingRadius: size * 0.2, style: .continuous)
+                        .fill(.black.opacity(0.18)).frame(height: size * 0.27)
+                    Text("\(day)").font(.system(size: size * 0.46, weight: .bold)).monospacedDigit()
+                        .foregroundStyle(.white).frame(maxHeight: .infinity).padding(.top, size * 0.22)
+                }
+                .frame(width: size * 0.86, height: size * 0.82)
+            case .calendar: symbol("calendar")
+            case .timer: symbol("stopwatch")
+            case .history: symbol("checkmark.square")
+            case .subjects: symbol("books.vertical")
+            case .settings: symbol("gearshape")
+            case .symbol(let name): symbol(name)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    private func symbol(_ name: String) -> some View {
+        Image(systemName: name).font(.system(size: size * 0.86, weight: .medium)).foregroundStyle(glyph.color)
+    }
+}
+
+/// Hlavička stránky: ikona, velký nadpis a pod ním jeden řádek souvislostí; akce vpravo.
+public struct PageHeader<Trailing: View>: View {
+    let title: String
+    let subtitle: String?
+    let glyph: PageGlyph?
+    let trailing: Trailing
+
+    public init(_ title: String, subtitle: String? = nil, glyph: PageGlyph? = nil, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
+        self.title = title
+        self.subtitle = subtitle
+        self.glyph = glyph
+        self.trailing = trailing()
+    }
+
+    public var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    if let glyph { PageGlyphView(glyph, size: 26) }
+                    Text(title)
+                        .font(Typo.pageTitle)
+                        .kerning(-0.3)
+                        .foregroundStyle(Palette.text)
+                        .accessibilityIdentifier("page.title")
+                        .accessibilityAddTraits(.isHeader)
+                }
+                if let subtitle {
+                    Text(subtitle).font(Typo.body).foregroundStyle(Palette.text2)
+                        .padding(.leading, glyph == nil ? 0 : 38)
+                }
+            }
+            Spacer(minLength: 16)
+            HStack(spacing: 8) { trailing }.padding(.top, 2)
+        }
+    }
+}
+
+/// Sekce: nadpis, tenká linka a obsah pod ní.
 public struct PageSection<Accessory: View, Content: View>: View {
     let title: String
     let accessory: Accessory
@@ -55,15 +122,15 @@ public struct PageSection<Accessory: View, Content: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).font(Typo.sectionTitle).foregroundStyle(Palette.text)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 12)
                 accessory.font(Typo.small).foregroundStyle(Palette.text3)
             }
-            .padding(.bottom, 8)
-            .overlay(alignment: .bottom) { Rectangle().fill(Palette.lineStrong).frame(height: 1) }
+            .padding(.bottom, 6)
+            .overlay(alignment: .bottom) { Rectangle().fill(Palette.line).frame(height: 1) }
             content
         }
         .accessibilityElement(children: .contain)
@@ -71,7 +138,32 @@ public struct PageSection<Accessory: View, Content: View>: View {
     }
 }
 
-/// Řádek seznamu s tenkou linkou pod sebou.
+/// Nadpis skupiny v seznamu („Dopoledne“): akcentem, vpravo souhrn, pod ním linka.
+public struct ListHeading<Leading: View>: View {
+    let title: String
+    let meta: String?
+    let leading: Leading
+
+    public init(_ title: String, meta: String? = nil, @ViewBuilder leading: () -> Leading = { EmptyView() }) {
+        self.title = title
+        self.meta = meta
+        self.leading = leading()
+    }
+
+    public var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            leading.foregroundStyle(Palette.accent)
+            Text(title).font(Typo.heading).foregroundStyle(Palette.accent).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 12)
+            if let meta { Text(meta).font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3) }
+        }
+        .padding(.bottom, 6)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.line).frame(height: 1) }
+        .padding(.bottom, 4)
+    }
+}
+
+/// Řádek seznamu (volitelně s tenkou linkou pod sebou – v tabulkách).
 public struct ListRow<Content: View>: View {
     let showsDivider: Bool
     let content: Content
@@ -83,7 +175,7 @@ public struct ListRow<Content: View>: View {
 
     public var body: some View {
         HStack(alignment: .center, spacing: 12) { content }
-            .padding(.vertical, 9)
+            .padding(.vertical, 8)
             .overlay(alignment: .bottom) {
                 if showsDivider { Rectangle().fill(Palette.line).frame(height: 1) }
             }
@@ -111,7 +203,7 @@ public struct FormField<Content: View>: View {
     }
 }
 
-/// Malý štítek (`.chip`).
+/// Malý štítek: šedá kapsle, barevný text jen u stavu.
 public struct Chip: View {
     public enum Tone { case neutral, accent, ok, warn, bad }
     let text: String
@@ -135,20 +227,19 @@ public struct Chip: View {
     }
 
     public var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             if let systemImage { Image(systemName: systemImage).imageScale(.small) }
             Text(text).monospacedDigit()
         }
         .font(.system(size: 11.5, weight: .medium))
         .foregroundStyle(color)
-        .padding(.horizontal, 9)
-        .frame(height: 22)
-        .background(tone == .accent ? Palette.accentSoft : .clear, in: Capsule())
-        .overlay(Capsule().strokeBorder(tone == .neutral ? Palette.lineStrong : color.opacity(0.4)))
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background(tone == .accent ? Palette.accentSoft : Palette.panel2, in: Capsule())
     }
 }
 
-/// Barevná značka a název předmětu.
+/// Barevná tečka a název předmětu (v textu a tabulkách).
 public struct SubjectTag: View {
     let name: String
     let color: String
@@ -160,13 +251,108 @@ public struct SubjectTag: View {
 
     public var body: some View {
         HStack(spacing: 7) {
-            RoundedRectangle(cornerRadius: 2).fill(Palette.subject(color)).frame(width: 8, height: 8)
+            Circle().fill(Palette.subject(color)).frame(width: 7, height: 7)
             Text(name).lineLimit(1)
         }
     }
 }
 
-/// Tenký ukazatel průběhu (`.bar`). Nad 100 % zůstane plný.
+/// Předmět jako štítek u položky seznamu (šedá kapsle s barevnou tečkou).
+public struct SubjectCapsule: View {
+    let name: String
+    let color: String
+    var dimmed = false
+
+    public init(name: String, color: String, dimmed: Bool = false) {
+        self.name = name
+        self.color = color
+        self.dimmed = dimmed
+    }
+
+    public var body: some View {
+        HStack(spacing: 5) {
+            Circle().fill(Palette.subject(color)).frame(width: 6, height: 6).opacity(dimmed ? 0.6 : 1)
+            Text(name).lineLimit(1)
+        }
+        .font(.system(size: 11.5))
+        .foregroundStyle(dimmed ? Palette.text3 : Palette.text2)
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background(Palette.panel2, in: Capsule())
+    }
+}
+
+/// Koláček splnění (týdenní cíl předmětu): obrys a výseč v barvě předmětu.
+public struct ProgressPie: View {
+    let fraction: Double
+    let color: Color
+    let size: CGFloat
+
+    public init(_ fraction: Double, color: Color, size: CGFloat = 14) {
+        self.fraction = fraction
+        self.color = color
+        self.size = size
+    }
+
+    public var body: some View {
+        Canvas { ctx, s in
+            let r = s.width / 2
+            let c = CGPoint(x: r, y: r)
+            let line = max(1.25, s.width / 10)
+            ctx.stroke(Path(ellipseIn: CGRect(origin: .zero, size: s).insetBy(dx: line / 2, dy: line / 2)), with: .color(color), lineWidth: line)
+            let f = min(1, max(0, fraction))
+            guard f > 0 else { return }
+            var wedge = Path()
+            wedge.move(to: c)
+            wedge.addArc(center: c, radius: r - line * 1.6, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * f), clockwise: false)
+            wedge.closeSubpath()
+            ctx.fill(wedge, with: .color(color))
+        }
+        .frame(width: size, height: size)
+        .accessibilityElement()
+        .accessibilityValue("\(Int((min(1, max(0, fraction)) * 100).rounded())) %")
+    }
+}
+
+/// Zaškrtávací políčko bloku v seznamu: hotový, běží (výseč postupu), čeká, zmeškaný, navržený.
+public struct BlockCheck: View {
+    public enum State: Equatable, Sendable {
+        case open, done, missed, suggested
+        case running(Double)
+    }
+
+    let state: State
+    let color: Color
+
+    public init(_ state: State, color: Color = Palette.accent) {
+        self.state = state
+        self.color = color
+    }
+
+    public var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+        ZStack {
+            switch state {
+            case .done:
+                shape.fill(color)
+                Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+            case .running(let f):
+                shape.strokeBorder(color, lineWidth: 1.5)
+                ProgressPie(f, color: color, size: 9).opacity(1)
+            case .open:
+                shape.strokeBorder(Palette.lineStrong, lineWidth: 1.5)
+            case .missed:
+                shape.strokeBorder(Palette.lineStrong, lineWidth: 1.5)
+                Rectangle().fill(Palette.text3).frame(width: 7, height: 1.5)
+            case .suggested:
+                shape.strokeBorder(Palette.lineStrong, style: StrokeStyle(lineWidth: 1.5, dash: [2.5, 2]))
+            }
+        }
+        .frame(width: 16, height: 16)
+    }
+}
+
+/// Tenký ukazatel průběhu. Nad 100 % zůstane plný.
 public struct ProgressLine: View {
     let value: Double
     let color: Color
@@ -179,11 +365,11 @@ public struct ProgressLine: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Palette.line)
+                Capsule().fill(Palette.panel2)
                 Capsule().fill(color).frame(width: geo.size.width * min(1, max(0, value)))
             }
         }
-        .frame(height: 4)
+        .frame(height: 3)
         .accessibilityElement()
         .accessibilityValue("\(Int((min(1, max(0, value)) * 100).rounded())) %")
     }
@@ -202,18 +388,19 @@ public struct EmptyNote<Footer: View>: View {
     }
 
     public var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: systemImage).font(.system(size: 20, weight: .light)).foregroundStyle(Palette.text3)
+        VStack(spacing: 6) {
+            Image(systemName: systemImage).font(.system(size: 18)).foregroundStyle(Palette.text3)
             Text(title).foregroundStyle(Palette.text2)
             footer.font(Typo.small).foregroundStyle(Palette.text3)
         }
         .font(.system(size: 13))
+        .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 26)
+        .padding(.vertical, 22)
     }
 }
 
-/// Upozornění s ikonou (`.banner`).
+/// Upozornění: ikona, věta a akce na jemné ploše.
 public struct Banner<Actions: View>: View {
     let systemImage: String
     let text: String
@@ -230,18 +417,19 @@ public struct Banner<Actions: View>: View {
     public var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
-                .foregroundStyle(tone == .bad ? Palette.danger : tone == .warn ? Palette.warn : Palette.text2)
+                .foregroundStyle(tone == .bad ? Palette.danger : tone == .warn ? Palette.warn : tone == .accent ? Palette.accent : Palette.text2)
             Text(text).font(Typo.body).foregroundStyle(Palette.text).frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
             actions
         }
-        .padding(.vertical, 9)
-        .padding(.leading, 16)
-        .padding(.trailing, 10)
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.lineStrong))
+        .padding(.vertical, 8)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .background(Palette.panel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
-/// Délka „1 h 19 min“: čísla velká patkovým písmem, jednotky menší (`<Dur>` na webu).
+/// Délka „1 h 19 min“: čísla větší a tučnější, jednotky menší a šedé.
 public struct DurationText: View {
     let text: String
     let size: CGFloat
@@ -259,8 +447,8 @@ public struct DurationText: View {
         var out = AttributedString()
         for (i, part) in text.split(separator: " ").enumerated() {
             let isNumber = part.first?.isNumber == true
-            var piece = AttributedString((i > 0 ? (isNumber ? " " : "\u{2009}") : "") + part)
-            piece.font = isNumber ? Typo.serifNumber(size) : .system(size: max(10, size * 0.4))
+            var piece = AttributedString((i > 0 ? " " : "") + part)
+            piece.font = isNumber ? Typo.number(size) : .system(size: max(11, size * 0.55), weight: .medium)
             piece.foregroundColor = isNumber ? Palette.text : Palette.text2
             out += piece
         }
@@ -269,13 +457,13 @@ public struct DurationText: View {
 }
 
 extension View {
-    /// Pozadí stránky ve vzhledu Deník.
+    /// Pozadí stránky.
     public func pageBackground() -> some View {
         background(Palette.bg)
     }
 }
 
-/// Víceřádkové textové pole ve vzhledu Deník, s nápovědou, dokud je prázdné.
+/// Víceřádkové textové pole s nápovědou, dokud je prázdné.
 public struct TextArea: View {
     @Binding var text: String
     let placeholder: String
@@ -302,7 +490,7 @@ public struct TextArea: View {
     }
 }
 
-/// Okno formuláře (`<Modal>` na webu): nadpis, obsah a řada tlačítek dole.
+/// Okno formuláře: nadpis, obsah a řada tlačítek dole.
 public struct EditorSheet<Content: View, Footer: View>: View {
     let title: String
     let width: CGFloat
@@ -318,7 +506,7 @@ public struct EditorSheet<Content: View, Footer: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(title).font(Typo.sectionTitle).accessibilityAddTraits(.isHeader)
+            Text(title).font(.system(size: 17, weight: .semibold)).accessibilityAddTraits(.isHeader)
             content
             HStack(spacing: 8) { footer }.padding(.top, 6)
         }

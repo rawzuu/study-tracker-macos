@@ -4,7 +4,8 @@ import DesignSystem
 import Engine
 import SwiftUI
 
-/// Přehled: dnešek, týden po předmětech, plán, zkoušky, časovač, poslední sezení.
+/// Dnes: seznam dne (bloky po částech dne, běžící blok, volné chvíle s návrhem) a vedle souhrn
+/// dneška, týdne, předmětů a zkoušek.
 public struct DashboardView: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
@@ -29,18 +30,18 @@ public struct DashboardView: View {
     public var body: some View {
         Group {
             if let snapshot {
-                page(now: snapshot.now, metrics: PageMetrics(width: snapshot.width))
+                page(now: snapshot.now, width: snapshot.width)
             } else {
-                // Každou minutu se přepočítá „teď“ (dnešek, série, „dnes“ v seznamu).
+                // Každou minutu se přepočítá „teď“ (zmeškané bloky, volné chvíle, série).
                 TimelineView(.everyMinute) { context in
                     GeometryReader { proxy in
-                        ScrollView { page(now: Int(context.date.timeIntervalSince1970 * 1000), metrics: PageMetrics(width: proxy.size.width)) }
+                        ScrollView { page(now: Int(context.date.timeIntervalSince1970 * 1000), width: proxy.size.width) }
                     }
                 }
             }
         }
         .pageBackground()
-        .navigationTitle("Přehled")
+        .navigationTitle("Dnes")
         .sheet(item: $dayPlan, onDismiss: { toasts.presentAfterSheet() }) { DayPlanSheet(items: $0.items) }
     }
 
@@ -49,400 +50,557 @@ public struct DashboardView: View {
         dayPlan = DayPlanRequest(items: DayPlan.propose(store.document, now: store.nowMs, clock: store.clock, external: appleCalendar.busyIntervals))
     }
 
-    private func page(now: Int, metrics: PageMetrics) -> some View {
-        let state = DashboardState(document: store.document, now: now, clock: store.clock)
-        return VStack(alignment: .leading, spacing: 36) {
-            PageHeader(state.title, subtitle: "Týden \(state.isoWeek)" + (state.intention.map { " · záměr: \($0)" } ?? "")) {
+    private func page(now: Int, width: CGFloat) -> some View {
+        let summary = DashboardState(document: store.document, now: now, clock: store.clock)
+        let today = TodayState(document: store.document, now: now, clock: store.clock,
+                               external: appleCalendar.busyEvents.map { .init(id: $0.id, title: $0.title, start: $0.start, end: $0.end) },
+                               running: running(now: now), recommendations: advisor.recommendations(now: now))
+        let metrics = PageMetrics(width: width)
+        let list = listColumn(summary, today, now: now, metrics: metrics)
+        let side = SummaryColumn(state: summary, openPage: openPage)
+        return Group {
+            if metrics.size == .compact {
+                VStack(alignment: .leading, spacing: 40) {
+                    list
+                    side.padding(.horizontal, metrics.padding).padding(.bottom, 40)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    list.frame(maxWidth: metrics.size == .wide ? 1180 : .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    side
+                        .padding(.horizontal, metrics.size == .wide ? 44 : 32)
+                        .padding(.top, 60)
+                        .padding(.bottom, 40)
+                        .frame(width: metrics.size == .wide ? 460 : 340, alignment: .topLeading)
+                        .frame(minHeight: 600, alignment: .top)
+                        .overlay(alignment: .leading) { Rectangle().fill(Palette.line).frame(width: 1) }
+                }
+            }
+        }
+    }
+
+    private func listColumn(_ summary: DashboardState, _ today: TodayState, now: Int, metrics: PageMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 28) {
+            PageHeader("Dnes", subtitle: subtitle(summary, today), glyph: .today(day: store.clock.calendar.component(.day, from: store.clock.date(now)))) {
+                Button("Ranní plán", action: planDay)
+                    .buttonStyle(.study(.normal, size: .small))
+                    .accessibilityIdentifier("dash.planDay")
                 if timer.state.status == .idle {
                     Button("Začít učení") { openPage("casovac") }
-                        .buttonStyle(.denik(.normal))
+                        .buttonStyle(.study(.normal, size: .small))
                         .accessibilityIdentifier("dash.startLearning")
                 }
             }
             SyncBanner(openSettings: { openPage("nastaveni") })
             if advisor.showsMorningPrompt(now: now) {
-                Banner("Dobré ráno – naplánuj si dnešek. Navrhnu bloky podle zkoušek a cílů, ty jen potvrdíš.", systemImage: "sunrise") {
+                Banner("Dobré ráno – naplánuj si dnešek. Navrhnu bloky podle zkoušek a cílů, ty jen potvrdíš.", systemImage: "sunrise", tone: .accent) {
                     Button("Naplánovat den", action: planDay)
-                        .buttonStyle(.denik(.normal, size: .small))
+                        .buttonStyle(.study(.normal, size: .small))
                         .accessibilityIdentifier("dash.morning.plan")
-                    Button { advisor.dismissMorningPrompt(now: now) } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
-                        .buttonStyle(.denik(.ghost, size: .small))
+                    Button { advisor.dismissMorningPrompt(now: now) } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
+                        .buttonStyle(.study(.ghost, size: .small))
                         .help("Skrýt na dnešek")
                         .accessibilityLabel("Skrýt")
                 }
                 .accessibilityIdentifier("dash.morning")
             }
-            if state.isEmpty && !store.isConnected {
+            if summary.isEmpty && !store.isConnected {
                 ConnectPrompt(openSettings: { openPage("nastaveni") })
             } else {
-                content(state, now: now, columns: metrics.columns)
+                if timer.state.canSwitch {
+                    NextUpSection(now: now, openTimer: { openPage("casovac") })
+                }
+                TodayList(state: today, now: now, openTimer: { openPage("casovac") }, planDay: planDay)
             }
         }
-        .padding(.horizontal, metrics.padding)
-        .padding(.vertical, 36)
+        .padding(.leading, metrics.size == .compact ? metrics.padding : 64)
+        .padding(.trailing, metrics.size == .compact ? metrics.padding : 48)
+        .padding(.top, 48)
+        .padding(.bottom, 48)
     }
 
-    /// Karty ve sloupcích. Na notebooku dva (dnešek, plán, zkoušky | co teď, týden, časovač) a pod nimi poslední
-    /// sezení přes celou šířku; na velkém monitoru tři (dnešek, plán, poslední sezení | co teď, zkoušky | týden,
-    /// časovač); v úzkém okně vše pod sebou.
-    @ViewBuilder
-    private func content(_ s: DashboardState, now: Int, columns: Int) -> some View {
-        let order: [DashCard] = columns == 3
-            ? [.today, .next, .week, .plan, .exams, .timer, .recent]
-            : [.today, .next, .plan, .week, .exams, .timer]
-        ColumnsLayout(columns: columns) {
-            ForEach(order, id: \.self) { card($0, s, now: now) }
+    private func subtitle(_ s: DashboardState, _ today: TodayState) -> String {
+        var parts = [s.title]
+        if today.goalSec > 0 {
+            parts.append(today.remainingSec > 0 ? "do denního cíle zbývá \(Format.duration(today.remainingSec))" : "denní cíl splněn")
         }
-        if columns < 3 { card(.recent, s, now: now) }
+        if let intention = s.intention { parts.append("záměr: \(intention)") }
+        return parts.joined(separator: " · ")
     }
 
-    @ViewBuilder
-    private func card(_ card: DashCard, _ s: DashboardState, now: Int) -> some View {
-        switch card {
-        case .today: TodaySection(state: s)
-        case .next: NextUpSection(now: now, openTimer: { openPage("casovac") })
-        case .plan: PlanSection(rows: s.todayPlan, start: startBlock, planDay: planDay)
-        case .week: WeekSection(state: s)
-        case .exams: ExamsSection(rows: s.exams)
-        case .timer: DashTimer(openTimer: { openPage("casovac") })
-        case .recent: RecentSection(rows: s.recent, openHistory: { openPage("historie") })
-        }
-    }
-
-    private enum DashCard { case today, next, plan, week, exams, timer, recent }
-
-    /// Spustit časovač z bloku plánu: předmět, téma z názvu a odkaz na blok (po uložení se odškrtne).
-    private func startBlock(_ b: DashboardState.PlanRow) {
-        timer.setup(TimerSetup(subjectId: b.subject.id, topic: b.topic, planBlockId: b.id))
-        openPage("casovac")
+    /// Běžící nebo pozastavený blok učení jako úsek dne (začátek a předpokládaný konec).
+    private func running(now: Int) -> TodayState.Running? {
+        let s = timer.state
+        guard s.isStudying else { return nil }
+        let left = s.remaining(at: now) ?? 25 * StudyClock.minute
+        return .init(planBlockId: s.planBlockId, subjectId: s.subjectId, topic: s.topic, start: s.workStartedAt ?? now, end: now + left)
     }
 }
 
-/// Sekce vedle sebe; když se nevejdou, pod sebou (`.dash-row` na webu).
-struct FlowRow<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 56) { content }
-            VStack(alignment: .leading, spacing: 40) { content }
-        }
-    }
+/// Otevřený ranní plán s návrhem z okamžiku otevření.
+struct DayPlanRequest: Identifiable {
+    let id = UUID()
+    let items: [DayPlanItem]
 }
 
-// MARK: - Dnešek
+// MARK: - Seznam dne
 
-private struct TodaySection: View {
-    let state: DashboardState
+/// Části dne s bloky, obsazeným časem a volnými chvílemi; pod nimi zítřek.
+private struct TodayList: View {
+    @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
+    @Environment(Toasts.self) private var toasts
+    let state: TodayState
+    let now: Int
+    let openTimer: () -> Void
+    let planDay: () -> Void
+    @State private var showsTomorrow = false
 
     var body: some View {
-        PageSection("Dnešek") {
-            HStack(alignment: .center, spacing: 30) {
-                DayGauge(rings: [
-                    .init(label: "Dnes", value: state.goalSec > 0 ? Double(state.todaySec) / Double(state.goalSec) : 0, color: Palette.accent),
-                    .init(label: "Týden", value: state.weekGoalSec > 0 ? Double(state.weekSec) / Double(state.weekGoalSec) : 0, color: Palette.breakColor),
-                    .init(label: "Soustředění", value: (state.focus7 ?? 0) / 5, color: Palette.focus),
-                ], valueText: Format.duration(state.todaySec), sub: state.goalSec > 0 ? "ze \(Format.duration(state.goalSec))" : "dnes")
+        VStack(alignment: .leading, spacing: 26) {
+            if state.sections.isEmpty {
+                EmptyNote("Na dnešek nic v plánu", systemImage: "calendar") {
+                    Button("Naplánovat den", action: planDay).buttonStyle(.study(.normal, size: .small)).padding(.top, 6)
+                }
+            }
+            ForEach(state.sections) { section in
                 VStack(alignment: .leading, spacing: 0) {
-                    LegendRow(color: Palette.accent, label: "Dnes", value: Format.duration(state.todaySec),
-                              of: state.goalSec > 0 ? (state.todaySec >= state.goalSec ? "cíl splněn" : "ze \(Format.duration(state.goalSec))") : "bez cíle")
-                    LegendRow(color: Palette.breakColor, label: "Týden", value: Format.duration(state.weekSec),
-                              of: state.weekGoalSec > 0 ? "z \(Format.duration(state.weekGoalSec))" : "bez cíle")
-                    LegendRow(color: Palette.focus, label: "Soustředění", value: state.focus7.map { Format.decimal($0) } ?? "—",
-                              of: state.focus7 != nil ? "z 5 · 7 dní" : "bez hodnocení")
-                    footer.padding(.top, 12)
+                    ListHeading(section.part.title, meta: section.meta) {
+                        if section.part == .evening { Image(systemName: "moon.fill").font(.system(size: 11)) }
+                    }
+                    ForEach(section.entries) { entry in
+                        switch entry {
+                        case .item(let item) where item.status == .running:
+                            RunningCard(item: item, openTimer: openTimer).padding(.vertical, 6)
+                        case .item(let item):
+                            ItemRow(item: item, start: start, toggle: toggle)
+                        case .busy(let busy):
+                            BusyRow(busy: busy)
+                        case .gap(let gap):
+                            GapRow(gap: gap, plan: plan)
+                        }
+                    }
                 }
-                .frame(minWidth: 200)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(section.part.title)
             }
-            .padding(.top, 6)
+            if !state.tomorrow.isEmpty {
+                tomorrow
+            }
         }
-        .accessibilityIdentifier("dash.today")
+        .accessibilityIdentifier("dash.plan")
     }
 
-    private var footer: some View {
-        let current = state.streak.current
-        return WrapLayout(spacing: 20, lineSpacing: 4) {
-            HStack(spacing: 4) {
-                Text("Série")
-                Text("\(current)").foregroundStyle(Palette.text).monospacedDigit()
-                Text(Format.plural(current, "den", "dny", "dní"))
-                if state.streak.best > current {
-                    Text("· rekord \(state.streak.best)").foregroundStyle(Palette.text3)
+    private var tomorrow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button { withAnimation(.easeOut(duration: 0.18)) { showsTomorrow.toggle() } } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
+                        .rotationEffect(.degrees(showsTomorrow ? 90 : 0))
+                    Text("Zítra").font(.system(size: 14, weight: .semibold))
+                    Text(meta(state.tomorrow)).font(Typo.small).foregroundStyle(Palette.text3)
                 }
+                .foregroundStyle(Palette.text2)
+                .contentShape(Rectangle())
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("dash.streak")
-            if let delta = state.weekDelta {
-                Text("\(delta >= 0 ? "+" : "−")\(Int((abs(delta) * 100).rounded())) % proti minulému týdnu")
-                    .foregroundStyle(delta >= 0 ? Palette.success : Palette.warn)
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("dash.tomorrow")
+            if showsTomorrow {
+                ForEach(state.tomorrow) { ItemRow(item: $0, start: nil, toggle: nil) }
+                    .padding(.top, 4)
             }
         }
-        .font(.system(size: 13))
-        .foregroundStyle(Palette.text2)
+    }
+
+    private func meta(_ items: [TodayState.Item]) -> String {
+        "\(items.count) \(Format.plural(items.count, "blok", "bloky", "bloků")) · \(Format.duration(items.reduce(0) { $0 + $1.durationMin } * 60))"
+    }
+
+    /// Spustit časovač z bloku plánu (předmět, téma z názvu, odkaz na blok – po uložení se odškrtne).
+    private func start(_ item: TodayState.Item) {
+        timer.setup(TimerSetup(subjectId: item.subject.id, topic: item.topic, planBlockId: item.planBlockId))
+        openTimer()
+    }
+
+    /// Odškrtnutí bloku v seznamu (jako „Hotovo“ v kalendáři, bez zápisu času).
+    private func toggle(_ item: TodayState.Item) {
+        guard let id = item.planBlockId, var block = store.document.record(PlanBlock.self, id: id) else { return }
+        block.done.toggle()
+        store.upsert(block)
+    }
+
+    /// Návrh z volné chvíle jako nový blok plánu (s možností vrátit).
+    private func plan(_ s: TodayState.Suggestion) {
+        let id = PlanBlock.newID()
+        store.upsert(PlanBlock(raw: [
+            "id": .string(id), "subjectId": .string(s.subject.id), "title": .string(s.title),
+            "start": .number(Double(s.start)), "durationMin": .number(Double(s.minutes)), "done": false,
+            "note": .string(s.reasons.joined(separator: " · ")),
+        ]))
+        toasts.show("Blok naplánován na \(Format.time(s.start, clock: store.clock))") { store.remove(.planBlocks, id: id) }
     }
 }
 
-private struct LegendRow: View {
-    let color: Color
-    let label: String
-    let value: String
-    let of: String
+/// Řádek bloku nebo sezení: políčko, název, předmět, blízká zkouška, čas a délka.
+private struct ItemRow: View {
+    @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
+    let item: TodayState.Item
+    let start: ((TodayState.Item) -> Void)?
+    let toggle: ((TodayState.Item) -> Void)?
+    @State private var hovering = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Rectangle().fill(color).frame(width: 14, height: 3).alignmentGuide(.firstTextBaseline) { $0[.bottom] + 4 }
-            Text(label).foregroundStyle(Palette.text2).frame(maxWidth: .infinity, alignment: .leading)
-            DurationText(value, size: 20)
-            Text(of).font(Typo.small).foregroundStyle(Palette.text3).monospacedDigit().frame(width: 96, alignment: .trailing)
+        let done = item.status == .done
+        HStack(spacing: 12) {
+            Button { toggle?(item) } label: { BlockCheck(check) }
+                .buttonStyle(.plain)
+                .disabled(toggle == nil || item.planBlockId == nil)
+                .help(done ? "Označit jako nehotové" : "Označit jako hotové")
+                .accessibilityLabel(done ? "Hotovo" : "Označit jako hotové")
+            Text(item.title.isEmpty ? item.subject.name : item.title)
+                .font(.system(size: 14))
+                .foregroundStyle(done || item.status == .missed ? Palette.text3 : Palette.text)
+                .lineLimit(1)
+                .layoutPriority(1)
+            if !item.title.isEmpty {
+                SubjectCapsule(name: item.subject.name, color: item.subject.color, dimmed: done)
+            }
+            if let hint = item.examHint, !done {
+                Label(hint, systemImage: "flag").font(.system(size: 12)).foregroundStyle(Palette.danger).lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            if item.status == .missed {
+                Text("zmeškáno").font(Typo.small).foregroundStyle(Palette.text3)
+            }
+            Text("\(Format.time(item.start, clock: store.clock)) · \(item.durationMin) min")
+                .font(.system(size: 12.5)).monospacedDigit()
+                .foregroundStyle(done ? Palette.text3 : Palette.text2)
+            if let start, !done, item.planBlockId != nil, timer.state.canSwitch {
+                Button { start(item) } label: { Image(systemName: "play.fill").font(.system(size: 9)) }
+                    .buttonStyle(.study(hovering ? .normal : .ghost, size: .small))
+                    .help("Spustit časovač")
+                    .accessibilityLabel("Spustit časovač")
+                    .accessibilityIdentifier("plan.start.\(item.planBlockId ?? item.id)")
+            }
         }
-        .padding(.vertical, 9)
-        .overlay(alignment: .bottom) { Rectangle().fill(Palette.line).frame(height: 1) }
+        .frame(minHeight: 34)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("today.\(item.id)")
+    }
+
+    private var check: BlockCheck.State {
+        switch item.status {
+        case .done: .done
+        case .missed: .missed
+        case .open, .running: .open
+        }
+    }
+}
+
+/// Běžící blok rozbalený jako karta: název, předmět, živý čas, popis a ovládání časovače.
+private struct RunningCard: View {
+    @Environment(AppStore.self) private var store
+    @Environment(TimerStore.self) private var timer
+    let item: TodayState.Item
+    let openTimer: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                liveCheck
+                Text(item.title.isEmpty ? item.subject.name : item.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                if !item.title.isEmpty { SubjectCapsule(name: item.subject.name, color: item.subject.color) }
+                Spacer(minLength: 12)
+                liveTime
+            }
+            Text(description(timer.state))
+                .font(.system(size: 13)).foregroundStyle(Palette.text2)
+                .padding(.leading, 28).padding(.top, 8)
+            HStack(spacing: 8) {
+                TimerControls(size: .small)
+                Spacer(minLength: 8)
+                Button("Otevřít časovač", action: openTimer).buttonStyle(.study(.ghost, size: .small))
+            }
+            .padding(.leading, 28).padding(.top, 12)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Palette.line))
+        .shadow(color: .black.opacity(0.07), radius: 12, y: 4)
+        .padding(.horizontal, -16)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dash.timer")
+    }
+
+    @ViewBuilder private var liveCheck: some View {
+        if timer.state.status == .running, let start = timer.state.segmentStart {
+            TimelineView(.periodic(from: Date(timeIntervalSince1970: Double(start) / 1000), by: 15)) { context in
+                BlockCheck(.running(timer.state.progress(at: Int(context.date.timeIntervalSince1970 * 1000))))
+            }
+        } else {
+            BlockCheck(.running(timer.state.progress(at: timer.currentTime())))
+        }
+    }
+
+    @ViewBuilder private var liveTime: some View {
+        if timer.state.status == .running, let start = timer.state.segmentStart {
+            TimelineView(.periodic(from: Date(timeIntervalSince1970: Double(start) / 1000), by: 1)) { context in
+                time(Int(context.date.timeIntervalSince1970 * 1000))
+            }
+        } else {
+            time(timer.currentTime())
+        }
+    }
+
+    private func time(_ now: Int) -> some View {
+        let s = timer.state
+        return Text(Format.clock(ms: s.remaining(at: now) ?? s.elapsed(at: now)))
+            .font(Typo.number(13.5))
+            .foregroundStyle(s.status == .paused ? Palette.text2 : Palette.accent)
+            .padding(.horizontal, 8).frame(height: 24)
+            .background(s.status == .paused ? Palette.panel2 : Palette.accentSoft, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .accessibilityIdentifier("dash.timer.time")
+    }
+
+    private func description(_ s: TimerState) -> String {
+        let now = timer.currentTime()
+        var parts = [timer.mode.name]
+        if s.status == .paused { parts.insert("Pozastaveno", at: 0) }
+        if let left = s.remaining(at: now) { parts.append("končí v \(Format.time(now + left, clock: store.clock))") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Obsazený čas (výuka, událost z kalendáře) – tichý řádek, ať je jasné, proč tu není volno.
+private struct BusyRow: View {
+    @Environment(AppStore.self) private var store
+    let busy: TodayState.Busy
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "calendar.badge.clock").font(.system(size: 12)).foregroundStyle(Palette.text3)
+                .frame(width: 16, height: 16)
+            Text(busy.title).font(.system(size: 13.5)).foregroundStyle(Palette.text2).lineLimit(1)
+            Spacer(minLength: 12)
+            Text("\(Format.time(busy.start, clock: store.clock))–\(Format.time(busy.end, clock: store.clock))")
+                .font(.system(size: 12.5)).monospacedDigit().foregroundStyle(Palette.text3)
+        }
+        .frame(minHeight: 30)
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Měřidlo dneška: tři tenké oblouky (270°, otevřené dole) se stupnicí po čtvrtinách.
-struct DayGauge: View {
-    struct Ring {
-        let label: String
-        let value: Double
-        let color: Color
-    }
-
-    let rings: [Ring]
-    let valueText: String
-    let sub: String
+/// Volná chvíle: s návrhem bloku a tlačítkem „Naplánovat“, jinak jen tichá poznámka.
+private struct GapRow: View {
+    @Environment(AppStore.self) private var store
+    let gap: TodayState.Gap
+    let plan: (TodayState.Suggestion) -> Void
 
     var body: some View {
-        ZStack {
-            Canvas { ctx, size in
-                let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                let scale = size.width / 230
-                var ticks = Path()
-                for f in [0, 0.25, 0.5, 0.75, 1.0] {
-                    let a = Angle.degrees(135 + 270 * f).radians
-                    ticks.move(to: CGPoint(x: c.x + 107 * scale * cos(a), y: c.y + 107 * scale * sin(a)))
-                    ticks.addLine(to: CGPoint(x: c.x + 113 * scale * cos(a), y: c.y + 113 * scale * sin(a)))
+        let clock = store.clock
+        let range = "\(Format.time(gap.start, clock: clock))–\(Format.time(gap.end, clock: clock))"
+        if let s = gap.suggestion {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 12) {
+                    BlockCheck(.suggested)
+                    Text(s.title).font(.system(size: 14)).foregroundStyle(Palette.text2).lineLimit(1).layoutPriority(1)
+                    SubjectCapsule(name: s.subject.name, color: s.subject.color)
+                    Spacer(minLength: 12)
+                    Button("Naplánovat na \(Format.time(s.start, clock: clock))") { plan(s) }
+                        .buttonStyle(.link)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .accessibilityIdentifier("gap.plan.\(gap.start)")
                 }
-                ctx.stroke(ticks, with: .color(Palette.text3.opacity(0.6)), lineWidth: 1)
-                for (i, ring) in rings.enumerated() {
-                    let r = CGFloat([100, 84, 68][i]) * scale
-                    var track = Path()
-                    track.addArc(center: c, radius: r, startAngle: .degrees(135), endAngle: .degrees(405), clockwise: false)
-                    ctx.stroke(track, with: .color(Palette.line), lineWidth: 7 * scale)
-                    let f = min(1, max(0, ring.value))
-                    if f > 0.004 {
-                        var arc = Path()
-                        arc.addArc(center: c, radius: r, startAngle: .degrees(135), endAngle: .degrees(135 + 270 * f), clockwise: false)
-                        ctx.stroke(arc, with: .color(ring.color), style: StrokeStyle(lineWidth: 7 * scale, lineCap: .butt))
-                    }
-                    let a = Angle.degrees(135).radians
-                    ctx.draw(
-                        Text(ring.label).font(.system(size: 11)).foregroundStyle(Palette.text2),
-                        at: CGPoint(x: c.x + r * cos(a) + 9 * scale, y: c.y + r * sin(a) + 1),
-                        anchor: .leading
-                    )
-                }
+                .frame(minHeight: 34)
+                Text(["Volno \(range)", "\(s.minutes) min", s.reasons.first].compactMap { $0 }.joined(separator: " · "))
+                    .font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
+                    .padding(.leading, 28)
+                    .padding(.bottom, 4)
             }
-            VStack(spacing: 2) {
-                DurationText(valueText, size: valueText.count > 9 ? 30 : valueText.count > 6 ? 36 : 46)
-                Text(sub).font(.system(size: 12.5)).foregroundStyle(Palette.text2)
-            }
-            .padding(.bottom, 10)
+            .accessibilityElement(children: .contain)
+        } else {
+            Text("Volno \(range) · \(Format.duration((gap.end - gap.start) / 1000))")
+                .font(Typo.small).foregroundStyle(Palette.text3)
+                .padding(.leading, 28)
+                .frame(minHeight: 28, alignment: .leading)
         }
-        .frame(width: 230, height: 230)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(rings.map { "\($0.label) \(Int((min(1, $0.value) * 100).rounded())) %" }.joined(separator: ", "))
     }
 }
 
-// MARK: - Týden
+// MARK: - Souhrn
 
-private struct WeekSection: View {
+/// Pravý sloupec: dnešek, časovač, týden, předměty, zkoušky a poslední sezení – jen text a tenké čáry.
+private struct SummaryColumn: View {
+    let state: DashboardState
+    let openPage: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 34) {
+            TodaySummary(state: state)
+            DashTimer(openTimer: { openPage("casovac") })
+            WeekSummary(state: state)
+            if !state.weekRows.isEmpty { SubjectsSummary(rows: state.weekRows) }
+            if !state.exams.isEmpty { ExamsSummary(rows: state.exams) }
+            if !state.recent.isEmpty { RecentSummary(rows: Array(state.recent.prefix(4)), openHistory: { openPage("historie") }) }
+        }
+        .font(.system(size: 13))
+    }
+}
+
+private struct SummaryTitle: View {
+    let title: String
+    let detail: String?
+
+    init(_ title: String, detail: String? = nil) {
+        self.title = title
+        self.detail = detail
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.text).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            if let detail { Text(detail).font(.system(size: 12.5)).monospacedDigit().foregroundStyle(Palette.text2) }
+        }
+    }
+}
+
+private struct TodaySummary: View {
     let state: DashboardState
 
     var body: some View {
-        PageSection("Tento týden", accessory: {
-            Text(Format.duration(state.weekSec) + (state.weekGoalSec > 0 ? " z \(Format.duration(state.weekGoalSec))" : "")).monospacedDigit()
-        }) {
-            let max = Swift.max(1, state.weekDays.map(\.sec).max() ?? 1)
-            HStack(alignment: .bottom, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
+            DurationText(Format.duration(state.todaySec), size: 24)
+            Text(line).font(.system(size: 13)).foregroundStyle(Palette.text2)
+            if state.goalSec > 0 {
+                ProgressLine(Double(state.todaySec) / Double(state.goalSec), color: state.todaySec >= state.goalSec ? Palette.success : Palette.accent)
+                    .padding(.top, 10)
+            }
+            if let focus = state.focus7 {
+                Text("Soustředění \(Format.decimal(focus)) z 5 za 7 dní").font(Typo.small).foregroundStyle(Palette.text3).padding(.top, 8)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("dash.today")
+    }
+
+    private var line: String {
+        var parts: [String] = []
+        if state.goalSec > 0 { parts.append(state.todaySec >= state.goalSec ? "dnes, cíl splněn" : "dnes ze \(Format.duration(state.goalSec))") } else { parts.append("dnes") }
+        let streak = state.streak.current
+        if streak > 0 { parts.append("série \(streak) \(Format.plural(streak, "den", "dny", "dní"))") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+private struct WeekSummary: View {
+    let state: DashboardState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SummaryTitle("Tento týden", detail: Format.duration(state.weekSec) + (state.weekGoalSec > 0 ? " z \(Format.duration(state.weekGoalSec))" : ""))
+            let top = max(1, state.weekDays.map(\.sec).max() ?? 1)
+            HStack(alignment: .bottom, spacing: 0) {
                 ForEach(state.weekDays, id: \.label) { d in
                     VStack(spacing: 6) {
-                        RoundedRectangle(cornerRadius: 2)
+                        Capsule()
                             .fill(d.isToday ? Palette.accent : Palette.panel3)
-                            .frame(maxWidth: 26)
-                            .frame(height: Swift.max(2, CGFloat(d.sec) / CGFloat(max) * 40))
-                        Text(d.label).font(.system(size: 11)).foregroundStyle(d.isToday ? Palette.text : Palette.text3)
+                            .frame(width: 6, height: max(3, CGFloat(d.sec) / CGFloat(top) * 44))
+                        Text(String(d.label.prefix(1))).font(.system(size: 10.5, weight: d.isToday ? .bold : .regular))
+                            .foregroundStyle(d.isToday ? Palette.text : Palette.text3)
                     }
                     .frame(maxWidth: .infinity)
                     .help("\(d.label): \(Format.duration(d.sec))")
                 }
             }
-            .frame(height: 62, alignment: .bottom)
-            .padding(.bottom, 6)
+            .frame(height: 64, alignment: .bottom)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Učení po dnech tohoto týdne")
-
-            if state.weekRows.isEmpty {
-                EmptyNote("Tento týden zatím nic", systemImage: "target") { Text("Týdenní cíle se nastavují u předmětů.") }
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(state.weekRows.enumerated()), id: \.element.id) { i, row in
-                        ListRow(divider: i < state.weekRows.count - 1) {
-                            SubjectTag(name: row.subject.name, color: row.subject.color).frame(width: 170, alignment: .leading)
-                            ProgressLine(row.goalSec > 0 ? row.fraction : 0, color: Palette.subject(row.subject.color))
-                            Text(Format.duration(row.sec) + (row.goalSec > 0 ? " z \(Format.duration(row.goalSec))" : ""))
-                                .font(Typo.small).monospacedDigit().foregroundStyle(Palette.text2)
-                                .frame(width: 140, alignment: .trailing)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                }
+            .accessibilityLabel(state.weekDays.map { "\($0.label) \(Format.duration($0.sec))" }.joined(separator: ", "))
+            if let delta = state.weekDelta {
+                Text("\(delta >= 0 ? "+" : "−")\(Int((abs(delta) * 100).rounded())) % proti minulému týdnu")
+                    .font(Typo.small).foregroundStyle(Palette.text3)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dash.week")
     }
 }
 
-// MARK: - Seznamy
-
-private struct PlanSection: View {
-    @Environment(TimerStore.self) private var timer
-    let rows: [DashboardState.PlanRow]
-    let start: (DashboardState.PlanRow) -> Void
-    let planDay: () -> Void
+private struct SubjectsSummary: View {
+    let rows: [DashboardState.SubjectProgress]
 
     var body: some View {
-        PageSection("Dnešní plán", accessory: {
-            Button("Naplánovat", action: planDay).buttonStyle(.denik(.ghost, size: .small)).accessibilityIdentifier("dash.planDay")
-        }) {
-            if rows.isEmpty {
-                EmptyNote("Na dnešek nic", systemImage: "calendar")
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, b in
-                        ListRow(divider: i < rows.count - 1) {
-                            Text(b.time).font(Typo.serifNumber(18)).frame(width: 52, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 2) {
-                                SubjectTag(name: b.subject.name, color: b.subject.color)
-                                if !b.title.isEmpty { Text(b.title).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1) }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            Text("\(b.durationMin) min").font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3)
-                            if b.done {
-                                Image(systemName: "checkmark").foregroundStyle(Palette.success).accessibilityLabel("Hotovo")
-                            } else if timer.state.canSwitch {
-                                Button { start(b) } label: { Image(systemName: "play.fill").font(.system(size: 10)) }
-                                    .buttonStyle(.denik(.normal, size: .small))
-                                    .help("Spustit časovač")
-                                    .accessibilityLabel("Spustit časovač")
-                                    .accessibilityIdentifier("plan.start.\(b.id)")
-                            }
-                        }
-                        .opacity(b.done ? 0.5 : 1)
-                        .accessibilityElement(children: .contain)
-                    }
+        VStack(alignment: .leading, spacing: 11) {
+            SummaryTitle("Předměty")
+            ForEach(rows) { row in
+                HStack(spacing: 10) {
+                    ProgressPie(row.fraction, color: Palette.subject(row.subject.color))
+                    Text(row.subject.name).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(Format.duration(row.sec) + (row.goalSec > 0 ? " z \(Format.duration(row.goalSec))" : ""))
+                        .monospacedDigit().foregroundStyle(Palette.text2)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
     }
 }
 
-private struct ExamsSection: View {
+private struct ExamsSummary: View {
     let rows: [DashboardState.ExamRow]
 
     var body: some View {
-        PageSection("Zkoušky") {
-            if rows.isEmpty {
-                EmptyNote("Žádné zkoušky", systemImage: "graduationcap")
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, e in
-                        ListRow(divider: i < rows.count - 1) {
-                            VStack(spacing: 0) {
-                                Text("\(e.daysLeft)").font(Typo.serifNumber(24))
-                                    .foregroundStyle(e.daysLeft <= 3 ? Palette.danger : e.daysLeft <= 10 ? Palette.warn : Palette.text)
-                                Text(Format.plural(e.daysLeft, "den", "dny", "dní")).font(.system(size: 10.5)).foregroundStyle(Palette.text3)
-                            }
-                            .frame(width: 44)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(e.name).lineLimit(1)
-                                SubjectTag(name: e.subject.name, color: e.subject.color).font(Typo.small).foregroundStyle(Palette.text3)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(e.day).font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
+        VStack(alignment: .leading, spacing: 11) {
+            SummaryTitle("Zkoušky")
+            ForEach(rows) { e in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(e.name).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(when(e)).monospacedDigit()
+                        .foregroundStyle(e.daysLeft <= 3 ? Palette.danger : e.daysLeft <= 10 ? Palette.warn : Palette.text2)
                 }
+                .help("\(e.subject.name) · \(e.day)")
+                .accessibilityElement(children: .combine)
             }
         }
     }
+
+    private func when(_ e: DashboardState.ExamRow) -> String {
+        e.daysLeft == 0 ? "dnes" : e.daysLeft == 1 ? "zítra" : "za \(e.daysLeft) \(Format.plural(e.daysLeft, "den", "dny", "dní"))"
+    }
 }
 
-private struct RecentSection: View {
+private struct RecentSummary: View {
     let rows: [SessionRow]
     let openHistory: () -> Void
 
     var body: some View {
-        PageSection("Poslední sezení", accessory: { Button("Historie", action: openHistory).buttonStyle(.link) }) {
-            if rows.isEmpty {
-                EmptyNote("Zatím žádná sezení", systemImage: "book")
-            } else {
-                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 0) {
-                    GridRow {
-                        ForEach(["Kdy", "Předmět", "Téma", "Režim", "Soustředění", "Čas"], id: \.self) { h in
-                            Text(h).gridColumnAlignment(h == "Soustředění" || h == "Čas" ? .trailing : .leading)
-                        }
-                    }
-                    .font(Typo.small).foregroundStyle(Palette.text3)
-                    .padding(.bottom, 6)
-                    ForEach(rows) { s in
-                        Divider().overlay(Palette.line).gridCellUnsizedAxes(.horizontal)
-                        GridRow {
-                            Text(s.when).monospacedDigit().foregroundStyle(Palette.text3)
-                            SubjectTag(name: s.subject.name, color: s.subject.color)
-                            // Téma dostane zbytek šířky – tabulka vyplní stránku i na velkém monitoru.
-                            Text(s.topic.isEmpty ? "—" : s.topic).foregroundStyle(s.topic.isEmpty ? Palette.text3 : Palette.text2).lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Text(s.mode).foregroundStyle(Palette.text3)
-                            Text(s.focus.map { "\($0)/5" } ?? "—").monospacedDigit()
-                            Text(s.duration).monospacedDigit()
-                        }
-                        .padding(.vertical, 8)
-                    }
+        VStack(alignment: .leading, spacing: 11) {
+            HStack {
+                SummaryTitle("Naposledy")
+                Button("Historie", action: openHistory).buttonStyle(.link).font(.system(size: 12.5))
+            }
+            ForEach(rows) { s in
+                HStack(spacing: 10) {
+                    Circle().fill(Palette.subject(s.subject.color)).frame(width: 7, height: 7)
+                    Text(s.topic.isEmpty ? s.subject.name : s.topic).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(s.duration).monospacedDigit().foregroundStyle(Palette.text2)
                 }
-                .font(.system(size: 13))
-                .accessibilityIdentifier("dash.recent")
+                .help("\(s.subject.name) · \(s.when)")
+                .accessibilityElement(children: .combine)
             }
         }
+        .accessibilityIdentifier("dash.recent")
     }
 }
 
-// MARK: - Bez dat
-
-private struct ConnectPrompt: View {
-    let openSettings: () -> Void
-
-    var body: some View {
-        PageSection("Připoj svoje data") {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Aplikace pro Mac používá stejná data jako webová aplikace – soukromé repo na GitHubu. Stačí vložit token a data se načtou.")
-                    .foregroundStyle(Palette.text2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Připojit GitHub", action: openSettings)
-                    .buttonStyle(.primary)
-                    .accessibilityIdentifier("dash.connect")
-            }
-            .frame(maxWidth: 560, alignment: .leading)
-        }
-    }
-}
-
-// MARK: - Časovač
-
-/// Časovač na přehledu – jen čas, stav a ovládání; celý ciferník je na stránce Časovač (`DashTimer`).
+/// Časovač v souhrnu: stav a čas; když blok běží, ovládání je v kartě v seznamu.
 private struct DashTimer: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
@@ -450,45 +608,29 @@ private struct DashTimer: View {
 
     var body: some View {
         let state = timer.state
-        let idle = state.status == .idle
-        PageSection("Časovač", accessory: {
-            Button("Otevřít", action: openTimer).buttonStyle(.link).font(Typo.small)
-        }) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 16) {
-                    if state.status == .running, let start = state.segmentStart {
-                        TimelineView(.periodic(from: Date(timeIntervalSince1970: Double(start) / 1000), by: 1)) { context in
-                            clock(Int(context.date.timeIntervalSince1970 * 1000))
-                        }
-                    } else {
-                        clock(timer.currentTime())
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
+        if !state.isStudying {
+            Button(action: openTimer) {
+                HStack(spacing: 10) {
+                    PageGlyphView(.timer, size: 15)
+                    VStack(alignment: .leading, spacing: 1) {
                         Text(status(state)).foregroundStyle(Palette.text)
                         Text(detail(state)).font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 8)
+                    Text(clock(state)).font(Typo.number(13.5)).foregroundStyle(state.phase == .work ? Palette.text : Palette.breakColor)
+                        .accessibilityIdentifier("dash.timer.time")
                 }
-                if idle && state.subjectId.isEmpty {
-                    Button("Vybrat předmět", action: openTimer).buttonStyle(.denik(.normal))
-                } else {
-                    TimerControls(size: .small)
-                }
+                .contentShape(Rectangle())
             }
-            .padding(.top, 4)
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("dash.timer")
         }
-        .accessibilityIdentifier("dash.timer")
     }
 
-    private func clock(_ now: Int) -> some View {
-        let state = timer.state
-        let text = state.status == .idle
-            ? Format.clock(ms: timer.mode.workDurationMs ?? 0)
-            : Format.clock(ms: state.remaining(at: now) ?? state.elapsed(at: now))
-        return Text(text)
-            .font(Typo.serifNumber(40))
-            .foregroundStyle(state.phase == .work ? Palette.text : Palette.breakColor)
-            .accessibilityIdentifier("dash.timer.time")
+    private func clock(_ s: TimerState) -> String {
+        let now = timer.currentTime()
+        return s.status == .idle ? Format.clock(ms: timer.mode.workDurationMs ?? 0) : Format.clock(ms: s.remaining(at: now) ?? s.elapsed(at: now))
     }
 
     private func status(_ s: TimerState) -> String {
@@ -506,8 +648,21 @@ private struct DashTimer: View {
     }
 }
 
-/// Otevřený ranní plán s návrhem z okamžiku otevření.
-struct DayPlanRequest: Identifiable {
-    let id = UUID()
-    let items: [DayPlanItem]
+// MARK: - Bez dat
+
+private struct ConnectPrompt: View {
+    let openSettings: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Připoj svoje data").font(Typo.sectionTitle)
+            Text("Aplikace pro Mac používá stejná data jako webová aplikace – soukromé repo na GitHubu. Stačí vložit token a data se načtou.")
+                .foregroundStyle(Palette.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Připojit GitHub", action: openSettings)
+                .buttonStyle(.primary)
+                .accessibilityIdentifier("dash.connect")
+        }
+        .frame(maxWidth: 560, alignment: .leading)
+    }
 }

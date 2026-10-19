@@ -46,15 +46,15 @@ struct DayPlanSheet: View {
             dayWindow(doc.settings)
         } footer: {
             Button { propose(extra: extra) } label: { Label("Navrhnout znovu", systemImage: "arrow.counterclockwise") }
-                .buttonStyle(.denik(.ghost))
+                .buttonStyle(.study(.ghost))
                 .accessibilityIdentifier("dayplan.again")
             Spacer()
-            Button("Zrušit") { dismiss() }.buttonStyle(.denik(.ghost)).keyboardShortcut(.cancelAction)
+            Button("Zrušit") { dismiss() }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
             Button {
                 extra += 1
                 propose(extra: extra)
             } label: { Label("Další blok", systemImage: "plus") }
-                .buttonStyle(.denik(.normal))
+                .buttonStyle(.study(.normal))
                 .accessibilityIdentifier("dayplan.more")
             Button(action: save) { Label("Uložit do kalendáře", systemImage: "calendar.badge.checkmark") }
                 .buttonStyle(.primary)
@@ -179,7 +179,7 @@ private struct DayPlanRow: View {
             .labelsHidden()
             .fixedSize()
             Button { remove() } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
-                .buttonStyle(.denik(.ghost, size: .small))
+                .buttonStyle(.study(.ghost, size: .small))
                 .help("Odebrat")
                 .accessibilityLabel("Odebrat")
         }

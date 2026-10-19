@@ -1,17 +1,17 @@
 import SwiftUI
 
-/// Tlačítka ve vzhledu Deník (`.btn` na webu): zaoblená, hlavní akce jantarová, pauza zelená.
-public struct DenikButtonStyle: ButtonStyle {
+/// Tlačítka: zaoblený obdélník, hlavní akce modrá, pauza tyrkysová, ostatní s jemným obrysem.
+public struct StudyButtonStyle: ButtonStyle {
     public enum Kind: Sendable {
-        /// `.btn.primary` – hlavní akce
+        /// hlavní akce
         case primary
-        /// `.btn.break` – pauza
+        /// pauza
         case rest
-        /// `.btn` – s obrysem
+        /// s obrysem
         case normal
-        /// `.btn.ghost` – bez obrysu
+        /// bez obrysu
         case ghost
-        /// `.btn.danger` – smazání
+        /// smazání
         case danger
     }
 
@@ -35,26 +35,28 @@ public struct DenikButtonStyle: ButtonStyle {
             .foregroundStyle(foreground)
             .padding(.horizontal, padding)
             .frame(height: height)
-            .background(background(pressed: configuration.isPressed), in: Capsule())
-            .overlay(Capsule().strokeBorder(border))
+            .background(background(pressed: configuration.isPressed), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border))
             .opacity(isEnabled ? 1 : 0.45)
-            .contentShape(Capsule())
+            .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .onHover { hovering = $0 }
     }
 
     private var height: CGFloat {
         switch size {
-        case .small: 28
-        case .regular: 32
-        case .large: 44
+        case .small: 26
+        case .regular: 30
+        case .large: 38
         }
     }
 
+    private var radius: CGFloat { size == .large ? 9 : 7 }
+
     private var padding: CGFloat {
         switch size {
-        case .small: 11
-        case .regular: 14
-        case .large: 22
+        case .small: 10
+        case .regular: 13
+        case .large: 18
         }
     }
 
@@ -62,14 +64,14 @@ public struct DenikButtonStyle: ButtonStyle {
         switch size {
         case .small: 12.5
         case .regular: 13
-        case .large: 14.5
+        case .large: 14
         }
     }
 
     private var foreground: Color {
         switch kind {
         case .primary: Palette.accentInk
-        case .rest: Color(red: 4 / 255, green: 20 / 255, blue: 11 / 255)
+        case .rest: .white
         case .normal: Palette.text
         case .ghost: hovering && isEnabled ? Palette.text : Palette.text2
         case .danger: Palette.danger
@@ -81,9 +83,9 @@ public struct DenikButtonStyle: ButtonStyle {
         return switch kind {
         case .primary: Palette.accent.opacity(active ? 0.88 : 1)
         case .rest: Palette.breakColor.opacity(active ? 0.88 : 1)
-        case .normal: active ? Palette.panel2 : .clear
+        case .normal: active ? Palette.panel2 : Palette.card
         case .ghost: active ? Palette.panel3 : .clear
-        case .danger: active ? Palette.danger.opacity(0.1) : .clear
+        case .danger: active ? Palette.danger.opacity(0.1) : Palette.card
         }
     }
 
@@ -98,11 +100,11 @@ public struct DenikButtonStyle: ButtonStyle {
     }
 }
 
-extension ButtonStyle where Self == DenikButtonStyle {
-    /// Hlavní akce (`.btn.primary`).
-    public static var primary: DenikButtonStyle { DenikButtonStyle(.primary) }
+extension ButtonStyle where Self == StudyButtonStyle {
+    /// Hlavní akce.
+    public static var primary: StudyButtonStyle { StudyButtonStyle(.primary) }
 
-    public static func denik(_ kind: DenikButtonStyle.Kind = .normal, size: DenikButtonStyle.Size = .regular) -> DenikButtonStyle {
-        DenikButtonStyle(kind, size: size)
+    public static func study(_ kind: StudyButtonStyle.Kind = .normal, size: StudyButtonStyle.Size = .regular) -> StudyButtonStyle {
+        StudyButtonStyle(kind, size: size)
     }
 }

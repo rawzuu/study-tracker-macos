@@ -46,19 +46,19 @@ public struct AfterBlockSheet: View {
             }
             if settings.askFocusRating {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("SOUSTŘEDĚNÍ").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
+                    Text("Jak ses soustředil?").fontWeight(.semibold)
                     HStack(spacing: 6) {
                         ForEach(1...5, id: \.self) { n in
                             Button { focus = n } label: {
                                 VStack(spacing: 3) {
-                                    Text("\(n)").font(Typo.serifNumber(18))
+                                    Text("\(n)").font(Typo.number(18))
                                     Text(Format.focusLabels[n]).font(.system(size: 10.5)).foregroundStyle(Palette.text2).lineLimit(1).minimumScaleFactor(0.8)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(focus == n ? Palette.panel3 : .clear, in: RoundedRectangle(cornerRadius: 8))
-                                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(focus == n ? Palette.text2 : Palette.line))
-                                .contentShape(RoundedRectangle(cornerRadius: 8))
+                                .foregroundStyle(focus == n ? Palette.accent : Palette.text)
+                                .background(focus == n ? Palette.accentSoft : Palette.panel2.opacity(0.5), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("rating.focus.\(n)")
@@ -73,7 +73,7 @@ public struct AfterBlockSheet: View {
             HStack {
                 Spacer()
                 Button("Přeskočit") { timer.skipRating() }
-                    .buttonStyle(.denik(.ghost))
+                    .buttonStyle(.study(.ghost))
                     .accessibilityIdentifier("rating.skip")
                 Button("Uložit") { save() }
                     .buttonStyle(.primary)

@@ -1,27 +1,40 @@
 import AppKit
 import SwiftUI
 
-/// Barvy webového vzhledu „Deník“ (`src/styles/global.css`): teplá tmavá (primární) a papírová světlá.
-/// Jeden jantarový akcent jen pro akce a „teď“; zelená = pauza/hotovo, modrá = soustředění.
+/// Barvy vzhledu „Seznam“: neutrální plochy (bílá / grafit), jeden modrý akcent pro výběr a akce,
+/// červená jen pro „teď“ a blížící se termín. Ostatní barvu nesou předměty (z dat).
 public enum Palette {
-    public static let bg = dynamic(dark: 0x12110F, light: 0xF6F3EE)
-    public static let panel = dynamic(dark: 0x1A1916, light: 0xFBF9F5)
-    public static let panel2 = dynamic(dark: 0x201E1B, light: 0xEFEBE4)
-    public static let panel3 = dynamic(dark: 0x282622, light: 0xE6E1D8)
-    public static let line = dynamic(dark: 0x22201D, light: 0xE4DFD6)
-    public static let lineStrong = dynamic(dark: 0x302D29, light: 0xD3CCC0)
-    public static let text = dynamic(dark: 0xEBE6DD, light: 0x1D1B18)
-    public static let text2 = dynamic(dark: 0xA39D92, light: 0x5F5A52)
-    public static let text3 = dynamic(dark: 0x837D73, light: 0x6E685F)
-    public static let accent = dynamic(dark: 0xE3A641, light: 0x96620F)
-    public static let accentInk = dynamic(dark: 0x1C1206, light: 0xFFFFFF)
-    public static let accentSoft = dynamic(dark: 0xE3A641, light: 0x96620F, alpha: (0.12, 0.09))
-    public static let breakColor = dynamic(dark: 0x8FAE8B, light: 0x4F7A4B)
-    public static let focus = dynamic(dark: 0x9DB8D9, light: 0x4F6F93)
-    public static let success = breakColor
-    public static let warn = dynamic(dark: 0xD9925A, light: 0xA8571F)
-    public static let danger = dynamic(dark: 0xE0786B, light: 0xB5473A)
-    public static let heat0 = dynamic(dark: 0x1E1C19, light: 0xEBE6DD)
+    /// Plocha stránky.
+    public static let bg = dynamic(dark: 0x1E1F22, light: 0xFFFFFF)
+    /// Druhá plocha (postranní sloupec, souhrn).
+    public static let panel = dynamic(dark: 0x232427, light: 0xF7F7F8)
+    /// Jemná výplň (štítky, pole, kolejnice ukazatelů).
+    public static let panel2 = dynamic(dark: 0x2E2F33, light: 0xF0F1F3)
+    /// Najetí myší a výběr.
+    public static let panel3 = dynamic(dark: 0x37383D, light: 0xE6E7EA)
+    /// Karta nad plochou (rozbalený běžící blok, plovoucí panely).
+    public static let card = dynamic(dark: 0x2A2B2F, light: 0xFFFFFF)
+    public static let line = dynamic(dark: 0x303136, light: 0xEBEBEE)
+    public static let lineStrong = dynamic(dark: 0x3E3F44, light: 0xD8D8DD)
+    public static let text = dynamic(dark: 0xECECEE, light: 0x1D1D1F)
+    public static let text2 = dynamic(dark: 0xA3A4A9, light: 0x66666B)
+    public static let text3 = dynamic(dark: 0x7E7F84, light: 0x88888D)
+    public static let accent = dynamic(dark: 0x4C8DF6, light: 0x2F6FEB)
+    public static let accentInk = dynamic(dark: 0xFFFFFF, light: 0xFFFFFF)
+    public static let accentSoft = dynamic(dark: 0x4C8DF6, light: 0x2F6FEB, alpha: (0.16, 0.10))
+    /// Pauza a odpočinek.
+    public static let breakColor = dynamic(dark: 0x3FB8AA, light: 0x23968A)
+    /// Hodnocení soustředění.
+    public static let focus = dynamic(dark: 0x9B83E8, light: 0x7356CF)
+    /// Splněný cíl.
+    public static let success = dynamic(dark: 0x4CC06A, light: 0x2E9348)
+    /// Termín se blíží (do deseti dní).
+    public static let warn = dynamic(dark: 0xF08A4B, light: 0xC7581E)
+    /// „Teď“, termín do tří dní, mazání.
+    public static let danger = dynamic(dark: 0xFF6B63, light: 0xD93F3A)
+    public static let heat0 = dynamic(dark: 0x2A2B2F, light: 0xF0F1F3)
+    /// Obsazený čas z jiných kalendářů (šrafování).
+    public static let hatch = dynamic(dark: 0xFFFFFF, light: 0x000000, alpha: (0.055, 0.045))
 
     /// Barva předmětu z dat (`#rrggbb`); neplatná hodnota → šedá jako na webu.
     public static func subject(_ hex: String) -> Color {
@@ -47,7 +60,7 @@ public enum Palette {
     }
 
     /// Text světlého vzhledu – s ním se v kalendáři ztmavují názvy předmětů na světlém pozadí.
-    public static let lightText: UInt32 = 0x1D1B18
+    public static let lightText: UInt32 = 0x1D1D1F
 
     private static func dynamic(dark: UInt32, light: UInt32, alpha: (Double, Double) = (1, 1)) -> Color {
         let d = NSColor(rgb: dark, alpha: alpha.0)

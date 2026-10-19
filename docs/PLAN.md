@@ -7,7 +7,7 @@ Schváleno 17. 10. 2026. Cíl: plnohodnotná nativní aplikace se **stejnými fu
 | | Rozhodnutí |
 |---|---|
 | Repo | veřejné (`rawzuu/study-tracker-macos`), bez jakýchkoli uživatelských dat |
-| Vzhled | nativní Mac (boční panel, toolbar, okno Nastavení, menu, zkratky) s paletou a písmem webového vzhledu „Deník“ |
+| Vzhled | nativní Mac (boční panel, toolbar, okno Nastavení, menu, zkratky); od v0.7.0 vlastní vzhled „Seznam“ (jako Things 3: den jako seznam, systémové písmo, modrý akcent, barvu nesou předměty; kalendář jako Notion Calendar; volné chvíle s návrhem bloku) – schváleno 19. 10. 2026 |
 | Distribuce | zatím jen pro autora – podpis certifikátem Apple Development, bez notarizace |
 | Úložiště | GRDB (ne SwiftData) – zachová původní JSON každého záznamu |
 | Nativní novinky | menu bar, Apple Kalendář (EventKit), Zkratky/Siri, widgety – **až po paritě a po schválení** |

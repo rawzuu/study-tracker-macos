@@ -6,7 +6,7 @@ import Engine
 import SwiftUI
 import Sync
 
-/// Stránka Časovač (`TimerPage` na webu): kruh, ovládání, co se učíš a režim.
+/// Stránka Časovač: kruh s odpočtem a ovládáním uprostřed, vpravo co se učíš, režim a šum.
 public struct TimerView: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
@@ -55,38 +55,50 @@ public struct TimerView: View {
         let metrics = PageMetrics(width: size.width)
         // Na velkém monitoru jsou nastavení ve dvou sloupcích vedle kruhu, jinak v jednom.
         let sideColumns = zen ? 0 : metrics.size == .wide ? 2 : 1
-        return VStack(alignment: .leading, spacing: 28) {
-            if !zen { header }
-            if store.sync.mode == .readOnly && store.isConnected {
-                Banner("Režim jen pro čtení: bloky se uloží jen na tomto Macu. Na GitHub odejdou, až v Nastavení vypneš „Jen čtení“.", systemImage: "lock", tone: .warn)
-            }
-            HStack(alignment: .top, spacing: 40) {
-                timerCard(ringSize: ringSize(size, metrics: metrics, sideColumns: sideColumns))
-                if sideColumns == 2 {
-                    VStack(alignment: .leading, spacing: 32) {
-                        NextUpInline()
-                        studyingSection
-                        NoiseSection()
-                    }
-                    .frame(width: Self.sideWidth)
-                    modeSection.frame(width: Self.sideWidth)
-                } else if sideColumns == 1 {
-                    VStack(alignment: .leading, spacing: 32) {
-                        NextUpInline()
-                        studyingSection
-                        modeSection
-                        NoiseSection()
-                    }
-                    .frame(width: 380)
+        return HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 24) {
+                header
+                if store.sync.mode == .readOnly && store.isConnected {
+                    Banner("Režim jen pro čtení: bloky se uloží jen na tomto Macu. Na GitHub odejdou, až v Nastavení vypneš „Jen čtení“.", systemImage: "lock", tone: .warn)
                 }
+                stage(ringSize: ringSize(size, metrics: metrics, sideColumns: sideColumns))
+            }
+            .padding(.leading, metrics.size == .compact ? metrics.padding : 64)
+            .padding(.trailing, metrics.size == .compact ? metrics.padding : 48)
+            .padding(.vertical, 48)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if sideColumns > 0 {
+                Group {
+                    if sideColumns == 2 {
+                        HStack(alignment: .top, spacing: 40) {
+                            VStack(alignment: .leading, spacing: 34) {
+                                NextUpInline()
+                                studyingSection
+                                NoiseSection()
+                            }
+                            modeSection
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 34) {
+                            NextUpInline()
+                            studyingSection
+                            modeSection
+                            NoiseSection()
+                        }
+                    }
+                }
+                .padding(.horizontal, metrics.size == .wide ? 44 : 32)
+                .padding(.top, 60)
+                .padding(.bottom, 40)
+                .frame(width: sideColumns == 2 ? 2 * Self.sideWidth + 40 + 88 : 380, alignment: .topLeading)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .overlay(alignment: .leading) { Rectangle().fill(Palette.line).frame(width: 1) }
             }
         }
-        .padding(.horizontal, metrics.padding)
-        .padding(.vertical, 36)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: size.height, alignment: .topLeading)
     }
 
-    private static let sideWidth: CGFloat = 400
+    private static let sideWidth: CGFloat = 360
 
     /// Píše se do textového pole (téma)? Pole v AppKitu edituje sdílený `NSTextView` okna.
     private var isEditingText: Bool {
@@ -96,8 +108,8 @@ public struct TimerView: View {
     /// Kruh roste s oknem: na notebooku ~480 bodů, na velkém monitoru až 760 (v zen režimu 900).
     private func ringSize(_ size: CGSize, metrics: PageMetrics, sideColumns: Int) -> CGFloat {
         let byHeight = min(zen ? 900 : 760, max(300, size.height * (zen ? 0.72 : 0.56)))
-        let side: CGFloat = sideColumns == 2 ? 2 * (Self.sideWidth + 40) : sideColumns == 1 ? 420 : 0
-        let byWidth = metrics.contentWidth - side - 48
+        let side: CGFloat = sideColumns == 2 ? 2 * Self.sideWidth + 40 + 88 : sideColumns == 1 ? 380 : 0
+        let byWidth = size.width - side - 160
         return max(260, min(byHeight, byWidth))
     }
 
@@ -107,33 +119,29 @@ public struct TimerView: View {
         let now = store.nowMs
         let today = Stats.totalSec(Stats.inRange(store.document.alive(Session.self), from: store.clock.startOfDay(now), to: now + 1))
         let goal = store.document.settings.dailyGoalMin * 60
-        return PageHeader("Časovač") {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("DNES").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
-                DurationText(Format.duration(today), size: 24)
-                if goal > 0 {
-                    Text("ze \(Format.duration(goal))").font(Typo.body).foregroundStyle(Palette.text3)
-                }
+        let subtitle = "Dnes \(Format.duration(today))" + (goal > 0 ? " ze \(Format.duration(goal))" : "") + " · \(timer.mode.name)"
+        return PageHeader("Časovač", subtitle: subtitle, glyph: .timer) {
+            Button { withAnimation(.easeOut(duration: 0.2)) { zen.toggle() } } label: {
+                Label(zen ? "Ukončit zen" : "Zen", systemImage: zen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("timer.today")
+            .buttonStyle(.study(.ghost, size: .small))
+            .help(zen ? "Ukončit zen režim" : "Zen režim – jen kruh, bez nastavení")
         }
+        .accessibilityIdentifier("timer.today")
     }
 
     // MARK: - Kruh a ovládání
 
-    private func timerCard(ringSize: CGFloat) -> some View {
+    private func stage(ringSize: CGFloat) -> some View {
         let state = timer.state
-        return VStack(spacing: 20) {
+        return VStack(spacing: 22) {
             TimerFace(size: ringSize)
             if state.status != .idle, !state.subjectId.isEmpty {
                 let subject = store.document.record(Subject.self, id: state.subjectId)
                 HStack(spacing: 8) {
-                    Circle().fill(Palette.subject(subject?.color ?? "#9aa3ad")).frame(width: 8, height: 8)
-                    Text(subject?.name ?? "Smazaný předmět").fontWeight(.medium)
-                    if !state.topic.isEmpty { Text("/ \(state.topic)").foregroundStyle(Palette.text3) }
+                    Text(state.topic.isEmpty ? subject?.name ?? "Smazaný předmět" : state.topic).font(.system(size: 15, weight: .semibold))
+                    SubjectCapsule(name: subject?.name ?? "Smazaný předmět", color: subject?.color ?? "#9aa3ad")
                 }
-                .font(.system(size: 14))
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("timer.studying")
             }
@@ -142,7 +150,7 @@ public struct TimerView: View {
                 Button { timer.addInterruption() } label: {
                     Label { Text("Vyrušení \(state.interruptions)").monospacedDigit() } icon: { Image(systemName: "bell.slash") }
                 }
-                .buttonStyle(.denik(.ghost, size: .small))
+                .buttonStyle(.study(.ghost, size: .small))
                 .help("Zaznamenej, když tě něco vyruší")
                 .accessibilityIdentifier("timer.interruption")
             }
@@ -155,24 +163,12 @@ public struct TimerView: View {
                 .frame(maxWidth: 460)
             }
             if state.status == .idle {
-                Text(state.subjectId.isEmpty ? "Nejdřív vyber předmět." : "Mezerník spustí i pozastaví.")
+                Text(state.subjectId.isEmpty ? "Nejdřív vpravo vyber předmět." : "Mezerník spustí i pozastaví.")
                     .font(Typo.small).foregroundStyle(Palette.text3)
             }
         }
-        .padding(.vertical, 40)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, minHeight: 560)
-        .background(Palette.panel, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Palette.line))
-        .overlay(alignment: .topTrailing) {
-            Button { zen.toggle() } label: {
-                Image(systemName: zen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-            }
-            .buttonStyle(.denik(.ghost, size: .small))
-            .help(zen ? "Ukončit zen režim" : "Zen režim")
-            .accessibilityLabel(zen ? "Ukončit zen režim" : "Zen režim")
-            .padding(10)
-        }
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Co se učíš
@@ -195,7 +191,7 @@ public struct TimerView: View {
                     .disabled(lockedSubject)
                     .accessibilityIdentifier("timer.subject")
                     Button { newSubject = SubjectDraft(newIn: store.document) } label: { Image(systemName: "plus") }
-                        .buttonStyle(.denik(.normal, size: .small))
+                        .buttonStyle(.study(.normal, size: .small))
                         .help("Nový předmět")
                         .accessibilityLabel("Nový předmět")
                         .disabled(lockedSubject || store.sync.mode == .readOnly)
@@ -249,7 +245,7 @@ public struct TimerView: View {
                 Button("Nastavit jako výchozí") {
                     store.updateSettings { $0.defaultMode = state.modeId }
                 }
-                .buttonStyle(.denik(.ghost, size: .small))
+                .buttonStyle(.study(.ghost, size: .small))
                 .disabled(store.sync.mode == .readOnly)
             }
         }) {
@@ -266,7 +262,7 @@ public struct TimerView: View {
     }
 }
 
-/// Jeden režim v mřížce (`.mode` na webu).
+/// Jeden režim v mřížce: vybraný modře, ostatní při najetí jemně podbarvené.
 private struct ModeButton: View {
     let mode: TimerMode
     let selected: Bool
@@ -284,14 +280,13 @@ private struct ModeButton: View {
                 }
                 Text(mode.tagline).font(.system(size: 11)).monospacedDigit().foregroundStyle(Palette.text3).lineLimit(2)
             }
-            .foregroundStyle(Palette.text)
+            .foregroundStyle(selected ? Palette.accent : Palette.text)
             .padding(.horizontal, 11)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
-            .background(selected || (hovering && isEnabled) ? Palette.panel2 : .clear, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? Palette.text3 : hovering && isEnabled ? Palette.lineStrong : Palette.line))
+            .background(selected ? Palette.accentSoft : hovering && isEnabled ? Palette.panel2 : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .opacity(!isEnabled && !selected ? 0.4 : 1)
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -318,14 +313,12 @@ struct TimerFace: View {
     }
 }
 
-/// Dílky a stupnice kruhu (`.seg`, `.ring-label` na webu, viewBox 200 × 200).
-private struct RingDial: View, Equatable {
-    nonisolated let segments: [TimerRingModel.Segment]
-    nonisolated let labels: [Int]
-    nonisolated let fractions: [Double]
+/// Kolej a oblouk kruhu. Překreslí se, jen když se oblouk viditelně posune (po ~1/360 obvodu).
+private struct RingArc: View, Equatable {
+    nonisolated let step: Int
     nonisolated let tone: TimerRingModel.Tone
 
-    private var activeColor: Color {
+    private var color: Color {
         switch tone {
         case .work, .idle: Palette.accent
         case .rest: Palette.breakColor
@@ -334,63 +327,49 @@ private struct RingDial: View, Equatable {
     }
 
     var body: some View {
-        Canvas { context, canvas in
-            let scale = canvas.width / 200
-            let center = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
-            let n = segments.count
-            let step = 360 / Double(n)
-            let gap = min(1.6, step * 0.22)
-            for (i, segment) in segments.enumerated() {
-                let from = -90 + Double(i) * step + gap / 2
-                let to = -90 + Double(i + 1) * step - gap / 2
-                var path = Path()
-                path.addArc(center: center, radius: 80 * scale, startAngle: .degrees(from), endAngle: .degrees(to), clockwise: false)
-                let color: Color = switch segment {
-                case .off: Palette.lineStrong
-                case .lit: activeColor
-                case .now: activeColor.opacity(0.45)
-                }
-                context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 9 * scale, lineCap: .butt))
+        GeometryReader { geo in
+            let line = max(6, geo.size.width * 0.022)
+            ZStack {
+                Circle().stroke(Palette.panel2, lineWidth: line)
+                Circle()
+                    .trim(from: 0, to: Double(step) / 360)
+                    .stroke(color, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
             }
-            for (minute, fraction) in zip(labels, fractions) {
-                let a = (-90 + fraction * 360) * .pi / 180
-                let point = CGPoint(x: center.x + 94 * scale * cos(a), y: center.y + 94 * scale * sin(a))
-                context.draw(Text("\(minute)").font(.system(size: 7.5 * scale)).monospacedDigit().foregroundStyle(Palette.text3), at: point)
-            }
+            .padding(line / 2)
         }
     }
 }
 
-/// Kreslený kruh (`.ring` na webu): ciferník a čas uprostřed.
+/// Kruh časovače: oblouk postupu, nad časem fáze, pod ním režim a kola.
 struct TimerRing: View {
     let model: TimerRingModel
     let size: CGFloat
 
     var body: some View {
         ZStack {
-            // Ciferník se mění nejvýš jednou za (půl)minutu – každou sekundu se překreslí jen čas uprostřed.
-            RingDial(segments: model.segments, labels: model.labels.map(\.minute), fractions: model.labels.map(\.fraction), tone: model.tone)
+            RingArc(step: Int((min(1, max(0, model.progress)) * 360).rounded()), tone: model.tone)
                 .equatable()
-            VStack(spacing: size * 0.03) {
+            VStack(spacing: size * 0.025) {
                 Text(model.phaseLabel)
-                    .font(.system(size: max(14, min(28, size * 0.047)), design: .serif).italic())
+                    .font(.system(size: max(13, min(20, size * 0.036)), weight: .semibold))
                     .foregroundStyle(model.tone == .work ? Palette.accent : model.tone == .rest ? Palette.breakColor : Palette.text3)
                 Text(model.time)
-                    .font(.system(size: size * (model.time.count > 5 ? 0.17 : 0.24), weight: .regular, design: .serif).monospacedDigit())
-                    .kerning(-size * 0.004)
+                    .font(.system(size: size * (model.time.count > 5 ? 0.16 : 0.22), weight: .light).monospacedDigit())
+                    .kerning(-size * 0.003)
                     .foregroundStyle(model.tone == .paused ? Palette.text2 : Palette.text)
                     .contentTransition(.identity)
                     .accessibilityIdentifier("timer.time")
-                VStack(spacing: 9) {
-                    Text(model.modeName.uppercased())
-                        .font(.system(size: max(11, min(16, size * 0.03)), weight: .semibold)).kerning(0.8)
+                VStack(spacing: 10) {
+                    Text(model.modeName)
+                        .font(.system(size: max(12, min(15, size * 0.028)), weight: .medium))
                         .foregroundStyle(Palette.text3)
                     if let rounds = model.rounds {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             ForEach(0..<rounds.total, id: \.self) { i in
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(i < rounds.done ? Palette.accent : Palette.lineStrong)
-                                    .frame(width: max(14, min(22, size * 0.039)), height: 3)
+                                Circle()
+                                    .fill(i < rounds.done ? Palette.accent : Palette.panel3)
+                                    .frame(width: 7, height: 7)
                             }
                         }
                         .accessibilityElement()
@@ -408,9 +387,9 @@ struct TimerRing: View {
 /// Ovládání časovače podle stavu (`TimerControls` na webu).
 public struct TimerControls: View {
     @Environment(TimerStore.self) private var timer
-    let size: DenikButtonStyle.Size
+    let size: StudyButtonStyle.Size
 
-    public init(size: DenikButtonStyle.Size = .regular) {
+    public init(size: StudyButtonStyle.Size = .regular) {
         self.size = size
     }
 
@@ -421,49 +400,49 @@ public struct TimerControls: View {
             switch state.status {
             case .idle:
                 Button { timer.start() } label: { Label("Začít učení", systemImage: "play.fill") }
-                    .buttonStyle(.denik(.primary, size: size))
+                    .buttonStyle(.study(.primary, size: size))
                     .disabled(state.subjectId.isEmpty)
                     .accessibilityIdentifier("timer.start")
             case .ready:
                 Button { timer.start() } label: {
                     Label(isWork ? "Další blok" : "Začít pauzu", systemImage: isWork ? "play.fill" : "cup.and.saucer")
                 }
-                .buttonStyle(.denik(isWork ? .primary : .rest, size: size))
+                .buttonStyle(.study(isWork ? .primary : .rest, size: size))
                 .accessibilityIdentifier("timer.start")
                 if !isWork {
                     Button { timer.skip() } label: { Label("Bez pauzy", systemImage: "forward.end") }
-                        .buttonStyle(.denik(.normal, size: size))
+                        .buttonStyle(.study(.normal, size: size))
                         .accessibilityIdentifier("timer.skip")
                 }
                 Button("Ukončit") { timer.discard() }
-                    .buttonStyle(.denik(.ghost, size: size))
+                    .buttonStyle(.study(.ghost, size: size))
                     .accessibilityIdentifier("timer.end")
             case .running, .paused:
                 if state.status == .running {
                     Button { timer.pause() } label: { Label("Pozastavit", systemImage: "pause.fill") }
-                        .buttonStyle(.denik(.normal, size: size))
+                        .buttonStyle(.study(.normal, size: size))
                         .accessibilityIdentifier("timer.pause")
                 } else {
                     Button { timer.resume() } label: { Label("Pokračovat", systemImage: "play.fill") }
-                        .buttonStyle(.denik(isWork ? .primary : .rest, size: size))
+                        .buttonStyle(.study(isWork ? .primary : .rest, size: size))
                         .accessibilityIdentifier("timer.resume")
                 }
                 if isWork && timer.mode.kind != .stopwatch {
                     Button { timer.finishWork() } label: {
                         Label(timer.mode.kind == .flowtime ? "Na pauzu" : "Hotovo", systemImage: "cup.and.saucer")
                     }
-                    .buttonStyle(.denik(.normal, size: size))
+                    .buttonStyle(.study(.normal, size: size))
                     .help("Uložit blok a jít na pauzu")
                     .accessibilityIdentifier("timer.finish")
                 }
                 if isWork {
                     Button { timer.stop() } label: { Label("Ukončit", systemImage: "stop.fill") }
-                        .buttonStyle(.denik(.ghost, size: size))
+                        .buttonStyle(.study(.ghost, size: size))
                         .help("Uložit a ukončit")
                         .accessibilityIdentifier("timer.stop")
                 } else {
                     Button { timer.skip() } label: { Label("Přeskočit", systemImage: "forward.end") }
-                        .buttonStyle(.denik(.ghost, size: size))
+                        .buttonStyle(.study(.ghost, size: size))
                         .accessibilityIdentifier("timer.skip")
                 }
             }

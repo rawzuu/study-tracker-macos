@@ -60,7 +60,7 @@ struct TimetableSheet: View {
         } footer: {
             if let pending {
                 Spacer()
-                Button("Zrušit") { self.pending = nil }.buttonStyle(.denik(.ghost)).keyboardShortcut(.cancelAction)
+                Button("Zrušit") { self.pending = nil }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
                 Button(pending.replaceId == nil ? "Importovat" : "Nahradit", action: confirm)
                     .buttonStyle(.primary)
                     .keyboardShortcut(.defaultAction)
@@ -69,7 +69,7 @@ struct TimetableSheet: View {
                 Button { picking = .new } label: {
                     Label(timetables.isEmpty ? "Vybrat soubor .ics" : "Přidat další rozvrh", systemImage: "square.and.arrow.down")
                 }
-                .buttonStyle(.denik(.normal))
+                .buttonStyle(.study(.normal))
                 .accessibilityIdentifier("timetable.import")
                 Spacer()
                 Button("Hotovo") { dismiss() }.buttonStyle(.primary).keyboardShortcut(.defaultAction)
@@ -97,10 +97,10 @@ struct TimetableSheet: View {
                 }
                 Spacer()
                 Button { picking = .replace(id: tt.id) } label: { Label("Nahrát novou verzi", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.denik(.normal, size: .small))
+                    .buttonStyle(.study(.normal, size: .small))
                     .help("Nahraj nový export – změny se ukážou před uložením")
                 Button { remove(tt) } label: { Image(systemName: "trash") }
-                    .buttonStyle(.denik(.ghost, size: .small))
+                    .buttonStyle(.study(.ghost, size: .small))
                     .help("Odstranit rozvrh")
                     .accessibilityLabel("Odstranit rozvrh")
             }
@@ -114,7 +114,7 @@ struct TimetableSheet: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Button { toggle(s.series, in: tt) } label: { Image(systemName: s.hidden ? "eye.slash" : "eye") }
-                            .buttonStyle(.denik(.ghost, size: .small))
+                            .buttonStyle(.study(.ghost, size: .small))
                             .help(s.hidden ? "Zobrazit v kalendáři" : "Skrýt (např. nepovinný předmět)")
                             .accessibilityLabel(s.hidden ? "Zobrazit" : "Skrýt")
                     }
@@ -197,7 +197,7 @@ private struct PendingImport: View {
             if let replacing {
                 let diff = Timetables.diff(old: replacing.events, next: events, now: now)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("ZMĚNY V BUDOUCÍCH TERMÍNECH").font(.system(size: 11, weight: .semibold)).kerning(0.6).foregroundStyle(Palette.text3)
+                    Text("Změny v budoucích termínech").fontWeight(.semibold)
                     HStack(spacing: 18) {
                         Text("+\(diff.added)").fontWeight(.semibold).monospacedDigit() + Text(" nových")
                         Text("−\(diff.removed)").fontWeight(.semibold).monospacedDigit() + Text(" zrušených")
@@ -240,12 +240,12 @@ struct LectureSheet: View {
                 }
                 .font(Typo.small)
             } footer: {
-                Button("Spravovat rozvrh", action: manage).buttonStyle(.denik(.ghost))
+                Button("Spravovat rozvrh", action: manage).buttonStyle(.study(.ghost))
                 Spacer()
                 Button("Skrýt všechny") {
                     change(tt, message: "Předmět skrytý v kalendáři") { $0.hiddenSeries.append(lecture.series) }
                 }
-                .buttonStyle(.denik(.normal))
+                .buttonStyle(.study(.normal))
                 Button("Tento termín odpadá") {
                     change(tt, message: "Termín označen jako odpadlý") { $0.skipped.append(lecture.key) }
                 }

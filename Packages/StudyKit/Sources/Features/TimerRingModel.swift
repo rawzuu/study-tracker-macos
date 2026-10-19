@@ -11,6 +11,8 @@ public struct TimerRingModel: Equatable {
     public let modeName: String
     public let tone: Tone
     public let segments: [Segment]
+    /// Podíl fáze 0–1 (u stopek a Flowtime podíl hodiny) – plynulý oblouk kruhu.
+    public let progress: Double
     /// Popisky stupnice: minuta a její podíl obvodu (0 = nahoře).
     public let labels: [(minute: Int, fraction: Double)]
     /// Kolečka kol do dlouhé pauzy (`nil` = režim je neukazuje).
@@ -22,9 +24,11 @@ public struct TimerRingModel: Equatable {
         let remaining = state.remaining(at: now)
         let countUp = idle ? mode.workMin == nil : remaining == nil
         let p = idle ? 0 : countUp ? Double(elapsed % 3_600_000) / 3_600_000 : state.progress(at: now)
+        progress = p
         let idleMs = Int(((mode.workMin ?? 0) * 60_000).rounded())
         time = idle ? Format.clock(ms: idleMs) : countUp ? Format.clock(ms: elapsed) : Format.clock(ms: remaining ?? 0)
-        phaseLabel = idle ? "Připraveno" : state.phase == .work ? "Učení" : state.phase == .long ? "Dlouhá pauza" : "Pauza"
+        phaseLabel = idle ? "Připraveno" : state.status == .paused ? "Pozastaveno"
+            : state.phase == .work ? "Učení" : state.phase == .long ? "Dlouhá pauza" : "Pauza"
         modeName = mode.name
         tone = idle ? .idle : state.status == .paused ? .paused : state.phase == .work ? .work : .rest
 

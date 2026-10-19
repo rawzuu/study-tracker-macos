@@ -3,7 +3,8 @@ import SwiftUI
 import WidgetData
 import WidgetKit
 
-// Vzhled widgetů „Deník“: patková čísla, barvu nesou jen předměty, jantar jen pro akci a „teď“.
+// Vzhled widgetů „Seznam“ jako v aplikaci: systémové písmo, modrý akcent pro akce a „teď“,
+// jinak barvu nesou jen předměty.
 // Barvy se počítají pro vzhled, který widget právě má (světlý/tmavý), a v tlumeném režimu plochy
 // (vibrant) se místo barev pracuje s průhledností.
 
@@ -20,7 +21,9 @@ struct WidgetTheme {
     var bg: Color { Palette.fixed(Palette.bg, scheme) }
     var panel: Color { Palette.fixed(Palette.panel2, scheme) }
     var line: Color { Palette.fixed(Palette.lineStrong, scheme) }
-    var track: Color { fullColor ? Palette.fixed(Palette.panel3, scheme) : .primary.opacity(0.18) }
+    var track: Color { fullColor ? Palette.fixed(Palette.panel2, scheme) : .primary.opacity(0.18) }
+    var accentSoft: Color { fullColor ? Palette.fixed(Palette.accentSoft, scheme) : .primary.opacity(0.12) }
+    var danger: Color { fullColor ? Palette.fixed(Palette.danger, scheme) : .primary }
     var text: Color { fullColor ? Palette.fixed(Palette.text, scheme) : .primary }
     var text2: Color { fullColor ? Palette.fixed(Palette.text2, scheme) : .primary.opacity(0.75) }
     var text3: Color { fullColor ? Palette.fixed(Palette.text3, scheme) : .primary.opacity(0.55) }
@@ -159,7 +162,8 @@ extension WidgetCommand {
 
 // MARK: - Drobné prvky
 
-/// Popisek sekce velkými písmeny („DNES“, „CO TEĎ?“).
+/// Nadpis sekce jako v seznamu aplikace („Dnes“, „Co teď?“) – tučně v barvě akcentu;
+/// s `color` třeba tichý popisek („Další · 16:00“).
 struct Caption: View {
     let text: String
     var color: Color?
@@ -171,16 +175,63 @@ struct Caption: View {
 
     var body: some View {
         Themed { t in
-            Text(text.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .kerning(0.7)
-                .foregroundStyle(color ?? t.text3)
+            Text(text)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(color ?? t.accent)
+                .widgetAccentable(color == nil)
                 .lineLimit(1)
         }
     }
 }
 
-/// Délka „1 h 25 min“: čísla patkovým písmem, jednotky menší (jako `DurationText` v aplikaci).
+/// List kalendáře s dnešním dnem (ikona stránky Dnes).
+struct DayGlyph: View {
+    let day: Int
+    var size: CGFloat = 14
+
+    var body: some View {
+        Themed { t in
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: size * 0.2, style: .continuous).fill(t.accent)
+                Text("\(day)").font(.system(size: size * 0.5, weight: .bold)).monospacedDigit()
+                    .foregroundStyle(t.fullColor ? .white : t.bg).frame(maxHeight: .infinity).padding(.top, size * 0.12)
+            }
+            .frame(width: size * 0.9, height: size * 0.86)
+            .widgetAccentable()
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Políčko položky plánu jako v seznamu aplikace: hotové (plné), běží (výseč), čeká (obrys).
+struct ItemCheck: View {
+    enum State { case done, open, running(Double) }
+    let state: State
+    var size: CGFloat = 13
+
+    var body: some View {
+        Themed { t in
+            let shape = RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+            ZStack {
+                switch state {
+                case .done:
+                    shape.fill(t.accent)
+                    Image(systemName: "checkmark").font(.system(size: size * 0.55, weight: .bold)).foregroundStyle(t.fullColor ? .white : t.bg)
+                case .open:
+                    shape.strokeBorder(t.line, lineWidth: 1.3)
+                case .running(let f):
+                    shape.strokeBorder(t.accent, lineWidth: 1.3)
+                    Circle().trim(from: 0, to: max(0.02, min(1, f))).stroke(t.accent, style: StrokeStyle(lineWidth: size * 0.3))
+                        .rotationEffect(.degrees(-90)).frame(width: size * 0.3, height: size * 0.3)
+                }
+            }
+            .frame(width: size, height: size)
+            .widgetAccentable()
+        }
+    }
+}
+
+/// Délka „1 h 25 min“: čísla větší a tučnější, jednotky menší a šedé (jako `DurationText` v aplikaci).
 struct BigDuration: View {
     let sec: Int
     let size: CGFloat
@@ -195,8 +246,8 @@ struct BigDuration: View {
         var out = AttributedString()
         for (i, part) in WidgetFormat.duration(sec).split(separator: " ").enumerated() {
             let isNumber = part.first?.isNumber == true
-            var piece = AttributedString((i > 0 ? (isNumber ? " " : "\u{2009}") : "") + part)
-            piece.font = isNumber ? .system(size: size, weight: .regular, design: .serif).monospacedDigit() : .system(size: max(10, size * 0.38))
+            var piece = AttributedString((i > 0 ? " " : "") + part)
+            piece.font = isNumber ? .system(size: size, weight: .semibold).monospacedDigit() : .system(size: max(10, size * 0.5), weight: .medium)
             piece.foregroundColor = isNumber ? t.text : t.text2
             out += piece
         }
@@ -222,14 +273,14 @@ struct ProgressBar: View {
     }
 }
 
-/// Barevná značka předmětu.
+/// Barevná tečka předmětu.
 struct SubjectMark: View {
     let color: String
-    var size: CGFloat = 8
+    var size: CGFloat = 7
 
     var body: some View {
         Themed { t in
-            RoundedRectangle(cornerRadius: size / 4).fill(t.subject(color)).frame(width: size, height: size).widgetAccentable()
+            Circle().fill(t.subject(color)).frame(width: size, height: size).widgetAccentable()
         }
     }
 }
@@ -260,7 +311,7 @@ struct LiveClock: View {
                     Text(WidgetFormat.clock(ms: timer.remaining(at: at) ?? timer.elapsed(at: at)))
                 }
             }
-            .font(.system(size: size, weight: .regular, design: .serif).monospacedDigit())
+            .font(.system(size: size, weight: .light).monospacedDigit())
             .foregroundStyle(timer.status == .paused ? t.text3 : timer.isWork ? t.text : t.rest)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
