@@ -32,8 +32,6 @@ public enum Palette {
     public static let warn = dynamic(dark: 0xF08A4B, light: 0xC7581E)
     /// „Teď“, termín do tří dní, mazání.
     public static let danger = dynamic(dark: 0xFF6B63, light: 0xD93F3A)
-    /// Obsazený čas z jiných kalendářů (šrafování).
-    public static let hatch = dynamic(dark: 0xFFFFFF, light: 0x000000, alpha: (0.055, 0.045))
 
     /// Barva předmětu z dat (`#rrggbb`); neplatná hodnota → šedá jako na webu.
     public static func subject(_ hex: String) -> Color {

@@ -141,7 +141,7 @@ public struct CalendarView: View {
     private func headerButtons(now: Int, week: Int) -> some View {
         let clock = store.clock
         Group {
-            Button { sheet = .init(.dayPlan(DayPlan.propose(store.document, now: store.nowMs, clock: clock, external: appleCalendar.busyIntervals))) } label: {
+            Button { sheet = .init(.dayPlan(DayPlanSheet.proposal(store, calendar: appleCalendar))) } label: {
                 Label("Ranní plán", systemImage: "sunrise")
             }
             .buttonStyle(.study(.normal, size: .small))
@@ -264,7 +264,7 @@ public struct CalendarView: View {
         case .timetable: TimetableSheet()
         case .export: ExportSheet()
         case .lecture(let timetableId, let key): LectureSheet(timetableId: timetableId, key: key) { self.sheet = .init(.timetable) }
-        case .dayPlan(let items): DayPlanSheet(items: items)
+        case .dayPlan(let plan): DayPlanSheet(plan: plan)
         }
     }
 }
@@ -279,7 +279,7 @@ struct CalendarSheet: Identifiable {
         case timetable
         case export
         case lecture(timetableId: String, key: String)
-        case dayPlan([DayPlanItem])
+        case dayPlan([DayPlan.PlannedDay])
     }
 
     let id = UUID()
@@ -359,9 +359,12 @@ private struct WeekLegend: View {
                 key("výuka") { RoundedRectangle(cornerRadius: 3).fill(Palette.panel3) }
             }
             if state.hasExternal {
-                key("obsazeno") {
-                    BusyHatch().clipShape(RoundedRectangle(cornerRadius: 3))
-                        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Palette.line))
+                key("jiné kalendáře") {
+                    HStack(spacing: 0) {
+                        Palette.text3.frame(width: 2)
+                        Palette.text3.opacity(0.15)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 2))
                 }
                 .help("Události z ostatních kalendářů v Apple Kalendáři – ranní plán se jim vyhne.")
             }

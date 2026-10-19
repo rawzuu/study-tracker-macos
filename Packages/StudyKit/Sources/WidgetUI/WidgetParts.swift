@@ -194,13 +194,16 @@ struct NextUpPanel: View {
                 let subject = s.subject(top.subjectId)
                 VStack(alignment: .leading, spacing: 0) {
                     Caption("Co teď?")
-                    HStack(spacing: 6) {
+                    // Co se učit: předmět; pod ním blok plánu nebo zkouška, ke kterým doporučení patří.
+                    HStack(spacing: 7) {
                         SubjectMark(color: subject.color)
-                        Text(subject.name).font(.system(size: 11.5)).foregroundStyle(t.text2).lineLimit(1)
+                        Text(subject.name).font(.system(size: titleSize, weight: .semibold)).foregroundStyle(t.text)
+                            .lineLimit(titleLines).fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.top, 7)
-                    Text(top.title).font(.system(size: titleSize, weight: .semibold)).foregroundStyle(t.text)
-                        .lineLimit(titleLines).fixedSize(horizontal: false, vertical: true).padding(.top, 3)
+                    if !top.title.isEmpty {
+                        Text(top.title).font(.system(size: 11.5)).foregroundStyle(t.text2).lineLimit(1).padding(.top, 2)
+                    }
                     if showsReason && !top.reason.isEmpty {
                         Text(top.reason).font(.system(size: 11)).foregroundStyle(t.text3).lineLimit(1).padding(.top, 3)
                     }

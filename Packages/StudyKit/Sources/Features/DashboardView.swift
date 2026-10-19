@@ -42,18 +42,18 @@ public struct DashboardView: View {
         }
         .pageBackground()
         .navigationTitle("Dnes")
-        .sheet(item: $dayPlan, onDismiss: { toasts.presentAfterSheet() }) { DayPlanSheet(items: $0.items) }
+        .sheet(item: $dayPlan, onDismiss: { toasts.presentAfterSheet() }) { DayPlanSheet(plan: $0.plan) }
     }
 
     /// Otevře ranní plán s čerstvým návrhem.
     private func planDay() {
-        dayPlan = DayPlanRequest(items: DayPlan.propose(store.document, now: store.nowMs, clock: store.clock, external: appleCalendar.busyIntervals))
+        dayPlan = DayPlanRequest(plan: DayPlanSheet.proposal(store, calendar: appleCalendar))
     }
 
     private func page(now: Int, width: CGFloat) -> some View {
         let summary = DashboardState(document: store.document, now: now, clock: store.clock)
         let today = TodayState(document: store.document, now: now, clock: store.clock,
-                               external: appleCalendar.busyEvents.map { .init(id: $0.id, title: $0.title, start: $0.start, end: $0.end) },
+                               external: appleCalendar.busyEvents.map { .init(id: $0.id, title: $0.title, start: $0.start, end: $0.end, color: $0.color) },
                                running: running(now: now), recommendations: advisor.recommendations(now: now))
         let metrics = PageMetrics(width: width)
         let list = listColumn(summary, today, now: now, metrics: metrics)
@@ -141,7 +141,7 @@ public struct DashboardView: View {
 /// Otevřený ranní plán s návrhem z okamžiku otevření.
 struct DayPlanRequest: Identifiable {
     let id = UUID()
-    let items: [DayPlanItem]
+    let plan: [DayPlan.PlannedDay]
 }
 
 // MARK: - Seznam dne
@@ -383,8 +383,14 @@ private struct BusyRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "calendar.badge.clock").font(.system(size: 12)).foregroundStyle(Palette.text3)
-                .frame(width: 16, height: 16)
+            Group {
+                if let color = busy.color {
+                    RoundedRectangle(cornerRadius: 1.5).fill(Palette.subject(color)).frame(width: 3, height: 14)
+                } else {
+                    Image(systemName: "graduationcap").font(.system(size: 11)).foregroundStyle(Palette.text3)
+                }
+            }
+            .frame(width: 16, height: 16)
             Text(busy.title).font(.system(size: 13.5)).foregroundStyle(Palette.text2).lineLimit(1)
             Spacer(minLength: 12)
             Text("\(Format.time(busy.start, clock: store.clock))–\(Format.time(busy.end, clock: store.clock))")
@@ -408,8 +414,9 @@ private struct GapRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 12) {
                     BlockCheck(.suggested)
-                    Text(s.title).font(.system(size: 14)).foregroundStyle(Palette.text2).lineLimit(1).layoutPriority(1)
-                    SubjectCapsule(name: s.subject.name, color: s.subject.color)
+                    ColorMark(color: s.subject.color).padding(.trailing, -4)
+                    (Text(s.subject.name).foregroundStyle(Palette.text2) + Text(s.title.isEmpty ? "" : "  \(s.title)").foregroundStyle(Palette.text3))
+                        .font(.system(size: 14)).lineLimit(1).layoutPriority(1)
                     Spacer(minLength: 12)
                     Button("Naplánovat na \(Format.time(s.start, clock: clock))") { plan(s) }
                         .buttonStyle(.link)

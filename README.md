@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **v0.7.0 – nový vzhled „Seznam“.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Dnes (den jako seznam bloků s volnými chvílemi a návrhy), Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics, export do Apple Kalendáře a odebíraný kalendář. Na Přehledu radí „Co teď?“ a ráno navrhne plán dne. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.8.0 – plán na víc dní, rozvrh bez dvojích hodin.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Dnes (den jako seznam bloků s volnými chvílemi a návrhy), Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics a export do Apple Kalendáře. Na stránce Dnes radí „Co teď?“ (jaký předmět) a ranní plán navrhne bloky na dnešek, zítřek, do neděle nebo na příští týden. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -17,11 +17,11 @@ Packages/StudyKit/      Swift Package s moduly aplikace
     Data/               schéma, migrace, slučování (merge), stabilní zápis (serialize)
   Sources/Engine/       výpočty bez UI: kalendář v místním čase, souhrny, série, české formáty,
                         časovač, rozložení kalendáře, čtení a zápis .ics, rozvrh, koš
-  Sources/Networking/   GitHub Contents API a gisty (URLSession), chyby a hlášky jako na webu
+  Sources/Networking/   GitHub Contents API (URLSession), chyby a hlášky jako na webu
   Sources/Persistence/  lokální kopie dat (GRDB/SQLite, WAL, zálohy) a token v Klíčence
   Sources/Sync/         SyncEngine (actor): stáhnout → sloučit → nahrát se sha, režim jen čtení
   Sources/AppModel/     AppStore (@Observable), AppEnvironment (DI), připojení zálohy, časovač,
-                        odebíraný kalendář, hlášky s „Vrátit“
+                        Apple Kalendář, hlášky s „Vrátit“
   Sources/DesignSystem/ barvy a prvky vzhledu „Seznam“
   Sources/Features/     obrazovky (SwiftUI) a jejich stavy (čisté funkce s testy)
   Sources/WidgetData/   souhrn pro widgety a příkazy z jejich tlačítek (jen Foundation)
@@ -119,15 +119,15 @@ Běžící blok odkaz nikdy nepřeruší; mezi bloky nejdřív ukončí čekají
 
 ## Připojení dat
 
-V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained token jen pro Mac (repo `study-tracker-data`, *Contents: Read and write*) a vlož ho. GitHub jméno se zjistí z tokenu, token se uloží do Klíčenky macOS. Pro odebíraný kalendář potřebuje token navíc *Account permissions → Gists: Read and write*.
+V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained token jen pro Mac (repo `study-tracker-data`, *Contents: Read and write*) a vlož ho. GitHub jméno se zjistí z tokenu, token se uloží do Klíčenky macOS.
 
 ## Kalendář a rozvrh
 
 - **Rozvrh:** Kalendář → Rozvrh → vyber export .ics ze školního systému. Nová verze rozvrhu ukáže před uložením, co se změní; proběhlé hodiny, skryté předměty a odpadlé termíny zůstanou.
 - **Export:** Kalendář → Do kalendáře uloží soubor .ics (stálá UID – opakovaný import aktualizuje stejné události).
-- **Odebíraný kalendář:** Nastavení → Odebíraný kalendář publikuje plán do tajného gistu; Apple Kalendář si ho sám stahuje. Mac i web ho po změně plánu aktualizují (se stejným obsahem, takže se navzájem nepřepisují zbytečně).
-- **Apple Kalendář přímo (jen Mac):** Nastavení → Apple Kalendář. Mac zapisuje bloky (od dvou týdnů zpět) a zkoušky do vlastního kalendáře „Studijní plán“ – v iCloudu jsou hned v iPhonu, iPadu i hodinkách, bez čekání na obnovu odebíraného kalendáře. Kalendář je jen kopie `data.json`: po každé změně dat se srovná, úpravy v Kalendáři se přepíšou podle dat a ostatních kalendářů se zápis nikdy nedotkne (každá změna se ověřuje). Událost odkazuje zpátky do aplikace (`studytracker://planovac?blok=…`). Další Mac najde stejný kalendář podle názvu. Odebíraný kalendář z gistu může zůstat jako záloha – v Kalendáři si ho jen skryj, ať bloky nevidíš dvakrát.
-- **Obsazený čas:** události z vybraných kalendářů (ve výchozím stavu vlastní kalendáře, ne odebírané ani narozeniny; bez celodenních, volných a odmítnutých) ranní plán obchází a Kalendář je ukazuje šedě šrafované.
+- **Odebíraný kalendář** (gist) je od v0.8.0 jen na webu – Mac ho nahradil přímým zápisem do Apple Kalendáře. Nastavení v datech Mac nemění, takže web ho dál aktualizuje, pokud je zapnutý.
+- **Apple Kalendář přímo (jen Mac):** Nastavení → Apple Kalendář. Mac zapisuje bloky (od dvou týdnů zpět) a zkoušky do vlastního kalendáře „Studijní plán“ – v iCloudu jsou hned v iPhonu, iPadu i hodinkách, bez čekání na obnovu odebíraného kalendáře. Kalendář je jen kopie `data.json`: po každé změně dat se srovná, úpravy v Kalendáři se přepíšou podle dat a ostatních kalendářů se zápis nikdy nedotkne (každá změna se ověřuje). Událost odkazuje zpátky do aplikace (`studytracker://planovac?blok=…`). Další Mac najde stejný kalendář podle názvu. Když máš v Kalendáři i odebíraný plán z gistu, zruš jeho odběr, ať bloky nevidíš dvakrát.
+- **Obsazený čas:** události z vybraných kalendářů (ve výchozím stavu vlastní kalendáře, ne odebírané ani narozeniny; bez celodenních, volných a odmítnutých) ranní plán obchází a Kalendář je ukazuje v barvě jejich kalendáře. Události ve stejném čase jako hodina z importovaného rozvrhu se neukazují – výuku ukáže rozvrh (dá se v něm označit, že odpadla, a pak se čas uvolní).
 
 ## Oznámení s tlačítky
 

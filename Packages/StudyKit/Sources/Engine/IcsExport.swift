@@ -1,14 +1,11 @@
 import Core
 import Foundation
 
-/// Export plánu a zkoušek do formátu iCalendar (`src/features/planner/ics.ts` a `calendarFeed.ts` na webu).
+/// Export plánu a zkoušek do formátu iCalendar (`src/features/planner/ics.ts` na webu).
 /// Časy jsou v UTC (přípona Z), takže nezáleží na časovém pásmu zařízení. Události mají stálá UID,
-/// takže opakovaný import i odebíraný kalendář aktualizují stejné události.
+/// takže opakovaný import aktualizuje stejné události.
 public enum IcsExport {
-    /// Soubor v tajném gistu, který si Apple Kalendář pravidelně stahuje.
-    public static let feedFile = "studijni-plan.ics"
-
-    /// Kalendář `.ics` (`buildIcs` na webu). `feed` = odebíraný kalendář (přidá interval obnovování).
+    /// Kalendář `.ics` (`buildIcs` na webu). `feed` = odebíraný kalendář webu (přidá interval obnovování).
     public static func build(blocks: [PlanBlock], exams: [Exam], subjects: [Subject], alarmMin: Int?, feed: Bool = false,
                              now: Int, clock: StudyClock) -> String {
         // `new Map(subjects.map(...))` – při stejném id platí poslední záznam
@@ -52,49 +49,6 @@ public enum IcsExport {
         return lines.map(fold).joined(separator: "\r\n") + "\r\n"
     }
 
-    /// Obsah odebíraného kalendáře (`buildFeed` na webu): bloky od dvou týdnů zpět a budoucí zkoušky.
-    public static func feed(_ doc: AppDocument, includeExams: Bool, alarmMin: Int?, now: Int, clock: StudyClock) -> String {
-        let from = clock.addDays(clock.startOfDay(now), -14)
-        // Na webu `new Date(e.date)` – datum bez času je půlnoc UTC (ne místní půlnoc).
-        let exams = includeExams ? doc.alive(Exam.self).filter { utcMidnight($0.date).map { $0 >= from } ?? false } : []
-        return build(blocks: doc.alive(PlanBlock.self).filter { $0.start >= from }, exams: exams, subjects: doc.records(Subject.self),
-                     alarmMin: alarmMin, feed: true, now: now, clock: clock)
-    }
-
-    /// Otisk obsahu bez časového razítka – mění se jen při skutečné změně plánu (`feedHash` na webu).
-    public static func hash(_ ics: String) -> String {
-        var h: Int32 = 5381
-        var lineStart = true
-        var skipping = false
-        let units = Array(ics.utf16)
-        let stampPrefix = Array("DTSTAMP:".utf16)
-        var i = 0
-        while i < units.count {
-            let u = units[i]
-            let terminator = u == 0x0A || u == 0x0D || u == 0x2028 || u == 0x2029
-            if terminator {
-                skipping = false
-                lineStart = true
-            } else if lineStart {
-                // `/^DTSTAMP:.*$/gm` – řádek s razítkem vypadne celý, konce řádků zůstanou
-                skipping = units.count - i >= stampPrefix.count && Array(units[i..<i + stampPrefix.count]) == stampPrefix
-                lineStart = false
-            }
-            if !skipping { h = (h &<< 5) &+ h &+ Int32(u) }
-            i += 1
-        }
-        return String(h)
-    }
-
-    /// Adresa souboru v gistu a odkaz pro Apple Kalendář (`webcal:`).
-    public static func feedURL(owner: String, gistId: String) -> URL? {
-        URL(string: "https://gist.githubusercontent.com/\(owner)/\(gistId)/raw/\(feedFile)")
-    }
-
-    public static func webcalURL(owner: String, gistId: String) -> URL? {
-        feedURL(owner: owner, gistId: gistId).flatMap { URL(string: "webcal:" + $0.absoluteString.dropFirst("https:".count)) }
-    }
-
     // MARK: - Formát
 
     /// `20261017T204013Z`
@@ -115,16 +69,6 @@ public enum IcsExport {
         c.timeZone = TimeZone(identifier: "UTC")!
         return c
     }()
-
-    /// `YYYY-MM-DD` jako půlnoc UTC (`new Date('2026-11-02')`; den nad konec měsíce přeteče do dalšího).
-    /// Jiné tvary data aplikace nezapisuje – ty se berou jako neplatné.
-    private static func utcMidnight(_ day: String) -> Int? {
-        let p = day.split(separator: "-", omittingEmptySubsequences: false)
-        guard p.count == 3, p[0].count == 4, p[1].count == 2, p[2].count == 2,
-              let y = Int(p[0]), let m = Int(p[1]), let d = Int(p[2]), p.allSatisfy({ $0.allSatisfy(\.isASCII) }),
-              (1...12).contains(m), (1...31).contains(d) else { return nil }
-        return ICal.epochMs(y, m - 1, d)
-    }
 
     /// Text hodnoty: `\` `;` `,` a konec řádku (LF) se escapují – po znacích Unicode, aby se LF
     /// v CRLF nahradil stejně jako regulárním výrazem na webu.

@@ -20,7 +20,7 @@ struct ExportSheet: View {
         let now = store.nowMs
         let (blocks, exams) = selection(now: now)
         EditorSheet("Export do Apple Kalendáře", width: 520) {
-            Banner("Uloží se soubor .ics. Otevři ho dvojklikem a Kalendář nabídne import – doporučuju samostatný kalendář „Učení“. Opakovaný import aktualizuje stejné události. Aby se plán aktualizoval sám, zapni v Nastavení odebíraný kalendář.",
+            Banner("Uloží se soubor .ics. Otevři ho dvojklikem a Kalendář nabídne import – doporučuju samostatný kalendář „Učení“. Opakovaný import aktualizuje stejné události. Aby se plán aktualizoval sám, zapni v Nastavení Apple Kalendář.",
                    systemImage: "calendar.badge.checkmark")
             FormField("Období") {
                 Picker("Období", selection: $weeks) {

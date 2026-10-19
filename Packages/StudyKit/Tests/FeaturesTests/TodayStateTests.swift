@@ -95,7 +95,8 @@ struct TodayStateTests {
         let g = gaps(s)
         // 15:15 (zaokrouhleno) – 16:50 (pauza před blokem 17:00) a 17:55 – 22:00 (konec plánovaného dne)
         #expect(g.map(\.start) == [at(15, 15), at(17, 55)] && g.map(\.end) == [at(16, 50), at(22)])
-        #expect(g[0].suggestion?.title == "Příprava na zápočet" && g[0].suggestion?.minutes == 50 && g[0].suggestion?.start == at(15, 15))
+        // Návrh je předmět – „Pokračovat: téma“ se nepíše (pokračování nemá kontext).
+        #expect(g[0].suggestion?.subject.id == "anat" && g[0].suggestion?.title == "" && g[0].suggestion?.minutes == 50 && g[0].suggestion?.start == at(15, 15))
         // Delší doporučení se zkrátí na délku chvíle; doporučení k bloku plánu se nenavrhuje.
         #expect(g[1].suggestion?.subject.id == "fyz" && g[1].suggestion?.minutes == 245 && g[1].suggestion?.start == at(17, 55))
         #expect(TodayState(document: document(), now: at(15), clock: clock).sections.flatMap(\.entries).contains {

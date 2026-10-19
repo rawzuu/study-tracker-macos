@@ -35,9 +35,9 @@ Rizika, která řeší architektura:
 | Odkaz pro Zkratky | `#/casovac?start=1&predmet=…&tema=…` | `studytracker://casovac?…` |
 | Kalendář | týden/měsíc, odučeno vs. plán, živý blok, filtry, přetahování a změna délky po 5 min, Hotovo zapíše čas, auto-odškrtnutí | SwiftUI (vlastní `Layout` pro sloupce dne); rozložení ověřené kontrolními daty z kódu webu; běžící blok bez animace pruhů (nepřekresluje okno) |
 | Zkoušky a rozvrh | rozložené opakování ke zkoušce, import rozvrhu .ics (náhled změn, skryté řady, odpadlé termíny, opakování po přednášce) | zkoušky a rozvrh 1:1, bez generovaných bloků opakování a bez přiřazení řady k předmětu (slouží jen opakování po přednášce; v datech zůstává) |
-| Export kalendáře | .ics, odebíraný kalendář přes gist | stejné API |
+| Export kalendáře | .ics, odebíraný kalendář přes gist | .ics; odebíraný kalendář od v0.8.0 nahradil přímý zápis do Apple Kalendáře (gist dál aktualizuje web) |
 | Opakování | FSRS-6, 4 hodnocení, historie opakování, hlídání zkoušky | **vynecháno** |
-| Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port bez signálu opakování a bez opakování po přednášce; témata se nečtou; výsledky shodné s webem (kontrolní data), předpočítané údaje sdílí simulace ranního plánu |
+| Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port bez signálu opakování a bez opakování po přednášce; témata se nečtou; výsledky shodné s webem (kontrolní data), předpočítané údaje sdílí simulace ranního plánu. Navíc (schváleno 19. 10. 2026): plán na zítřek, do neděle a na příští týden; „Co teď?“ ukazuje předmět, ne „Pokračovat: téma“ |
 | Statistiky | heatmapy, trend, den × hodina, soustředění, série | Swift Charts |
 | Report, reflexe | postřehy, návrhy úprav (kalibrace), tisk/PDF, týdenní reflexe | systémový tisk do PDF |
 | Úspěchy | 119 úspěchů, stabilní id, medaile, trvalé záznamy | stejná id |

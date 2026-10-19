@@ -107,7 +107,7 @@ public final class WidgetBridge {
             exams: Array(exams),
             timer: info,
             nextUp: recommendations.filter { $0.subjectId != nil }.prefix(3).map {
-                .init(subjectId: $0.subjectId!, title: $0.title, topic: $0.topic, modeId: $0.modeId, minutes: $0.minutes, reason: $0.reasons.first ?? "")
+                .init(subjectId: $0.subjectId!, title: $0.context ?? "", topic: $0.topic, modeId: $0.modeId, minutes: $0.minutes, reason: $0.reasons.first ?? "")
             }
         )
     }

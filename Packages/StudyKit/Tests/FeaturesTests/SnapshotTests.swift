@@ -60,6 +60,16 @@ struct SnapshotTests {
                    name: "dashboard-\(screen)", size: CGSize(width: screen.size.width, height: screen == .laptop ? 1400 : 1340))
     }
 
+    @Test("Přehled v klidu: Co teď? a volné chvíle")
+    func dashboardIdle() async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        try render(DashboardView(snapshotNow: now, width: Screen.laptop.size.width).environment(app).environment(TimerStore(app: app) { now })
+                    .environment(Advisor(store: app)).environment(Toasts()).environment(await calendars(app, now: now)),
+                   name: "dashboard-idle", size: CGSize(width: Screen.laptop.size.width, height: 1400))
+    }
+
     @Test("Historie a předměty", arguments: Screen.allCases)
     func lists(_ screen: Screen) async throws {
         let app = AppStore(environment: .uiTesting())
@@ -92,9 +102,13 @@ struct SnapshotTests {
         let clock = app.clock
         // Návrh na dopoledne, ať je v náhledu vždy co ukázat.
         let morning = clock.atMinutes(clock.startOfDay(now), 7 * 60 + 40)
-        let items = DayPlan.propose(app.document, now: morning, extra: 1, clock: clock)
-        try render(DayPlanSheet(items: items, scrolls: false).environment(app).environment(Toasts()).environment(await calendars(app, now: now)).background(Palette.bg),
-                   name: "dayplan", size: CGSize(width: 720, height: 640))
+        let plan = DayPlan.propose(app.document, days: [clock.startOfDay(now)], now: morning, extra: 1, clock: clock)
+        try render(DayPlanSheet(plan: plan, scrolls: false).environment(app).environment(Toasts()).environment(await calendars(app, now: now)).background(Palette.bg),
+                   name: "dayplan", size: CGSize(width: 760, height: 640))
+        // Plán na tři dny dopředu (od zítřka).
+        let ahead = DayPlan.propose(app.document, days: (1...3).map { clock.addDays(clock.startOfDay(now), $0) }, now: now, clock: clock)
+        try render(DayPlanSheet(plan: ahead, span: .week, scrolls: false).environment(app).environment(Toasts()).environment(await calendars(app, now: now))
+            .background(Palette.bg), name: "dayplan-week", size: CGSize(width: 760, height: 1100))
     }
 
     @Test("Horní lišta: v klidu a s běžícím blokem", arguments: [false, true])

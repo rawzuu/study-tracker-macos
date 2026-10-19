@@ -86,7 +86,7 @@ struct AppleCalendarSettings: View {
                 Banner(error, systemImage: "exclamationmark.triangle", tone: .bad)
             }
             if sync.hasFeedSubscription {
-                Banner("V Kalendáři máš i odebíraný „\(CalendarMirror.calendarTitle)“ z gistu – bloky tam uvidíš dvakrát. Odebíraný kalendář si v Kalendáři skryj (odškrtni); dál se aktualizuje jako záloha pro dobu, kdy Mac neběží.",
+                Banner("V Kalendáři máš i odebíraný „\(CalendarMirror.calendarTitle)“ z gistu – bloky tam uvidíš dvakrát. V Kalendáři na něj klikni pravým tlačítkem a vyber Zrušit odběr.",
                        systemImage: "square.on.square")
             }
             HStack(spacing: 10) {
@@ -156,7 +156,7 @@ private struct BusyCalendars: View {
             Toggle(isOn: Binding(get: { on }, set: { sync.setBusyEnabled($0) })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Události z ostatních kalendářů jsou obsazený čas")
-                    Text("Ranní plán se jim vyhne a v Kalendáři jsou šedě šrafované. Celodenní a volné události se nepočítají.")
+                    Text("Ranní plán se jim vyhne a v Kalendáři jsou v barvě svého kalendáře. Hodiny, které máš i v importovaném rozvrhu, se ukážou jen jednou. Celodenní a volné události se nepočítají.")
                         .font(Typo.small).foregroundStyle(Palette.text3).fixedSize(horizontal: false, vertical: true)
                 }
             }

@@ -119,7 +119,8 @@ public struct CalendarWeekState: Sendable {
         hasExternal = !busy.isEmpty
         let locations = Dictionary(lectures.map { ("\($0.timetableId)|\($0.event.key)", $0.event.location) }, uniquingKeysWith: { a, _ in a })
 
-        let calendarOf = Dictionary(busy.map { ($0.id, $0.calendarTitle) }, uniquingKeysWith: { a, _ in a })
+        // Událost z jiného kalendáře nese jeho název a barvu (jako v Apple Kalendáři).
+        let calendarOf = Dictionary(busy.map { ($0.id, SubjectInfo(id: "", name: $0.calendarTitle, color: $0.color)) }, uniquingKeysWith: { a, _ in a })
         let blockById = Dictionary(blocks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let sessionById = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let today = clock.startOfDay(now)
@@ -150,7 +151,7 @@ public struct CalendarWeekState: Sendable {
     }
 
     private static func item(_ it: CalendarItem, lane: CalendarLayout.Lane, subjects: SubjectLookup, block: [String: PlanBlock],
-                             session: [String: Session], locations: [String: String], calendars: [String: String], clock: StudyClock) -> Item {
+                             session: [String: Session], locations: [String: String], calendars: [String: SubjectInfo], clock: StudyClock) -> Item {
         let subject = subjects[it.subjectId]
         let time = "\(Format.time(it.fullStart, clock: clock))–\(Format.time(it.fullEnd, clock: clock))"
         switch it.source {
@@ -169,9 +170,9 @@ public struct CalendarWeekState: Sendable {
             return Item(item: it, lane: lane, subject: subject, done: false, detail: location.isEmpty ? "výuka" : location, timeLabel: time,
                         tooltip: "Výuka: \(it.title)\(location.isEmpty ? "" : " · \(location)") · \(time)")
         case .external(let id):
-            let calendar = calendars[id] ?? "Kalendář"
-            return Item(item: it, lane: lane, subject: subject, done: false, detail: calendar, timeLabel: time,
-                        tooltip: "Obsazeno (\(calendar)): \(it.title) · \(time)")
+            let calendar = calendars[id] ?? SubjectInfo(id: "", name: "Kalendář", color: "#8e8e93")
+            return Item(item: it, lane: lane, subject: calendar, done: false, detail: calendar.name, timeLabel: time,
+                        tooltip: "\(calendar.name): \(it.title) · \(time)")
         }
     }
 }

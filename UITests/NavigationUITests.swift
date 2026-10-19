@@ -219,8 +219,10 @@ final class NavigationUITests: XCTestCase {
         let app = launch()
         XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["dash.next"].waitForExistence(timeout: 3))
-        XCTAssertFalse(text(of: app.staticTexts["next.title"]).isEmpty)
+        // Hlavní řádek je předmět, ne téma, kde jsi skončil.
         let subject = text(of: app.descendants(matching: .any)["next.subject"])
+        XCTAssertFalse(subject.isEmpty)
+        XCTAssertFalse(subject.contains("Pokračovat"))
 
         app.buttons["next.why"].click()
         XCTAssertTrue(app.descendants(matching: .any)["next.whyTable"].waitForExistence(timeout: 2))
@@ -260,6 +262,27 @@ final class NavigationUITests: XCTestCase {
             app.typeKey(.escape, modifierFlags: [])
             XCTAssertTrue(save.waitForNonExistence(timeout: 2))
         }
+    }
+
+    /// Ranní plán dopředu: příští týden se naplánuje po dnech a uloží najednou.
+    @MainActor
+    func testDayPlanNextWeek() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.buttons["dash.planDay"].click()
+        let save = app.buttons["dayplan.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 3))
+        let nextWeek = app.radioButtons["Příští týden"]
+        XCTAssertTrue(nextWeek.waitForExistence(timeout: 2))
+        nextWeek.click()
+        XCTAssertTrue(app.descendants(matching: .any)["dayplan.day.6"].waitForExistence(timeout: 3), "sedm dní příštího týdne")
+        XCTAssertFalse(app.buttons["dayplan.more"].exists, "„Další blok“ jen u plánu jednoho dne")
+        attachScreenshot(app, "Ranní plán – příští týden")
+        XCTAssertTrue(save.isEnabled)
+        save.click()
+        XCTAssertTrue(save.waitForNonExistence(timeout: 2))
+        let toast = app.staticTexts.matching(NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", " na ", " na ")).firstMatch
+        XCTAssertTrue(toast.waitForExistence(timeout: 3), "hláška o blocích na víc dní")
     }
 
     /// Apple Kalendář v Nastavení (kalendáře v paměti): zapnutí zapíše plán a ukáže stav, ostatní kalendáře

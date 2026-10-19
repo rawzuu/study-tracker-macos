@@ -46,7 +46,7 @@ extension WidgetSnapshot {
             nextUp: [
                 .init(subjectId: "anat", title: "Příprava na zkoušku: Zápočet z anatomie", topic: "", modeId: "pomodoro", minutes: 50,
                       reason: "zkouška za 4 dny"),
-                .init(subjectId: "fyz", title: "Pokračovat: Srdeční cyklus", topic: "Srdeční cyklus", modeId: "pomodoro", minutes: 25,
+                .init(subjectId: "fyz", title: "", topic: "Srdeční cyklus", modeId: "pomodoro", minutes: 25,
                       reason: "naplánováno později dnes"),
             ]
         )

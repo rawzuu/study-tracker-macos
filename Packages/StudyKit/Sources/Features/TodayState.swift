@@ -51,18 +51,22 @@ public struct TodayState: Sendable {
         public let title: String
         public let start: Int
         public let end: Int
+        /// Barva kalendáře (`#rrggbb`); `nil` = výuka z rozvrhu.
+        public let color: String?
 
-        public init(id: String, title: String, start: Int, end: Int) {
+        public init(id: String, title: String, start: Int, end: Int, color: String? = nil) {
             self.id = id
             self.title = title
             self.start = start
             self.end = end
+            self.color = color
         }
     }
 
     /// Návrh bloku do volné chvíle (z doporučení „Co teď?“).
     public struct Suggestion: Hashable, Sendable {
         public let subject: SubjectInfo
+        /// Plán nebo zkouška, ke kterým návrh patří (`Recommendation.context`); prázdné = jen předmět.
         public let title: String
         public let topic: String
         public let modeId: String
@@ -192,7 +196,7 @@ public struct TodayState: Sendable {
             let rec = candidates.removeFirst()
             let start = Self.roundUp(slot.start, toMinutes: 5)
             let fits = (slot.end - start) / StudyClock.minute / 5 * 5
-            let suggestion = Suggestion(subject: subjects[rec.subjectId ?? ""], title: rec.title, topic: rec.topic, modeId: rec.modeId,
+            let suggestion = Suggestion(subject: subjects[rec.subjectId ?? ""], title: rec.context ?? "", topic: rec.topic, modeId: rec.modeId,
                                         start: start, minutes: min(rec.minutes, fits), reasons: rec.reasons)
             return Gap(start: slot.start, end: slot.end, suggestion: suggestion)
         }

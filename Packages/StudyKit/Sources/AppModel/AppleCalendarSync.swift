@@ -40,7 +40,7 @@ public final class AppleCalendarSync {
     public private(set) var syncing = false
     public private(set) var calendars: [CalendarInfo] = []
     public private(set) var accounts: [CalendarAccount] = []
-    /// Obsazený čas z vybraných kalendářů od včerejška na dva týdny dopředu.
+    /// Obsazený čas z vybraných kalendářů od včerejška na dva týdny dopředu, bez hodin z rozvrhu.
     public private(set) var external: [ExternalBusy] = []
 
     @ObservationIgnored private let app: AppStore
@@ -53,6 +53,8 @@ public final class AppleCalendarSync {
     @ObservationIgnored private var again = false
     /// Co Mac do kalendáře naposledy zapsal a kolikrát to musel zapsat znovu beze změny v datech.
     /// Kdyby kalendář událost pokaždé uložil jinak, zápis se po třetím pokusu vzdá – nikdy nevznikne smyčka.
+    /// Události z kalendářů, jak přišly (před odebráním hodin z rozvrhu).
+    @ObservationIgnored private var fetched: [ExternalBusy] = []
     @ObservationIgnored private var written: [CalendarMirror.Key: (event: CalendarMirror.Event, rewrites: Int)] = [:]
 
     static let preferencesKey = "st.appleCalendar"
@@ -237,6 +239,7 @@ public final class AppleCalendarSync {
         guard access == .granted else {
             calendars = []
             accounts = []
+            fetched = []
             external = []
             return
         }
@@ -252,12 +255,21 @@ public final class AppleCalendarSync {
 
     private func refreshExternal() async {
         guard access == .granted, preferences.busyEnabled else {
-            external = []
+            fetched = []
+            filterExternal()
             return
         }
         let day = app.clock.startOfDay(app.nowMs)
         let ids = busyCalendarIds.subtracting(preferences.calendarId.map { [$0] } ?? [])
-        external = ids.isEmpty ? [] : await service.busy(calendarIds: ids, from: app.clock.addDays(day, -1), to: app.clock.addDays(day, 15))
+        fetched = ids.isEmpty ? [] : await service.busy(calendarIds: ids, from: app.clock.addDays(day, -1), to: app.clock.addDays(day, 15))
+        filterExternal()
+    }
+
+    /// Školní hodiny, které jsou v Apple Kalendáři i v importovaném rozvrhu, se ukážou jen z rozvrhu.
+    /// Znovu po každé změně dat (nový rozvrh, odpadlá hodina) – mění se, jen když je výsledek jiný.
+    private func filterExternal() {
+        let next = Timetables.withoutLectures(fetched, app.document)
+        if next != external { external = next }
     }
 
     private var busyCalendarIds: Set<String> {
@@ -283,6 +295,7 @@ public final class AppleCalendarSync {
             _ = app.document
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
+                self?.filterExternal()
                 self?.schedule()
                 self?.observeDocument()
             }

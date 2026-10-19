@@ -18,6 +18,9 @@ public struct DayPlanItem: Sendable, Hashable, Identifiable {
     public var carry: PlanBlock?
 
     public var isPlaced: Bool { start != 0 }
+
+    /// Mac: název bloku bez „Pokračovat: téma“ – blok je o předmětu, ne o tom, kde jsi skončil.
+    public var displayTitle: String { activity == .continue ? "" : title }
 }
 
 /// Obsazený úsek dne (výuka, plán, odučený čas).
@@ -123,12 +126,49 @@ public enum DayPlan {
     /// Návrh bloků na zbytek dne. `extra` = kolikrát uživatel přidal „Další blok“ (+25 min k cíli),
     /// `external` = obsazený čas z Apple Kalendáře.
     public static func propose(_ doc: AppDocument, now: Int, extra: Int = 0, clock: StudyClock, external: [BusyInterval] = []) -> [DayPlanItem] {
+        // sezení se z dat čtou jednou pro doporučení, cíl i rozmístění
+        propose(doc, sessions: SessionFacts.alive(in: doc), ahead: [], now: now, extra: extra, carry: true, clock: clock, external: external)
+    }
+
+    /// Plánovaný den s návrhem (Mac: plán na víc dní dopředu).
+    public struct PlannedDay: Sendable, Hashable, Identifiable {
+        public let day: Int
+        /// Okamžik, od kterého se den plánuje: dnes teď, jindy začátek rozmezí dne.
+        public let now: Int
+        public var items: [DayPlanItem]
+        public var id: Int { day }
+    }
+
+    /// Mac: návrh na víc dní dopředu (`days` = začátky dnů od dneška dál). Každý den se plánuje jako jeho
+    /// ranní plán – od začátku rozmezí dne, s jeho výukou a událostmi z Apple Kalendáře a se vzdáleností
+    /// zkoušek od toho dne. Co je ve dnech předtím navržené nebo už naplánované, se bere jako odučené:
+    /// týdenní cíl se plní a předmět, který byl dlouho bez učení, se nenavrhuje každý den znovu.
+    /// Dnešek je přesně ranní plán (i s přesunem nedokončených bloků), další dny bez přesunu.
+    public static func propose(_ doc: AppDocument, days: [Int], now: Int, extra: Int = 0, clock: StudyClock,
+                               external: [BusyInterval] = []) -> [PlannedDay] {
+        let today = clock.startOfDay(now)
+        let sessions = SessionFacts.alive(in: doc)
+        let pending = doc.alive(PlanBlock.self).filter { !$0.done && $0.start >= now }
+        var proposed: [SessionFacts] = []
+        var out: [PlannedDay] = []
+        for day in days.sorted() where day >= today {
+            let at = day == today ? now : dayRange(doc.settings, day: day, clock: clock).start
+            let ahead = pending.filter { $0.start < day }.map { SessionFacts(planned: $0.subjectId, start: $0.start, minutes: $0.durationMin) }
+            let items = propose(doc, sessions: sessions, ahead: ahead + proposed, now: at, extra: extra, carry: day == today,
+                                clock: clock, external: external)
+            proposed += items.filter { $0.include && $0.isPlaced }.map { SessionFacts(planned: $0.subjectId, start: $0.start, minutes: $0.minutes) }
+            out.append(PlannedDay(day: day, now: at, items: items))
+        }
+        return out
+    }
+
+    /// `ahead` = bloky z dřívějších dnů plánu, které doporučení počítá jako odučené (ne cíl dne ani rozmístění).
+    static func propose(_ doc: AppDocument, sessions: [SessionFacts], ahead: [SessionFacts], now: Int, extra: Int, carry: Bool,
+                        clock: StudyClock, external: [BusyInterval]) -> [DayPlanItem] {
         let settings = doc.settings
         let day = clock.startOfDay(now)
         let next = clock.addDays(day, 1)
         let blocks = doc.alive(PlanBlock.self)
-        // sezení se z dat čtou jednou pro doporučení, cíl i rozmístění
-        let sessions = SessionFacts.alive(in: doc)
         let studied = sessions.filter { $0.start >= day }.reduce(0.0) { $0 + Double($1.durationSec) / 60 }
         let plannedLeft = blocks
             .filter { !$0.done && $0.start >= day && $0.start < next && $0.start + $0.durationMin * StudyClock.minute > now }
@@ -138,7 +178,7 @@ public enum DayPlan {
         var items: [DayPlanItem] = []
         // 1) nedokončené bloky z posledních 2 dnů
         let yesterday = clock.addDays(day, -1)
-        for b in blocks where !b.done && b.start < day && b.start >= clock.addDays(day, -2) {
+        for b in blocks where carry && !b.done && b.start < day && b.start >= clock.addDays(day, -2) {
             items.append(DayPlanItem(
                 key: "carry-\(b.id)", subjectId: b.subjectId, title: b.title.isEmpty ? "Nedokončený blok" : b.title, minutes: b.durationMin,
                 start: 0, activity: .carry, reasons: ["nedokončeno " + (b.start >= yesterday ? "včera" : "předevčírem")], include: true, carry: b
@@ -147,7 +187,7 @@ public enum DayPlan {
         }
 
         // 2) doporučení se simulací – plní se do cíle (i když už žádný předmět nemá kladné skóre)
-        let recommender = Recommender(document: doc, sessions: sessions, now: now, clock: clock)
+        let recommender = Recommender(document: doc, sessions: ahead.isEmpty ? sessions : sessions + ahead, now: now, clock: clock)
         var sim = Recommender.Simulation()
         for it in items { sim.extraMinutes[it.subjectId, default: 0] += Double(it.minutes) }
         var round = 0
@@ -260,7 +300,7 @@ public enum DayPlan {
     }
 
     /// Bloky do kalendáře z vybraných položek: nedokončené se přesunou (z aktuální verze v datech),
-    /// nové dostanou důvody jako poznámku.
+    /// nové dostanou důvody jako poznámku a název bez „Pokračovat: téma“ (`displayTitle`).
     public static func blocks(_ items: [DayPlanItem], in doc: AppDocument) -> [PlanBlock] {
         items.filter { $0.include && $0.isPlaced }.map { i in
             if let carry = i.carry {
@@ -270,7 +310,7 @@ public enum DayPlan {
                 return b
             }
             return PlanBlock(raw: [
-                "id": .string(PlanBlock.newID()), "subjectId": .string(i.subjectId), "title": .string(i.title),
+                "id": .string(PlanBlock.newID()), "subjectId": .string(i.subjectId), "title": .string(i.displayTitle),
                 "start": .number(Double(i.start)), "durationMin": .number(Double(i.minutes)), "done": false,
                 "note": .string(i.reasons.joined(separator: " · ")),
             ])

@@ -204,4 +204,25 @@ struct AppleCalendarSyncTests {
         sync.setBusyEnabled(false)
         #expect(sync.busyIntervals.isEmpty)
     }
+
+    @Test("Hodiny z rozvrhu, které jsou i v Apple Kalendáři, se ukážou jen jednou – i po importu rozvrhu")
+    func lectureDuplicates() async {
+        let service = InMemoryCalendarService(access: .granted, calendars: [work])
+        let start = Int(Date().timeIntervalSince1970 * 1000) / 60_000 * 60_000 + hour
+        await service.addBusy(ExternalBusy(id: "skola", title: "Anatomie", start: start, end: start + 90 * 60_000, calendarId: "work",
+                                           calendarTitle: "Práce", color: "#ff0000"))
+        await service.addBusy(ExternalBusy(id: "trenink", title: "Trénink", start: start + 3 * hour, end: start + 4 * hour, calendarId: "work",
+                                           calendarTitle: "Práce", color: "#ff0000"))
+        let app = await store(seed)
+        let sync = AppleCalendarSync(app: app, service: service)
+        await sync.start()
+        #expect(sync.busyEvents.map(\.id) == ["skola", "trenink"])
+
+        let event: JSONValue = .object(["key": "l1", "series": "Anatomie", "title": "Anatomie", "location": "",
+                                        "start": .number(Double(start)), "end": .number(Double(start + 90 * 60_000))])
+        app.upsert(Timetable(raw: ["id": "tt", "name": "Rozvrh", "importedAt": 1, "events": [event], "hiddenSeries": [], "skipped": []]))
+        for _ in 0..<100 where sync.busyEvents.count != 1 { try? await Task.sleep(for: .milliseconds(5)) }
+        #expect(sync.busyEvents.map(\.id) == ["trenink"])
+        #expect(sync.busyIntervals == [BusyInterval(start: start + 3 * hour, end: start + 4 * hour)])
+    }
 }

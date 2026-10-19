@@ -205,12 +205,6 @@ public final class AppStore {
         update { $0.restore(key, id: id, now: now) }
     }
 
-    /// Gist pro odebíraný kalendář s tokenem z Klíčenky (`nil` = GitHub není připojený).
-    public func gistPublisher() -> (any GistPublisher)? {
-        guard backup != nil, let token = try? environment.secrets.secret(for: Self.tokenAccount), !token.isEmpty else { return nil }
-        return environment.backupService.gists(token: token)
-    }
-
     // MARK: - Interní
 
     private func currentRemote() -> (any RemoteDataFile)? {

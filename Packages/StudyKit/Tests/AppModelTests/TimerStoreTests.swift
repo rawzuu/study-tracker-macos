@@ -277,7 +277,7 @@ struct StudyActionsTests {
         let (actions, timer, clock, _) = try await actions()
         try await actions.ready()
         #expect(actions.today().text == "Dnes 0 min z 2 h, zbývá 2 h.")
-        #expect(actions.whatNow().hasPrefix("Anatomie: "))
+        #expect(actions.whatNow().hasPrefix("Anatomie") && !actions.whatNow().contains("Pokračovat"))
         clock.t = Int(Date().timeIntervalSince1970 * 1000) - 30 * minute
         try actions.start(subjectId: "anat", topic: nil, modeId: "pomodoro")
         clock.t += 25 * minute

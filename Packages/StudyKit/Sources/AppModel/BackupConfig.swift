@@ -34,24 +34,6 @@ public protocol BackupService: Sendable {
     /// GitHub jméno majitele tokenu.
     func login(token: String) async throws(GitHubError) -> String
     func remote(token: String, location: RepoLocation) -> any RemoteDataFile
-    /// Gist pro odebíraný kalendář (stejný token jako záloha).
-    func gists(token: String) -> any GistPublisher
-}
-
-extension BackupService {
-    /// Bez sítě – jen skutečné připojení ke GitHubu (`GitHubBackupService`) gist opravdu zapíše.
-    public func gists(token: String) -> any GistPublisher { OfflineGists() }
-}
-
-/// Gist bez sítě (UI testy, náhledy): každý pokus skončí chybou sítě.
-struct OfflineGists: GistPublisher {
-    func createGist(file: String, content: String, description: String) async throws(GitHubError) -> CreatedGist {
-        throw .network(code: URLError.Code.notConnectedToInternet.rawValue)
-    }
-
-    func updateGist(id: String, file: String, content: String) async throws(GitHubError) {
-        throw .network(code: URLError.Code.notConnectedToInternet.rawValue)
-    }
 }
 
 public struct GitHubBackupService: BackupService {
@@ -63,10 +45,6 @@ public struct GitHubBackupService: BackupService {
 
     public func remote(token: String, location: RepoLocation) -> any RemoteDataFile {
         GitHubDataFile(client: GitHubClient(token: token), location: location)
-    }
-
-    public func gists(token: String) -> any GistPublisher {
-        GitHubClient(token: token)
     }
 }
 

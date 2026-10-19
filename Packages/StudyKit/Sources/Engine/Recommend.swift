@@ -53,6 +53,18 @@ public struct Recommendation: Sendable, Hashable, Identifiable {
     public let planBlockId: String?
 }
 
+extension Recommendation {
+    /// Mac: k čemu doporučení patří – blok plánu, zkouška nebo kartičky; u pokračování nic. Hlavní řádek je
+    /// vždy předmět (co se učit). Téma z posledního sezení jen předvyplní časovač – „Pokračovat: téma“
+    /// (`title` jako na webu) působilo, jako by šlo o opakování.
+    public var context: String? {
+        switch activity {
+        case .plan, .exam, .anki: title
+        case .continue, .carry: nil
+        }
+    }
+}
+
 /// „Co se mám teď učit?“ (`src/lib/recommend.ts` na webu) – stejné skóre, důvody i délka bloku.
 ///
 /// Pro každý aktivní předmět spočítá signály (0–1) a skóre jako vážený součet:

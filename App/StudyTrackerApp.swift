@@ -24,7 +24,6 @@ struct StudyTrackerApp: App {
                 .environment(delegate.timer)
                 .environment(delegate.navigator)
                 .environment(delegate.toasts)
-                .environment(delegate.calendarFeed)
                 .environment(delegate.advisor)
                 .environment(delegate.appleCalendar)
                 .frame(minWidth: 900, minHeight: 600)
@@ -88,7 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var timer = TimerStore(app: store, effects: Self.uiTesting ? nil : LiveTimerEffects())
     let navigator = Navigator()
     let toasts = Toasts()
-    lazy var calendarFeed = CalendarFeedSync(app: store)
     lazy var advisor = Advisor(store: store)
     lazy var menuBar = MenuBarStatus(timer: timer)
     // Widgety: souhrn do sdíleného kontejneru (UI testy bez widgetů) a příkazy z jejich tlačítek.
@@ -115,8 +113,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await store.start()
             // Blok, který doběhl, zatímco aplikace neběžela, se uloží až teď; čekající odkaz se spustí.
             timer.refresh()
-            // Odebíraný kalendář se aktualizuje po změnách plánu (jen když je zapnutý).
-            calendarFeed.start()
             // Widgety dostanou souhrn a začnou se poslouchat jejich tlačítka.
             widgets.start()
             // Apple Kalendář: zápis plánu (když je zapnutý) a obsazený čas z ostatních kalendářů.

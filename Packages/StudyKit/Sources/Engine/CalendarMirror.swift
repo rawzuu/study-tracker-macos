@@ -2,7 +2,7 @@ import Core
 import Foundation
 
 /// Plán a zkoušky jako události vlastního kalendáře „Studijní plán“ v Apple Kalendáři. Obsah odpovídá
-/// odebíranému kalendáři (`IcsExport.feed`): bloky od dvou týdnů zpět a zkoušky. Kalendář je jen kopie dat –
+/// odebíranému kalendáři webu: bloky od dvou týdnů zpět a zkoušky. Kalendář je jen kopie dat –
 /// zdrojem pravdy zůstává `data.json`, takže změny v Kalendáři se při další synchronizaci přepíšou.
 public enum CalendarMirror {
     /// Název kalendáře, který Mac založí (a na jiném Macu najde).

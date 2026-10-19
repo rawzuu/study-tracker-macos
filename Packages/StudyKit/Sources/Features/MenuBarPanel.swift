@@ -143,9 +143,14 @@ public struct MenuBarPanel: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Co teď?").font(Typo.heading).foregroundStyle(Palette.accent)
                 VStack(alignment: .leading, spacing: 4) {
-                    SubjectCapsule(name: subject.name, color: subject.color)
-                    Text(top.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.text)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 7) {
+                        Circle().fill(Palette.subject(subject.color)).frame(width: 8, height: 8)
+                        Text(subject.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let context = top.context {
+                        Text(context).font(.system(size: 12.5)).foregroundStyle(Palette.text2).fixedSize(horizontal: false, vertical: true)
+                    }
                     if let reason = top.reasons.first {
                         Text(reason).font(Typo.small).foregroundStyle(Palette.text3)
                     }

@@ -23,6 +23,19 @@ public enum Timetables {
         return out.sorted { $0.event.start < $1.event.start }
     }
 
+    /// Události z jiných kalendářů bez hodin, které jsou i v rozvrhu (stejný začátek i konec na minutu):
+    /// výuku ukáže rozvrh a jde v něm upravit. Schovají se i události k odpadlé hodině nebo skryté řadě,
+    /// aby se jejich čas opravdu uvolnil, i když v Apple Kalendáři zůstaly.
+    public static func withoutLectures(_ events: [ExternalBusy], _ doc: AppDocument) -> [ExternalBusy] {
+        guard let from = events.map(\.start).min(), let to = events.map(\.end).max() else { return events }
+        let m = StudyClock.minute
+        var lectures = Set<[Int]>()
+        for tt in doc.alive(Timetable.self) {
+            for e in tt.events where e.end >= from && e.start <= to { lectures.insert([e.start / m, e.end / m]) }
+        }
+        return lectures.isEmpty ? events : events.filter { !lectures.contains([$0.start / m, $0.end / m]) }
+    }
+
     /// Co se změní, když starý rozvrh nahradí nový (porovnávají se jen budoucí termíny).
     public struct Diff: Equatable, Sendable {
         public let added: Int

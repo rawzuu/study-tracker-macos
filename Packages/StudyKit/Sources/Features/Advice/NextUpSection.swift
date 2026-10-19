@@ -4,7 +4,7 @@ import DesignSystem
 import Engine
 import SwiftUI
 
-/// „Co teď?“ nad seznamem dne: hlavní doporučení jako karta (předmět, název, důvody, Začít), pod ním
+/// „Co teď?“ nad seznamem dne: hlavní doporučení jako karta (předmět, plán nebo zkouška, důvody, Začít), pod ním
 /// další možnosti a na požádání „Proč“ – signály, ze kterých je skóre.
 struct NextUpSection: View {
     @Environment(AppStore.self) private var store
@@ -57,18 +57,24 @@ struct NextUpSection: View {
     private func main(_ top: Recommendation, note: String?) -> some View {
         let subject = SubjectInfo(top.subjectId, in: store.document)
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                SubjectCapsule(name: subject.name, color: subject.color)
-                Text(top.activity.label).font(Typo.small).foregroundStyle(Palette.text3)
+            // Co se učit: předmět. Kde jsi skončil, je jen v časovači (předvyplněné téma).
+            HStack(spacing: 9) {
+                Circle().fill(Palette.subject(subject.color)).frame(width: 10, height: 10)
+                Text(top.activity == .anki ? top.title : subject.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Palette.text)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("next.subject")
-            Text(top.title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Palette.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
-                .accessibilityIdentifier("next.title")
+            if let context = top.context, top.activity != .anki {
+                Text(context)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Palette.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+                    .accessibilityIdentifier("next.context")
+            }
             Text(top.reasons.prefix(3).joined(separator: " · "))
                 .font(.system(size: 13))
                 .foregroundStyle(Palette.text2)
@@ -108,7 +114,7 @@ struct NextUpSection: View {
                     HStack(spacing: 10) {
                         Text("Nebo").font(Typo.small).foregroundStyle(Palette.text3).frame(width: 32, alignment: .leading)
                         ColorMark(color: subject.color)
-                        (Text(subject.name).foregroundStyle(Palette.text) + Text("  \(r.title)").foregroundStyle(Palette.text3))
+                        (Text(subject.name).foregroundStyle(Palette.text) + Text(r.context.map { "  \($0)" } ?? "").foregroundStyle(Palette.text3))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("\(r.minutes) min").font(Typo.small).monospacedDigit().foregroundStyle(Palette.text3)
@@ -216,7 +222,7 @@ struct NextUpInline: View {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Palette.accent)
                 (Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.text)
-                    + Text("  \(top.title) · \(top.minutes) min").foregroundStyle(Palette.text2))
+                    + Text("  \(top.context.map { "\($0) · " } ?? "")\(top.minutes) min").foregroundStyle(Palette.text2))
                     .font(.system(size: 13))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)

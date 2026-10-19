@@ -172,6 +172,17 @@ struct SessionFacts: TimedStudy {
         focusValue = s.focus ?? 0
     }
 
+    /// Blok plánu, který se při plánování dalších dnů počítá, jako by byl odučený (bez hodnocení soustředění).
+    init(planned subjectId: String, start: Int, minutes: Int) {
+        self.subjectId = subjectId
+        topic = ""
+        mode = "plan"
+        self.start = start
+        end = start + minutes * StudyClock.minute
+        durationSec = minutes * 60
+        focusValue = 0
+    }
+
     static func alive(in doc: AppDocument) -> [SessionFacts] {
         doc.alive(Session.self).map(SessionFacts.init)
     }

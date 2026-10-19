@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Jedna položka týdenní mřížky. Barvu nese jen předmět: odučené je syté, plán světlé s obrysem,
 /// zmeškaný plán čárkovaně, běžící blok s výrazným obrysem, výuka šedá a události z ostatních
-/// kalendářů šedě šrafované (obsazeno).
+/// kalendářů jemně v barvě svého kalendáře s proužkem vlevo (jako v Apple Kalendáři).
 struct CalendarItemView: View {
     @Environment(\.colorScheme) private var scheme
     let item: CalendarWeekState.Item
@@ -43,13 +43,16 @@ struct CalendarItemView: View {
                 Text(kind == .lecture || kind == .external ? item.item.title : item.subject.name)
                     .fontWeight(kind == .external ? .medium : .semibold)
             }
-            .foregroundStyle(missed ? Palette.text3 : kind == .external ? Palette.text2 : Palette.text)
-            if height >= 34 { Text(missed ? "zmeškáno · \(item.detail)" : item.detail).foregroundStyle(missed ? Palette.text3 : Palette.text2) }
+            .foregroundStyle(missed ? Palette.text3 : Palette.text)
+            if height >= 34 {
+                Text(missed ? "zmeškáno · \(item.detail)" : item.detail).foregroundStyle(missed || kind == .external ? Palette.text3 : Palette.text2)
+            }
             if height >= 50 { Text(timeLabel ?? item.timeLabel).font(.system(size: 10.5)).monospacedDigit().foregroundStyle(Palette.text3) }
         }
         .font(.system(size: 11.5))
         .lineLimit(1)
-        .padding(.horizontal, 7)
+        .padding(.leading, kind == .external ? 9 : 7)
+        .padding(.trailing, 7)
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background { background.clipShape(shape) }
@@ -70,7 +73,11 @@ struct CalendarItemView: View {
         case .done: color.opacity(hovering ? strong + 0.06 : strong)
         case .live: color.opacity(strong)
         case .lecture: Palette.panel3
-        case .external: BusyHatch()
+        case .external:
+            HStack(spacing: 0) {
+                color.frame(width: 3)
+                color.opacity(hovering ? 0.16 : 0.1)
+            }
         }
     }
 
@@ -83,24 +90,7 @@ struct CalendarItemView: View {
                 shape.strokeBorder(color.opacity(0.6), lineWidth: 1)
             }
         case .live: shape.strokeBorder(color, lineWidth: 1.5)
-        case .external: shape.strokeBorder(Palette.line)
-        case .done, .lecture: EmptyView()
-        }
-    }
-}
-
-/// Obsazený čas z jiného kalendáře: jemné šedé šrafování – barvu v kalendáři nesou jen předměty.
-struct BusyHatch: View {
-    var body: some View {
-        Canvas { ctx, size in
-            var lines = Path()
-            var x: CGFloat = -size.height
-            while x < size.width {
-                lines.move(to: CGPoint(x: x, y: size.height))
-                lines.addLine(to: CGPoint(x: x + size.height, y: 0))
-                x += 8
-            }
-            ctx.stroke(lines, with: .color(Palette.lineStrong.opacity(0.8)), lineWidth: 3)
+        case .done, .lecture, .external: EmptyView()
         }
     }
 }

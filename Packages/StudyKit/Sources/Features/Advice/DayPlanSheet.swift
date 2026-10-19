@@ -4,92 +4,208 @@ import DesignSystem
 import Engine
 import SwiftUI
 
-/// Ranní plánování (`DayPlanModal` na webu): návrh bloků na zbytek dne, úpravy a uložení do kalendáře.
+/// Na kolik dní ranní plán navrhuje (Mac – web plánuje jen zbytek dneška).
+enum PlanSpan: String, CaseIterable, Identifiable, Sendable {
+    case today, tomorrow, week, nextWeek
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .today: "Dnes"
+        case .tomorrow: "Zítra"
+        case .week: "Do neděle"
+        case .nextWeek: "Příští týden"
+        }
+    }
+
+    /// Začátky plánovaných dnů.
+    func days(now: Int, clock: StudyClock) -> [Int] {
+        let today = clock.startOfDay(now)
+        let monday = clock.startOfWeek(now)
+        switch self {
+        case .today: return [today]
+        case .tomorrow: return [clock.addDays(today, 1)]
+        case .week: return (0...max(0, 6 - clock.weekdayIndex(now))).map { clock.addDays(today, $0) }
+        case .nextWeek: return (7..<14).map { clock.addDays(monday, $0) }
+        }
+    }
+
+    /// V neděli je „do neděle“ totéž co dnes.
+    static func available(now: Int, clock: StudyClock) -> [PlanSpan] {
+        clock.weekdayIndex(now) == 6 ? [.today, .tomorrow, .nextWeek] : allCases
+    }
+}
+
+/// Ranní plánování (`DayPlanModal` na webu): návrh bloků na zbytek dne – na Macu i na zítřek a dny
+/// dopředu –, úpravy a uložení do kalendáře.
 struct DayPlanSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(Toasts.self) private var toasts
     @Environment(AppleCalendarSync.self) private var appleCalendar
     @Environment(\.dismiss) private var dismiss
-    /// Kolikrát se přidal „Další blok“ (+25 min k dennímu cíli).
+    @State private var span = PlanSpan.today
+    /// Kolikrát se přidal „Další blok“ (+25 min k dennímu cíli; jen u plánu jednoho dne).
     @State private var extra = 0
-    @State private var items: [DayPlanItem]
+    @State private var plan: [DayPlan.PlannedDay]
     /// Bez posouvání – jen pro náhledy (ImageRenderer nevykreslí ScrollView).
     private let scrolls: Bool
 
     static let durations = [15, 25, 30, 45, 50, 60, 75, 90, 120]
 
-    init(items: [DayPlanItem], scrolls: Bool = true) {
-        _items = State(initialValue: items)
+    init(plan: [DayPlan.PlannedDay], span: PlanSpan = .today, scrolls: Bool = true) {
+        _plan = State(initialValue: plan)
+        _span = State(initialValue: span)
         self.scrolls = scrolls
+    }
+
+    /// Návrh na dnešek, se kterým se okno otevírá.
+    @MainActor static func proposal(_ store: AppStore, calendar: AppleCalendarSync, span: PlanSpan = .today, extra: Int = 0) -> [DayPlan.PlannedDay] {
+        DayPlan.propose(store.document, days: span.days(now: store.nowMs, clock: store.clock), now: store.nowMs, extra: extra,
+                        clock: store.clock, external: calendar.busyIntervals)
     }
 
     var body: some View {
         let now = store.nowMs
-        let clock = store.clock
         let doc = store.document
-        let bounds = DayPlan.dayBounds(doc.settings, now: now, clock: clock)
-        EditorSheet("Plán na dnešek · \(Format.date(now, .weekdayDayMonth, clock: clock))", width: 720) {
-            summary(doc: doc, now: now, day: bounds.day)
-            DayAxis(items: items, busy: DayPlan.busyIntervals(doc, day: bounds.day, excluding: carried, clock: clock, external: appleCalendar.busyIntervals),
-                    range: DayPlan.dayRange(doc.settings, day: bounds.day, clock: clock), to: bounds.to, now: now, clock: clock)
-            if items.isEmpty {
-                Text("Na dnešek nic dalšího nenavrhuji – cíl je splněný nebo naplánovaný. Přidat můžeš tlačítkem „Další blok“.")
-                    .font(Typo.small).foregroundStyle(Palette.text2)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if scrolls {
-                ScrollView { rows(day: bounds.day, from: bounds.from) }
-                    .frame(maxHeight: 360)
-                    .fixedSize(horizontal: false, vertical: true)
+        let single = plan.count == 1
+        EditorSheet(title(now: now), width: 760) {
+            HStack(spacing: 16) {
+                Picker("Plánovat", selection: Binding(get: { span }, set: { change(to: $0) })) {
+                    ForEach(PlanSpan.available(now: now, clock: store.clock)) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityIdentifier("dayplan.span")
+                Spacer(minLength: 0)
+                if let day = plan.first, single {
+                    summary(doc: doc, day: day)
+                } else {
+                    figure("navrhuji", proposedMinutes(plan) * 60).font(Typo.small).accessibilityIdentifier("dayplan.proposed")
+                }
+            }
+            if single, let day = plan.first {
+                DayAxis(items: day.items, busy: busy(day, doc: doc), range: DayPlan.dayRange(doc.settings, day: day.day, clock: store.clock),
+                        to: bounds(day, doc: doc).to, now: now, clock: store.clock)
+                if day.items.isEmpty {
+                    Text("Na \(span == .tomorrow ? "zítřek" : "dnešek") nic dalšího nenavrhuji – cíl je splněný nebo naplánovaný. Přidat můžeš tlačítkem „Další blok“.")
+                        .font(Typo.small).foregroundStyle(Palette.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    scrolling(maxHeight: 360) { rows(0) }
+                }
             } else {
-                rows(day: bounds.day, from: bounds.from)
+                scrolling(maxHeight: 520) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        ForEach(plan.indices, id: \.self) { i in dayGroup(i, doc: doc, now: now) }
+                    }
+                }
             }
             dayWindow(doc.settings)
         } footer: {
-            Button { propose(extra: extra) } label: { Label("Navrhnout znovu", systemImage: "arrow.counterclockwise") }
+            Button { propose() } label: { Label("Navrhnout znovu", systemImage: "arrow.counterclockwise") }
                 .buttonStyle(.study(.ghost))
                 .accessibilityIdentifier("dayplan.again")
             Spacer()
             Button("Zrušit") { dismiss() }.buttonStyle(.study(.ghost)).keyboardShortcut(.cancelAction)
-            Button {
-                extra += 1
-                propose(extra: extra)
-            } label: { Label("Další blok", systemImage: "plus") }
-                .buttonStyle(.study(.normal))
-                .accessibilityIdentifier("dayplan.more")
+            if single {
+                Button {
+                    extra += 1
+                    propose()
+                } label: { Label("Další blok", systemImage: "plus") }
+                    .buttonStyle(.study(.normal))
+                    .accessibilityIdentifier("dayplan.more")
+            }
             Button(action: save) { Label("Uložit do kalendáře", systemImage: "calendar.badge.checkmark") }
                 .buttonStyle(.primary)
                 .keyboardShortcut(.defaultAction)
-                .disabled(!items.contains { $0.include && $0.isPlaced })
+                .disabled(proposedMinutes(plan) == 0)
                 .accessibilityIdentifier("dayplan.save")
         }
     }
 
-    private var carried: Set<String> { Set(items.compactMap { $0.carry?.id }) }
+    private func title(now: Int) -> String {
+        let clock = store.clock
+        guard let first = plan.first?.day, let last = plan.last?.day else { return "Plán" }
+        let range = "\(Format.date(first, .dayMonth, clock: clock)) – \(Format.date(last, .dayMonth, clock: clock))"
+        switch span {
+        case .today: return "Plán na dnešek · \(Format.date(now, .weekdayDayMonth, clock: clock))"
+        case .tomorrow: return "Plán na zítřek · \(Format.date(first, .weekdayDayMonth, clock: clock))"
+        case .week: return plan.count == 1 ? "Plán na dnešek · \(Format.date(now, .weekdayDayMonth, clock: clock))" : "Plán do neděle · \(range)"
+        case .nextWeek: return "Plán na příští týden · \(range)"
+        }
+    }
 
-    private func rows(day: Int, from: Int) -> some View {
-        VStack(spacing: 0) {
-            ForEach($items) { $item in
-                DayPlanRow(item: $item, day: day, placeholder: from, clock: store.clock,
-                           resize: { reflow(resizing: item.key, to: $0) }, remove: { reflow(removing: item.key) })
+    private func bounds(_ day: DayPlan.PlannedDay, doc: AppDocument) -> (day: Int, from: Int, to: Int) {
+        DayPlan.dayBounds(doc.settings, now: day.now, clock: store.clock)
+    }
+
+    private func busy(_ day: DayPlan.PlannedDay, doc: AppDocument) -> [BusyInterval] {
+        DayPlan.busyIntervals(doc, day: day.day, excluding: Set(day.items.compactMap { $0.carry?.id }), clock: store.clock,
+                              external: appleCalendar.busyIntervals)
+    }
+
+    @ViewBuilder
+    private func scrolling(maxHeight: CGFloat, @ViewBuilder content: () -> some View) -> some View {
+        if scrolls {
+            ScrollView { content() }
+                .frame(maxHeight: maxHeight)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            content()
+        }
+    }
+
+    /// Den v plánu na víc dní: nadpis s počtem bloků, časová osa a bloky.
+    private func dayGroup(_ i: Int, doc: AppDocument, now: Int) -> some View {
+        let day = plan[i]
+        let chosen = day.items.filter { $0.include && $0.isPlaced }
+        let meta = chosen.isEmpty ? "nic nenavrhuji"
+            : "\(chosen.count) \(Format.plural(chosen.count, "blok", "bloky", "bloků")) · \(Format.duration(chosen.reduce(0) { $0 + $1.minutes } * 60))"
+        return VStack(alignment: .leading, spacing: 8) {
+            ListHeading(Format.date(day.day, .weekdayDayNumericMonth, clock: store.clock), meta: meta)
+            DayAxis(items: day.items, busy: busy(day, doc: doc), range: DayPlan.dayRange(doc.settings, day: day.day, clock: store.clock),
+                    to: bounds(day, doc: doc).to, now: now, clock: store.clock)
+            if day.items.isEmpty {
+                Text("Cíl dne je splněný nebo naplánovaný, nebo se do dne nic nevejde.").font(Typo.small).foregroundStyle(Palette.text3)
+            } else {
+                rows(i)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dayplan.day.\(i)")
+    }
+
+    private func rows(_ i: Int) -> some View {
+        let day = plan[i]
+        let from = bounds(day, doc: store.document).from
+        return VStack(spacing: 0) {
+            ForEach($plan[i].items) { $item in
+                DayPlanRow(item: $item, day: day.day, placeholder: from, clock: store.clock,
+                           resize: { reflow(i, resizing: item.key, to: $0) }, remove: { reflow(i, removing: item.key) })
             }
         }
     }
 
-    /// Cíl · odučeno · už v plánu · navrhuji
-    private func summary(doc: AppDocument, now: Int, day: Int) -> some View {
-        let next = store.clock.addDays(day, 1)
-        let studied = doc.alive(Session.self).filter { $0.start >= day }.reduce(0) { $0 + $1.durationSec }
+    /// Cíl · odučeno · už v plánu · navrhuji (plán jednoho dne)
+    private func summary(doc: AppDocument, day: DayPlan.PlannedDay) -> some View {
+        let next = store.clock.addDays(day.day, 1)
+        let studied = doc.alive(Session.self).filter { $0.start >= day.day && $0.start < next }.reduce(0) { $0 + $1.durationSec }
         let planned = doc.alive(PlanBlock.self)
-            .filter { !$0.done && $0.start >= day && $0.start < next && $0.start + $0.durationMin * StudyClock.minute > now }
+            .filter { !$0.done && $0.start >= day.day && $0.start < next && $0.start + $0.durationMin * StudyClock.minute > day.now }
             .reduce(0) { $0 + $1.durationMin }
-        let proposed = items.filter { $0.include && $0.isPlaced }.reduce(0) { $0 + $1.minutes }
         return HStack(spacing: 22) {
             figure("cíl", doc.settings.dailyGoalMin * 60)
-            figure("odučeno", studied)
+            if day.now <= store.nowMs { figure("odučeno", studied) }
             figure("už v plánu", planned * 60)
-            figure("navrhuji", proposed * 60).accessibilityIdentifier("dayplan.proposed")
+            figure("navrhuji", proposedMinutes([day]) * 60).accessibilityIdentifier("dayplan.proposed")
         }
         .font(Typo.small)
+    }
+
+    private func proposedMinutes(_ days: [DayPlan.PlannedDay]) -> Int {
+        days.reduce(0) { $0 + $1.items.filter { $0.include && $0.isPlaced }.reduce(0) { $0 + $1.minutes } }
     }
 
     private func figure(_ label: String, _ sec: Int) -> some View {
@@ -117,30 +233,40 @@ struct DayPlanSheet: View {
 
     // MARK: - Akce
 
-    private func propose(extra: Int) {
-        items = DayPlan.propose(store.document, now: store.nowMs, extra: extra, clock: store.clock, external: appleCalendar.busyIntervals)
+    private func change(to next: PlanSpan) {
+        guard next != span else { return }
+        span = next
+        extra = 0
+        propose()
     }
 
-    /// Po změně délky nebo odebrání se zbytek rozmístí znovu (`reflow` na webu).
-    private func reflow(_ list: [DayPlanItem]) {
-        let cleared = list.map { var i = $0; i.start = 0; return i }
-        items = DayPlan.place(store.document, items: cleared, now: store.nowMs, clock: store.clock, external: appleCalendar.busyIntervals)
+    private func propose() {
+        plan = Self.proposal(store, calendar: appleCalendar, span: span, extra: plan.count == 1 ? extra : 0)
     }
 
-    private func reflow(resizing key: String, to minutes: Int) {
-        reflow(items.map { var i = $0; if i.key == key { i.minutes = minutes }; return i })
+    /// Po změně délky nebo odebrání se zbytek dne rozmístí znovu (`reflow` na webu).
+    private func reflow(_ i: Int, _ list: [DayPlanItem]) {
+        let cleared = list.map { var item = $0; item.start = 0; return item }
+        plan[i].items = DayPlan.place(store.document, items: cleared, now: plan[i].now, clock: store.clock, external: appleCalendar.busyIntervals)
     }
 
-    private func reflow(removing key: String) {
-        reflow(items.filter { $0.key != key })
+    private func reflow(_ i: Int, resizing key: String, to minutes: Int) {
+        reflow(i, plan[i].items.map { var item = $0; if item.key == key { item.minutes = minutes }; return item })
+    }
+
+    private func reflow(_ i: Int, removing key: String) {
+        reflow(i, plan[i].items.filter { $0.key != key })
     }
 
     private func save() {
-        let blocks = DayPlan.blocks(items, in: store.document)
+        let doc = store.document
+        let saved = plan.map { DayPlan.blocks($0.items, in: doc) }
+        let blocks = saved.flatMap { $0 }
         guard !blocks.isEmpty else { return }
         store.upsert(blocks)
-        let n = blocks.count
-        toasts.showAfterSheet("Do kalendáře \(Format.plural(n, "přidán", "přidány", "přidáno")) \(n) \(Format.plural(n, "blok", "bloky", "bloků"))")
+        let n = blocks.count, days = saved.filter { !$0.isEmpty }.count
+        let added = "Do kalendáře \(Format.plural(n, "přidán", "přidány", "přidáno")) \(n) \(Format.plural(n, "blok", "bloky", "bloků"))"
+        toasts.showAfterSheet(days > 1 ? "\(added) na \(days) \(Format.plural(days, "den", "dny", "dní"))" : added)
         dismiss()
     }
 }
@@ -167,9 +293,9 @@ private struct DayPlanRow: View {
                 .frame(width: 76)
             ColorMark(color: subject.color)
             VStack(alignment: .leading, spacing: 2) {
-                (Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.text) + Text("  \(item.title)").foregroundStyle(Palette.text2))
+                (Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.text) + Text("  \(item.displayTitle)").foregroundStyle(Palette.text2))
                     .lineLimit(1)
-                Text(item.isPlaced ? item.reasons.joined(separator: " · ") : "nevejde se do dnešního dne")
+                Text(item.isPlaced ? item.reasons.joined(separator: " · ") : "nevejde se do dne")
                     .font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -136,7 +136,7 @@ public struct StudyActions {
             return "Teď není co doporučit – přidej předměty, cíle nebo zkoušky."
         }
         let reasons = top.reasons.prefix(2).joined(separator: ", ")
-        return "\(subjectName(top.subjectId ?? "")): \(top.title), \(top.minutes) min" + (reasons.isEmpty ? "." : " – \(reasons).")
+        return "\(subjectName(top.subjectId ?? ""))\(top.context.map { ": \($0)" } ?? ""), \(top.minutes) min" + (reasons.isEmpty ? "." : " – \(reasons).")
     }
 
     /// Kolik je dnes odučeno (minuty) a věta s cílem.
