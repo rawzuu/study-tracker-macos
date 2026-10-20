@@ -1,3 +1,4 @@
+import AppKit
 import AppModel
 import Core
 import DesignSystem
@@ -53,6 +54,13 @@ struct DayPlanSheet: View {
 
     static let durations = [15, 25, 30, 45, 50, 60, 75, 90, 120]
 
+    /// Výška seznamu dnů: na velkém monitoru víc, na malé obrazovce tak, aby tlačítka dole zůstala vidět
+    /// (okno kolem seznamu potřebuje asi 340 bodů).
+    @MainActor static var daysHeight: CGFloat {
+        let screen = NSScreen.main?.visibleFrame.height ?? 900
+        return max(240, min(560, screen - 360))
+    }
+
     init(plan: [DayPlan.PlannedDay], span: PlanSpan = .today, scrolls: Bool = true) {
         _plan = State(initialValue: plan)
         _span = State(initialValue: span)
@@ -96,7 +104,7 @@ struct DayPlanSheet: View {
                     scrolling(maxHeight: 360) { rows(0) }
                 }
             } else {
-                scrolling(maxHeight: 520) {
+                scrolling(maxHeight: Self.daysHeight) {
                     VStack(alignment: .leading, spacing: 18) {
                         ForEach(plan.indices, id: \.self) { i in dayGroup(i, doc: doc, now: now) }
                     }
