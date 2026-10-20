@@ -51,7 +51,8 @@ struct AnkiSummary: View {
                     Spacer(minLength: 8)
                     if t.fresh { AnkiCounts(new: t.new, learn: t.learn, review: t.review) }
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(t.fresh ? "\(t.due) \(Format.plural(t.due, "karta", "karty", "karet")) zbývá, \(t.new) nových, \(t.learn) učených, \(t.review) k opakování" : "Stav Anki není z dneška")
                 .accessibilityIdentifier("dash.anki.due")
                 ForEach(t.decks.prefix(4), id: \.name) { d in
                     HStack(spacing: 10) {
