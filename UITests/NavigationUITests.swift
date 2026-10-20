@@ -318,7 +318,8 @@ final class NavigationUITests: XCTestCase {
         app.staticTexts["nav.prehled"].click()
         let due = app.descendants(matching: .any)["dash.anki.due"]
         XCTAssertTrue(due.waitForExistence(timeout: 5))
-        XCTAssertTrue(due.label.contains("85"), "85 karet zbývá (\(due.label))")
+        let count = due.staticTexts.matching(NSPredicate(format: "value == %@ OR label == %@", "85", "85")).firstMatch
+        XCTAssertTrue(count.exists || (due.value as? String ?? "").contains("85") || due.label.contains("85"), "85 karet zbývá")
         attachScreenshot(app, "Anki na stránce Dnes")
     }
 
