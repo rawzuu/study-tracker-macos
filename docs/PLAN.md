@@ -40,7 +40,7 @@ Rizika, která řeší architektura:
 | Co teď? a ranní plán | skóre z 6 signálů, simulace, prokládání, nejlepší okno soustředění | port bez signálu opakování a bez opakování po přednášce; témata se nečtou; výsledky shodné s webem (kontrolní data), předpočítané údaje sdílí simulace ranního plánu. Navíc (schváleno 19. 10. 2026): plán na zítřek, do neděle a na příští týden; „Co teď?“ ukazuje předmět, ne „Pokračovat: téma“ |
 | Statistiky | heatmapy, trend, den × hodina, soustředění, série | Swift Charts |
 | Report, reflexe | postřehy, návrhy úprav (kalibrace), tisk/PDF, týdenní reflexe | systémový tisk do PDF |
-| Úspěchy | 119 úspěchů, stabilní id, medaile, trvalé záznamy | stejná id |
+| Úspěchy | 119 úspěchů, stabilní id, medaile, trvalé záznamy | stejná id a výpočet (kontrolní data), trvalé záznamy; místo medailí řádky s úrovněmi |
 | Historie, předměty | úpravy, ruční zápis, CSV, barvy, cíle, archivace, mazání i s plány | SwiftUI |
 | Nastavení | vše vč. vypínatelných funkcí, skrytých stránek, zálohy (token → login) | token v Klíčence |
 | Data | koš 30 dní, JSON export/import se sloučením | stejná logika |
@@ -61,7 +61,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M3 ✓ | Kalendář, zkoušky, rozvrh .ics, export a odebíraný kalendář | v0.4.0 |
 | M4 ✓ | Co teď?, ranní plán (bez opakování) | v0.5.0 |
 | M4+ ✓ | Integrace s macOS (schváleno 18. 10. 2026): velký monitor, Apple Kalendář (EventKit), horní lišta, oznámení s akcemi, Zkratky a Siri, widgety | v0.6.0, #27–#32 |
-| M5 | Statistiky, report a kalibrace, reflexe (v0.9.0), úspěchy | |
+| M5 ✓ | Statistiky, report a kalibrace, reflexe, úspěchy (úspěchy jako seznam místo kovových medailí – bez žluté, vzhled „Seznam“) | v0.9.0 |
 | M6 | Nastavení, koš, export/import, onboarding (Anki už v v0.9.0) | parita |
 | M7 | profilování v Instruments, optimalizace, výkonnostní testy | v1.0.0 |
 

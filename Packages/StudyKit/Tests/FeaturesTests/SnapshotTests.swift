@@ -159,6 +159,14 @@ struct SnapshotTests {
                    name: "reflection", size: CGSize(width: 1440, height: 1100))
     }
 
+    @Test("Úspěchy")
+    func achievements() async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        try render(AchievementsView(snapshotWidth: 1440, now: now).environment(app), name: "achievements", size: CGSize(width: 1440, height: 1700))
+    }
+
     @Test("Anki v Nastavení: zapnuto, balíčky přiřazené k předmětům")
     func ankiSettings() async throws {
         let now = Int(Date().timeIntervalSince1970 * 1000)

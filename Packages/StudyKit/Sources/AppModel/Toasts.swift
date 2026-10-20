@@ -11,6 +11,8 @@ public final class Toasts {
         public let text: String
         /// Vrátí akci, o které hláška informuje (`nil` = hláška bez tlačítka).
         public let undo: (@MainActor () -> Void)?
+        /// Popisek tlačítka (výchozí „Vrátit“).
+        public var actionTitle = "Vrátit"
     }
 
     public private(set) var current: Toast?
@@ -21,6 +23,11 @@ public final class Toasts {
 
     public func show(_ text: String, undo: (@MainActor () -> Void)? = nil) {
         current = Toast(text: text, undo: undo)
+    }
+
+    /// Hláška s jiným tlačítkem než „Vrátit“ (např. „Zobrazit“).
+    public func show(_ text: String, action title: String, _ action: @escaping @MainActor () -> Void) {
+        current = Toast(text: text, undo: action, actionTitle: title)
     }
 
     /// Hláška z okna formuláře (sheet) – ukáže se až po jeho zavření (`presentAfterSheet()` v `onDismiss`),

@@ -54,6 +54,11 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["reflection.save"].waitForExistence(timeout: 3))
         attachScreenshot(app, "Reflexe")
 
+        app.staticTexts["nav.uspechy"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Úspěchy")
+        XCTAssertTrue(app.descendants(matching: .any)["achievements.summary"].waitForExistence(timeout: 3))
+        attachScreenshot(app, "Úspěchy")
+
         app.staticTexts["nav.nastaveni"].click()
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Nastavení")
         attachScreenshot(app, "Nastavení")

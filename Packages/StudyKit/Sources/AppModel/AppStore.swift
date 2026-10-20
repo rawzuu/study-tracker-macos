@@ -50,8 +50,8 @@ public final class AppStore {
 
     public var isConnected: Bool { backup != nil }
 
-    /// Nastavení jen pro tento Mac (stav časovače, připojení zálohy).
-    var defaults: UserDefaults { environment.defaults }
+    /// Nastavení jen pro tento Mac (stav časovače, připojení zálohy; v testech vlastní sada).
+    public var defaults: UserDefaults { environment.defaults }
 
     // MARK: - Start a životní cyklus
 

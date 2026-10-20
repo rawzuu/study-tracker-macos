@@ -81,6 +81,7 @@ struct RootView: View {
             case .statistiky: StatsView()
             case .report: ReportView()
             case .reflexe: ReflectionView(openPage: open)
+            case .uspechy: AchievementsView()
             case let other: PlaceholderPage(page: other)
             }
         }
@@ -252,12 +253,18 @@ private struct ToastView: View {
         HStack(spacing: 14) {
             Text(toast.text).font(Typo.body)
             if toast.undo != nil {
-                Button("Vrátit") { toasts.undo() }
-                    .buttonStyle(.study(.ghost, size: .small))
-                    // ⌘Z jako „Odvolat“ – jen dokud je hláška vidět
-                    .keyboardShortcut("z", modifiers: .command)
-                    .help("Vrátit (⌘Z)")
-                    .accessibilityIdentifier("toast.undo")
+                if toast.actionTitle == "Vrátit" {
+                    Button("Vrátit") { toasts.undo() }
+                        .buttonStyle(.study(.ghost, size: .small))
+                        // ⌘Z jako „Odvolat“ – jen dokud je hláška vidět
+                        .keyboardShortcut("z", modifiers: .command)
+                        .help("Vrátit (⌘Z)")
+                        .accessibilityIdentifier("toast.undo")
+                } else {
+                    Button(toast.actionTitle) { toasts.undo() }
+                        .buttonStyle(.study(.ghost, size: .small))
+                        .accessibilityIdentifier("toast.action")
+                }
             }
         }
         .padding(.leading, 16)

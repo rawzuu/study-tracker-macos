@@ -98,6 +98,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var appleCalendar = AppleCalendarSync(app: store, service: Self.uiTesting ? DemoCalendars.service() : EventKitCalendarService())
     // Anki na tomto Macu (AnkiConnect); UI testy mají Anki v paměti – nikdy nesahají na skutečnou Anki.
     lazy var anki = Self.uiTesting ? AnkiSync(app: store, service: DemoAnki.service()) : AnkiSync(app: store)
+    // Úspěchy: nově získané se uloží do dat a krátce se o nich dá vědět.
+    lazy var achievements = AchievementWatcher(app: store, toasts: toasts) { [navigator] in navigator.page = .uspechy }
     private var wakeObserver: NSObjectProtocol?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -122,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await appleCalendar.start()
             // Anki: jen když je na tomto Macu zapnutá.
             anki.start()
+            achievements.start()
             // Měření výkonu s běžícím blokem (Tools/dev/idle-cpu.sh casovac) – jen s ukázkovými daty.
             if Self.uiTesting, let page = Self.measurePage {
                 timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
