@@ -26,6 +26,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.toasts)
                 .environment(delegate.advisor)
                 .environment(delegate.appleCalendar)
+                .environment(delegate.anki)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -95,6 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     // UI testy mají kalendáře v paměti – nikdy nesahají na skutečný Apple Kalendář.
     lazy var appleCalendar = AppleCalendarSync(app: store, service: Self.uiTesting ? DemoCalendars.service() : EventKitCalendarService())
+    // Anki na tomto Macu (AnkiConnect); UI testy mají Anki v paměti – nikdy nesahají na skutečnou Anki.
+    lazy var anki = Self.uiTesting ? AnkiSync(app: store, service: DemoAnki.service()) : AnkiSync(app: store)
     private var wakeObserver: NSObjectProtocol?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -117,6 +120,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             widgets.start()
             // Apple Kalendář: zápis plánu (když je zapnutý) a obsazený čas z ostatních kalendářů.
             await appleCalendar.start()
+            // Anki: jen když je na tomto Macu zapnutá.
+            anki.start()
             // Měření výkonu s běžícím blokem (Tools/dev/idle-cpu.sh casovac) – jen s ukázkovými daty.
             if Self.uiTesting, let page = Self.measurePage {
                 timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
@@ -178,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         timer.refresh()
+        anki.refreshIfDue()
         Task { await store.setActive(true) }
     }
 

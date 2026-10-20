@@ -35,6 +35,11 @@
 	<string>public.app-category.education</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Study Tracker zapisuje tvůj studijní plán do kalendáře „Studijní plán“ a události z ostatních kalendářů bere v ranním plánu jako obsazený čas. Ostatní kalendáře jen čte.</string>
 	<key>STAppGroup</key>

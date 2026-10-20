@@ -57,7 +57,7 @@ public struct DashboardView: View {
                                running: running(now: now), recommendations: advisor.recommendations(now: now))
         let metrics = PageMetrics(width: width)
         let list = listColumn(summary, today, now: now, metrics: metrics)
-        let side = SummaryColumn(state: summary, openPage: openPage)
+        let side = SummaryColumn(state: summary, now: now, openPage: openPage)
         return Group {
             if metrics.size == .compact {
                 VStack(alignment: .leading, spacing: 40) {
@@ -443,13 +443,18 @@ private struct GapRow: View {
 
 /// Pravý sloupec: dnešek, časovač, týden, předměty, zkoušky a poslední sezení – jen text a tenké čáry.
 private struct SummaryColumn: View {
+    @Environment(AppStore.self) private var store
+    @Environment(AnkiSync.self) private var anki
     let state: DashboardState
+    let now: Int
     let openPage: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 34) {
             TodaySummary(state: state)
             DashTimer(openTimer: { openPage("casovac") })
+            // Anki jako na webu: když je propojená, nebo už je známý stav z jiného zařízení.
+            if anki.enabled || AnkiImport.today(store.document, now: now, clock: store.clock) != nil { AnkiSummary(now: now) }
             WeekSummary(state: state)
             if !state.weekRows.isEmpty { SubjectsSummary(rows: state.weekRows) }
             if !state.exams.isEmpty { ExamsSummary(rows: state.exams) }
@@ -459,7 +464,7 @@ private struct SummaryColumn: View {
     }
 }
 
-private struct SummaryTitle: View {
+struct SummaryTitle: View {
     let title: String
     let detail: String?
 

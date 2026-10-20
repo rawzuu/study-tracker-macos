@@ -89,8 +89,12 @@ struct NextUpSection: View {
             }
             HStack(spacing: 10) {
                 if top.activity == .anki {
-                    Label("Otevři Anki – čas se započítá při dalším načtení z Anki.", systemImage: "rectangle.stack")
-                        .font(Typo.small).foregroundStyle(Palette.text2)
+                    if AnkiApp.isInstalled {
+                        Button { AnkiApp.open() } label: { Label("Otevřít Anki", systemImage: "rectangle.stack") }
+                            .buttonStyle(.study(.primary, size: .small))
+                            .accessibilityIdentifier("next.openAnki")
+                    }
+                    Text("Čas se započítá při dalším načtení z Anki.").font(Typo.small).foregroundStyle(Palette.text3)
                 } else if busy {
                     Button("Časovač běží – otevřít", action: openTimer).buttonStyle(.study(.normal, size: .small))
                     Text("Doporučení spustíš po ukončení bloku.").font(Typo.small).foregroundStyle(Palette.text3)

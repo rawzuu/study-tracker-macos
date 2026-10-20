@@ -2,7 +2,7 @@
 
 Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
 
-Stav: **v0.8.0 – plán na víc dní, rozvrh bez dvojích hodin.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Dnes (den jako seznam bloků s volnými chvílemi a návrhy), Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics a export do Apple Kalendáře. Na stránce Dnes radí „Co teď?“ (jaký předmět) a ranní plán navrhne bloky na dnešek, zítřek, do neděle nebo na příští týden. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Stav: **v0.9.0 – Anki přímo na Macu.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Dnes (den jako seznam bloků s volnými chvílemi a návrhy), Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics a export do Apple Kalendáře. Na stránce Dnes radí „Co teď?“ (jaký předmět) a ranní plán navrhne bloky na dnešek, zítřek, do neděle nebo na příští týden. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Anki čte Mac přímo přes AnkiConnect (karty na dnešek, čas z Anki jako sezení se stejnými id jako na webu). Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -17,7 +17,7 @@ Packages/StudyKit/      Swift Package s moduly aplikace
     Data/               schéma, migrace, slučování (merge), stabilní zápis (serialize)
   Sources/Engine/       výpočty bez UI: kalendář v místním čase, souhrny, série, české formáty,
                         časovač, rozložení kalendáře, čtení a zápis .ics, rozvrh, koš
-  Sources/Networking/   GitHub Contents API (URLSession), chyby a hlášky jako na webu
+  Sources/Networking/   GitHub Contents API a AnkiConnect (URLSession), chyby a hlášky jako na webu
   Sources/Persistence/  lokální kopie dat (GRDB/SQLite, WAL, zálohy) a token v Klíčence
   Sources/Sync/         SyncEngine (actor): stáhnout → sloučit → nahrát se sha, režim jen čtení
   Sources/AppModel/     AppStore (@Observable), AppEnvironment (DI), připojení zálohy, časovač,
@@ -32,7 +32,7 @@ Config/                 xcconfig (podpis)
 project.yml             definice projektu pro XcodeGen
 ```
 
-Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persistence` → `Sync` → `AppModel` → `Features` (+ `DesignSystem`) → aplikace. V dalších milnících přibudou do `Engine` algoritmy (Co teď?, ranní plán, statistiky, úspěchy) a do `Networking` AnkiConnect.
+Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persistence` → `Sync` → `AppModel` → `Features` (+ `DesignSystem`) → aplikace. V dalších milnících přibudou do `Engine` statistiky, report a úspěchy.
 
 **Tok dat:** View ← stav obrazovky (čistá funkce z `AppDocument`) ← `AppStore` (`@Observable @MainActor`, drží neměnný `AppDocument`) ⇄ `SyncEngine` (actor) → `LocalStore` (SQLite na Macu) a GitHub Contents API → `data.json` v soukromém repu. Závislosti se předávají přes `AppEnvironment` a protokoly (`RemoteDataFile`, `SecretStore`, `BackupService`), testy je nahrazují podvrženými implementacemi.
 
@@ -128,6 +128,10 @@ V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained tok
 - **Odebíraný kalendář** (gist) je od v0.8.0 jen na webu – Mac ho nahradil přímým zápisem do Apple Kalendáře. Nastavení v datech Mac nemění, takže web ho dál aktualizuje, pokud je zapnutý.
 - **Apple Kalendář přímo (jen Mac):** Nastavení → Apple Kalendář. Mac zapisuje bloky (od dvou týdnů zpět) a zkoušky do vlastního kalendáře „Studijní plán“ – v iCloudu jsou hned v iPhonu, iPadu i hodinkách, bez čekání na obnovu odebíraného kalendáře. Kalendář je jen kopie `data.json`: po každé změně dat se srovná, úpravy v Kalendáři se přepíšou podle dat a ostatních kalendářů se zápis nikdy nedotkne (každá změna se ověřuje). Událost odkazuje zpátky do aplikace (`studytracker://planovac?blok=…`). Další Mac najde stejný kalendář podle názvu. Když máš v Kalendáři i odebíraný plán z gistu, zruš jeho odběr, ať bloky nevidíš dvakrát.
 - **Obsazený čas:** události z vybraných kalendářů (ve výchozím stavu vlastní kalendáře, ne odebírané ani narozeniny; bez celodenních, volných a odmítnutých) ranní plán obchází a Kalendář je ukazuje v barvě jejich kalendáře. Události ve stejném čase jako hodina z importovaného rozvrhu se neukazují – výuku ukáže rozvrh (dá se v něm označit, že odpadla, a pak se čas uvolní).
+
+## Anki
+
+Nastavení → Anki: jednou do desktopové Anki doplněk AnkiConnect (kód 2055492159), pak zapnout „Načítat z Anki na tomto Macu“ (platí jen pro tento Mac, sdílené nastavení `anki.enabled` webu se nemění). Mac se každé 2 minuty a po návratu do aplikace zeptá Anki na `127.0.0.1:8765` (výjimka ATS jen pro místní adresy), zapíše dnešní stav balíčků (`anki` → `snapshot`) a opakování jako sezení `anki-<balíček>-<začátek>` – stejně jako web v2.6.7 (`runAnkiSync`), ověřeno kontrolními daty z jeho kódu (`Tools/parity/generate-anki.ts`). Přiřazení balíčků k předmětům, počítání času a délka historie jsou sdílené s webem. Testy a UI testy používají Anki v paměti, nikdy skutečnou Anki.
 
 ## Oznámení s tlačítky
 

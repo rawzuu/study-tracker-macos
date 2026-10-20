@@ -44,7 +44,7 @@ Rizika, která řeší architektura:
 | Historie, předměty | úpravy, ruční zápis, CSV, barvy, cíle, archivace, mazání i s plány | SwiftUI |
 | Nastavení | vše vč. vypínatelných funkcí, skrytých stránek, zálohy (token → login) | token v Klíčence |
 | Data | koš 30 dní, JSON export/import se sloučením | stejná logika |
-| Anki | AnkiConnect, panel, odhad času, čas do statistik, mapování balíčků | bez omezení Safari |
+| Anki | AnkiConnect, panel, odhad času, čas do statistik, mapování balíčků | v0.9.0 (předsunuto z M6, schváleno 20. 10. 2026): AnkiConnect přímo z Macu bez omezení Safari, souhrn na stránce Dnes, zapnutí jen pro tento Mac; zápis shodný s webem (kontrolní data) |
 | Onboarding | průvodce pro nové uživatele | SwiftUI |
 
 Jinak než na webu: PWA, service worker, CSP a synchronizace mezi záložkami nahrazuje App Sandbox (síť jen `api.github.com` a `127.0.0.1:8765`). Běžící časovač je – stejně jako na webu – jen na daném zařízení.
@@ -62,7 +62,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M4 ✓ | Co teď?, ranní plán (bez opakování) | v0.5.0 |
 | M4+ ✓ | Integrace s macOS (schváleno 18. 10. 2026): velký monitor, Apple Kalendář (EventKit), horní lišta, oznámení s akcemi, Zkratky a Siri, widgety | v0.6.0, #27–#32 |
 | M5 | Statistiky, report a kalibrace, reflexe, úspěchy | |
-| M6 | Nastavení, koš, export/import, Anki, onboarding | parita |
+| M6 | Nastavení, koš, export/import, onboarding (Anki už v v0.9.0) | parita |
 | M7 | profilování v Instruments, optimalizace, výkonnostní testy | v1.0.0 |
 
 Cíle výkonu: studený start < 0,4 s, paměť v klidu < 60 MB, CPU v klidu ≈ 0 %.

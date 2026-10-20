@@ -285,6 +285,24 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(toast.waitForExistence(timeout: 3), "hláška o blocích na víc dní")
     }
 
+    /// Anki (v paměti, nikdy skutečná Anki): zapnutí v Nastavení načte balíčky a na stránce Dnes je souhrn karet.
+    @MainActor
+    func testAnkiSummary() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["dash.anki"].exists, "bez propojení a bez stavu Anki se souhrn neukazuje")
+        app.staticTexts["nav.nastaveni"].click()
+        let toggle = app.switches["settings.anki.enabled"]
+        reveal(toggle, app)
+        toggle.click()
+        attachScreenshot(app, "Anki v Nastavení")
+        app.staticTexts["nav.prehled"].click()
+        let due = app.descendants(matching: .any)["dash.anki.due"]
+        XCTAssertTrue(due.waitForExistence(timeout: 5))
+        XCTAssertTrue(due.label.contains("85"), "85 karet zbývá (\(due.label))")
+        attachScreenshot(app, "Anki na stránce Dnes")
+    }
+
     /// Apple Kalendář v Nastavení (kalendáře v paměti): zapnutí zapíše plán a ukáže stav, ostatní kalendáře
     /// jsou obsazený čas – odebírané (svátky) ve výchozím stavu ne.
     @MainActor

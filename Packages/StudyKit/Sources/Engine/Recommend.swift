@@ -59,7 +59,9 @@ extension Recommendation {
     /// (`title` jako na webu) působilo, jako by šlo o opakování.
     public var context: String? {
         switch activity {
-        case .plan, .exam, .anki: title
+        case .plan, .exam: title
+        // „Anki: 85 karet“ → „85 karet“ (předmět Anki už je v hlavním řádku)
+        case .anki: title.hasPrefix("Anki: ") ? String(title.dropFirst(6)) : title
         case .continue, .carry: nil
         }
     }

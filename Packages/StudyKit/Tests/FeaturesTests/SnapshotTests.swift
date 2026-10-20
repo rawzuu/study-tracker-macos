@@ -56,7 +56,7 @@ struct SnapshotTests {
         timer.start()
         t = now
         try render(DashboardView(snapshotNow: now, width: screen.size.width).environment(app).environment(timer).environment(Advisor(store: app)).environment(Toasts())
-                    .environment(await calendars(app, now: now)),
+                    .environment(await calendars(app, now: now)).environment(await anki(app, now: now)),
                    name: "dashboard-\(screen)", size: CGSize(width: screen.size.width, height: screen == .laptop ? 1400 : 1340))
     }
 
@@ -66,7 +66,7 @@ struct SnapshotTests {
         let app = AppStore(environment: .uiTesting(now: now))
         await app.start()
         try render(DashboardView(snapshotNow: now, width: Screen.laptop.size.width).environment(app).environment(TimerStore(app: app) { now })
-                    .environment(Advisor(store: app)).environment(Toasts()).environment(await calendars(app, now: now)),
+                    .environment(Advisor(store: app)).environment(Toasts()).environment(await calendars(app, now: now)).environment(await anki(app, now: now)),
                    name: "dashboard-idle", size: CGSize(width: Screen.laptop.size.width, height: 1400))
     }
 
@@ -136,6 +136,25 @@ struct SnapshotTests {
         if enabled { await sync.enable() }
         try render(AppleCalendarSettings().environment(app).environment(sync).environment(Toasts()).padding(32).background(Palette.bg),
                    name: "apple-calendar-\(enabled ? "on" : "off")", size: CGSize(width: 780, height: enabled ? 760 : 300))
+    }
+
+    @Test("Anki v Nastavení: zapnuto, balíčky přiřazené k předmětům")
+    func ankiSettings() async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        let sync = await anki(app, now: now)
+        sync.updateSettings { $0.deckSubjects = ["Anatomie": "demo-anat"] }
+        try render(AnkiSettingsSection().environment(app).environment(sync).padding(32).background(Palette.bg),
+                   name: "anki-settings", size: CGSize(width: 780, height: 760))
+    }
+
+    /// Ukázková Anki, zapnutá a jednou načtená.
+    private func anki(_ app: AppStore, now: Int) async -> AnkiSync {
+        let sync = AnkiSync(app: app, service: DemoAnki.service(now: now), interval: .seconds(3600))
+        sync.setEnabled(true)
+        await sync.syncNow()
+        return sync
     }
 
     /// Ukázkové kalendáře s obsazeným časem (trénink dnes 16:00, porada zítra 10:00).

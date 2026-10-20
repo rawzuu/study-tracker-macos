@@ -15,8 +15,8 @@ settings:
     ARCHS: arm64
     DEAD_CODE_STRIPPING: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    MARKETING_VERSION: 0.8.1
-    CURRENT_PROJECT_VERSION: 10
+    MARKETING_VERSION: 0.9.0
+    CURRENT_PROJECT_VERSION: 11
   configs:
     Release:
       SWIFT_COMPILATION_MODE: wholemodule
@@ -55,12 +55,15 @@ targets:
         # Apple Kalendář: zápis plánu do vlastního kalendáře a obsazený čas z ostatních (jen na žádost v Nastavení).
         # Sdílený kontejner s widgety (souhrn pro widgety a příkazy z jejich tlačítek).
         STAppGroup: $(ST_APP_GROUP)
+        # Anki (AnkiConnect) poslouchá jen na http://127.0.0.1:8765 – výjimka ATS jen pro místní adresy.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSCalendarsFullAccessUsageDescription: Study Tracker zapisuje tvůj studijní plán do kalendáře „Studijní plán“ a události z ostatních kalendářů bere v ranním plánu jako obsazený čas. Ostatní kalendáře jen čte.
     entitlements:
       path: App/StudyTracker.entitlements
       properties:
         com.apple.security.app-sandbox: true
-        # Jen odchozí spojení (api.github.com); žádný server.
+        # Jen odchozí spojení (api.github.com a Anki na 127.0.0.1:8765); žádný server.
         com.apple.security.network.client: true
         # Mimo kontejner jen soubory, které uživatel sám vybere (import rozvrhu .ics, export do kalendáře).
         com.apple.security.files.user-selected.read-write: true
