@@ -105,7 +105,7 @@ public struct ReportView: View {
             if state.cur.sessions == 0 {
                 EmptyNote("V \(Report.monthsIn[state.month]) žádné učení", systemImage: "doc.text") { Text("Vyber jiný měsíc šipkami.") }
             } else {
-                FactRows(title: "Souhrn", facts: facts(state), columns: metrics.size == .compact ? 1 : metrics.size == .regular ? 2 : 3)
+                FactRows(title: "Souhrn", facts: facts(state), columns: metrics.factColumns)
                     .accessibilityIdentifier("report.facts")
                 if state.isLastClosed && !printing {
                     CalibrationSection(year: state.year, month: state.month, now: now)
@@ -122,7 +122,7 @@ public struct ReportView: View {
                     ChartSection("Část dne", meta: state.cur.chronotype) { DayParts(state: state) }
                     ChartSection("Předměty vs. minulý měsíc") { SubjectCompare(state: state) }
                 }
-                FactRows(title: "Další", facts: more(state), columns: metrics.size == .compact ? 1 : metrics.size == .regular ? 2 : 3)
+                FactRows(title: "Další", facts: more(state), columns: metrics.factColumns)
             }
         }
         .padding(.leading, metrics.size == .compact ? metrics.padding : 64)

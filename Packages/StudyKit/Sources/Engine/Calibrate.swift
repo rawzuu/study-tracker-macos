@@ -171,14 +171,20 @@ public enum Calibrate {
         var reasons = ["Cíle předmětů dávají dohromady \(fmtMin(G)) týdně, odučí se typicky kolem \(fmtMin(round15(T * G))).",
                        "Za posledních \(weeks.count) týdnů se v průměru splnilo \(Int(JS.round(C * 100))) % cílů."]
         if f < 1 {
-            let behind = goals.map { s in
-                (s, weeks.reduce(0) { $0 + min(1, ($1.per[s.id] ?? 0) / Double(s.weeklyGoalMin)) * $1.w } / wSum)
+            // Kolik cíle předmět v průměru plní (vážené jako C).
+            var shares: [(subject: Subject, share: Double)] = []
+            for s in goals {
+                var sum = 0.0
+                for week in weeks {
+                    let done: Double = week.per[s.id] ?? 0
+                    sum += min(1, done / Double(s.weeklyGoalMin)) * week.w
+                }
+                shares.append((s, sum / wSum))
             }
-            .filter { $0.1 < 0.5 }
-            .enumerated().sorted { a, b in a.element.1 != b.element.1 ? a.element.1 < b.element.1 : a.offset < b.offset }
-            .prefix(2).map(\.element)
+            let behind = Array(shares.filter { $0.share < 0.5 }.enumerated().sorted(by: Self.lessShare).map(\.element).prefix(2))
             if !behind.isEmpty {
-                reasons.append("Nejvíc zaostává: \(behind.map { "\($0.0.name) (\(Int(JS.round($0.1 * 100))) %)" }.joined(separator: ", ")).")
+                let names = behind.map { "\($0.subject.name) (\(Int(JS.round($0.share * 100))) %)" }
+                reasons.append("Nejvíc zaostává: \(names.joined(separator: ", ")).")
             }
         }
         reasons.append("Všechny cíle se upraví poměrně – pořadí důležitosti předmětů zůstane stejné.")
@@ -187,6 +193,11 @@ public enum Calibrate {
         for n in next { after[n.id] = .number(Double(n.weeklyGoalMin)) }
         return Suggestion(key: .weeklyGoals, title: "Týdenní cíle předmětů", current: "\(fmtMin(G)) týdně", proposed: "\(fmtMin(newG)) týdně",
                           reasons: reasons, settings: [:], subjects: next, before: .object(before), after: .object(after))
+    }
+
+    /// Stabilní řazení podle plnění vzestupně (`sort((a, b) => a.c - b.c)`).
+    private static func lessShare(_ a: (offset: Int, element: (subject: Subject, share: Double)), _ b: (offset: Int, element: (subject: Subject, share: Double))) -> Bool {
+        a.element.share != b.element.share ? a.element.share < b.element.share : a.offset < b.offset
     }
 
     // MARK: - Časové okno ranního plánu

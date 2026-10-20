@@ -115,7 +115,13 @@ public struct PeriodStats: Sendable, Hashable {
         let totalMin = total == 0 ? 1 : Double(total) / 60
         let morning = dayparts[0].min / totalMin
         let night = (dayparts[2].min + dayparts[3].min) / totalMin
-        chronotype = list.isEmpty ? "—" : morning >= 0.45 ? "Ranní ptáče" : night >= 0.55 ? "Noční sova" : "Denní typ"
+        if list.isEmpty {
+            chronotype = "—"
+        } else if morning >= 0.45 {
+            chronotype = "Ranní ptáče"
+        } else {
+            chronotype = night >= 0.55 ? "Noční sova" : "Denní typ"
+        }
 
         // Bloky z Anki jsou krátké opakování kartiček – do průměrné délky bloku a hluboké práce se nepočítají.
         let focusList = list.filter { $0.mode != "anki" }

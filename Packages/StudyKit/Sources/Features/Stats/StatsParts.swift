@@ -77,13 +77,19 @@ struct ChartSection<Content: View>: View {
 }
 
 
+/// Krok osy minut: půlhodiny, hodiny, nebo víc hodin podle největší hodnoty.
+func axisStep(_ max: Double) -> Double {
+    for (limit, step) in [(90.0, 30.0), (300, 60), (600, 120), (1200, 240)] where max <= limit { return step }
+    return 480
+}
+
 /// Osa minut po celých hodinách (nebo půlhodinách) podle největší hodnoty, jemná mřížka.
 func minutesAxis(max: Double) -> some AxisContent {
-    let step: Double = max <= 90 ? 30 : max <= 300 ? 60 : max <= 600 ? 120 : max <= 1200 ? 240 : 480
+    let step = axisStep(max)
     return AxisMarks(position: .leading, values: .stride(by: step)) { value in
         AxisGridLine().foregroundStyle(Palette.line)
         AxisValueLabel {
-            if let m = value.as(Double.self) { Text(m == 0 ? "0" : m < 60 ? "\(Int(m)) min" : "\(Format.decimal(m / 60, digits: m.truncatingRemainder(dividingBy: 60) == 0 ? 0 : 1)) h") }
+            if let m = value.as(Double.self) { Text(axisLabel(m)) }
         }
     }
 }
@@ -109,5 +115,24 @@ struct HighlightBars: View {
         .chartXAxis { AxisMarks { _ in AxisValueLabel(collisionResolution: .greedy) } }
         .chartChrome()
         .frame(height: height)
+    }
+}
+
+/// „0“, „30 min“, „2 h“, „1,5 h“
+func axisLabel(_ m: Double) -> String {
+    if m == 0 { return "0" }
+    if m < 60 { return "\(Int(m)) min" }
+    let digits = m.truncatingRemainder(dividingBy: 60) == 0 ? 0 : 1
+    return "\(Format.decimal(m / 60, digits: digits)) h"
+}
+
+extension PageMetrics {
+    /// Sloupce souhrnu: notebook 1, okno 2, velký monitor 3.
+    var factColumns: Int {
+        switch size {
+        case .compact: 1
+        case .regular: 2
+        case .wide: 3
+        }
     }
 }

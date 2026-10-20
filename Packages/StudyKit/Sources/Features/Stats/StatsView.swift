@@ -61,7 +61,7 @@ public struct StatsView: View {
                     Text("Jakmile odučíš první blok, objeví se tu grafy.")
                 }
             } else {
-                Facts(state: state, columns: metrics.size == .compact ? 1 : metrics.size == .regular ? 2 : 3)
+                Facts(state: state, columns: metrics.factColumns)
                 if !state.insights.isEmpty { Insights(tips: state.insights) }
                 ColumnsLayout(columns: metrics.size == .compact ? 1 : 2, spacing: 56, rowSpacing: 44) {
                     ChartSection("Vývoj v čase", meta: state.days > 90 ? "posledních 90 dní" : "po dnech") { TrendChart(state: state) }

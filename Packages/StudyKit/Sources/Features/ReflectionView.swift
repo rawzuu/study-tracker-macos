@@ -88,7 +88,7 @@ public struct ReflectionView: View {
                 Fact(label: "Cíle splněny", value: goals.isEmpty ? "–" : "\(goalsMet) z \(goals.count)", note: "týdenní cíle předmětů"),
                 Fact(label: "Soustředění", value: cur.focus.map { Format.decimal($0) } ?? "–", note: prev.focus.map { "předtím \(Format.decimal($0))" }),
                 Fact(label: "Plnění plánu", value: cur.planAdherence.map { "\(Int(JS.round($0 * 100))) %" } ?? "–", note: "hotových bloků"),
-            ], columns: metrics.size == .compact ? 1 : metrics.size == .regular ? 2 : 3)
+            ], columns: metrics.factColumns)
             ColumnsLayout(columns: metrics.size == .compact ? 1 : 2, spacing: 56, rowSpacing: 44) {
                 form(key, saved: saved)
                 VStack(alignment: .leading, spacing: 36) {
