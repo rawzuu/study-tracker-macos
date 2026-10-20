@@ -48,8 +48,9 @@ struct ReportState {
         var ids = cur.perSubject.map(\.id)
         for p in prev.perSubject where !ids.contains(p.id) { ids.append(p.id) }
         let prev = prev
-        subjects = ids.map { (lookup[$0], cur.secOf(subject: $0), prev.secOf(subject: $0)) }
-            .enumerated().sorted { $0.element.1 != $1.element.1 ? $0.element.1 > $1.element.1 : $0.offset < $1.offset }.map(\.element)
+        var rows: [(subject: SubjectInfo, cur: Int, prev: Int)] = []
+        for id in ids { rows.append((lookup[id], cur.secOf(subject: id), prev.secOf(subject: id))) }
+        subjects = rows.stableSorted { $0.cur > $1.cur }
     }
 
     var title: String { "\(Format.capitalized(Report.months[month])) \(year)" }
@@ -306,60 +307,101 @@ struct CalibrationSection: View {
 
     private static let titles: [Calibrate.Key: String] = [.dailyGoal: "Denní cíl", .weeklyGoals: "Týdenní cíle předmětů", .dayWindow: "Časové okno ranního plánu"]
 
+    /// Řádek návrhu: už rozhodnutý (záznam v historii) nebo čekající návrh.
+    struct Row: Identifiable {
+        let key: Calibrate.Key
+        let entryIndex: Int?
+        let entry: CalibrationEntry?
+        let suggestion: Calibrate.Suggestion?
+        var id: String { key.rawValue }
+    }
+
+    static func rows(log: [CalibrationEntry], month: String, suggestions: [Calibrate.Suggestion]) -> [Row] {
+        var out: [Row] = []
+        for k in Calibrate.Key.allCases {
+            var index: Int?
+            for (i, e) in log.enumerated() where e.month == month && e.key == k.rawValue {
+                index = i
+                break
+            }
+            let suggestion = suggestions.first { $0.key == k }
+            if index != nil || suggestion != nil {
+                out.append(Row(key: k, entryIndex: index, entry: index.map { log[$0] }, suggestion: suggestion))
+            }
+        }
+        return out
+    }
+
     var body: some View {
         let clock = store.clock
         let doc = store.document
         let key = Calibrate.monthKey(year: year, month: month)
         let end = min(Report.monthRange(year: year, month: month, clock: clock).to, now)
-        let log = doc.settings.calibration
-        let suggestions = Calibrate.suggestions(doc, end: end, clock: clock)
-        let rows: [(key: Calibrate.Key, entry: (index: Int, value: CalibrationEntry)?, suggestion: Calibrate.Suggestion?)] = Calibrate.Key.allCases.compactMap { k in
-            let entry = log.enumerated().first { $0.element.month == key && $0.element.key == k.rawValue }.map { ($0.offset, $0.element) }
-            let sug = suggestions.first { $0.key == k }
-            return entry != nil || sug != nil ? (k, entry, sug) : nil
-        }
+        let rows = Self.rows(log: doc.settings.calibration, month: key, suggestions: Calibrate.suggestions(doc, end: end, clock: clock))
+        let enough = Calibrate.enoughData(doc, end: end, clock: clock)
         return VStack(alignment: .leading, spacing: 0) {
             ListHeading("Návrhy na další měsíc", meta: "podle posledních 8 týdnů")
             if rows.isEmpty {
-                Text(Calibrate.enoughData(doc, end: end, clock: clock)
-                     ? "Cíle i plán odpovídají tomu, jak se opravdu učíš. Není co měnit."
+                Text(enough ? "Cíle i plán odpovídají tomu, jak se opravdu učíš. Není co měnit."
                      : "Na návrhy je zatím málo dat. Objeví se tady, až bude za posledních 8 týdnů aspoň 10 studijních dní.")
                     .font(.system(size: 13.5)).foregroundStyle(Palette.text2).padding(.vertical, 8)
             }
-            ForEach(rows, id: \.key) { row in
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(Self.titles[row.key]!).fontWeight(.semibold)
-                        if let entry = row.entry?.value {
-                            if entry.action == "applied" {
-                                (Text(describe(row.key, entry.raw["before"])).foregroundStyle(Palette.text3) + Text("  →  ")
-                                    + Text(describe(row.key, entry.raw["after"])).fontWeight(.semibold) + Text("  · použito").foregroundStyle(Palette.success))
-                                    .monospacedDigit()
-                            } else {
-                                Text("ponecháno beze změny").foregroundStyle(Palette.text3)
-                            }
-                        } else if let s = row.suggestion {
-                            (Text(s.current).foregroundStyle(Palette.text3) + Text("  →  ") + Text(s.proposed).fontWeight(.semibold)).monospacedDigit()
-                            ForEach(s.reasons, id: \.self) { r in
-                                Text("· \(r)").font(Typo.small).foregroundStyle(Palette.text2).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    .font(.system(size: 13.5))
-                    Spacer(minLength: 16)
-                    if let entry = row.entry {
-                        Button("Vrátit") { undo(entry.index, entry.value) }.buttonStyle(.study(.ghost, size: .small))
-                    } else if let s = row.suggestion {
-                        Button("Použít") { apply(s, month: key) }.buttonStyle(.study(.primary, size: .small)).accessibilityIdentifier("calibration.apply.\(s.key.rawValue)")
-                        Button("Ponechat") { keep(s, month: key) }.buttonStyle(.study(.ghost, size: .small))
-                    }
-                }
-                .padding(.vertical, 12)
-                .overlay(alignment: .bottom) { Rectangle().fill(Palette.line).frame(height: 1) }
-            }
+            ForEach(rows) { row in rowView(row, month: key) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("report.calibration")
+    }
+
+    private func rowView(_ row: Row, month: String) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Self.titles[row.key] ?? "").fontWeight(.semibold)
+                rowValues(row)
+            }
+            .font(.system(size: 13.5))
+            Spacer(minLength: 16)
+            rowActions(row, month: month)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.line).frame(height: 1) }
+    }
+
+    @ViewBuilder
+    private func rowValues(_ row: Row) -> some View {
+        if let entry = row.entry {
+            if entry.action == "applied" {
+                let before = describe(row.key, entry.raw["before"]), after = describe(row.key, entry.raw["after"])
+                HStack(spacing: 6) {
+                    Text(before).foregroundStyle(Palette.text3)
+                    Text("→")
+                    Text(after).fontWeight(.semibold)
+                    Text("· použito").foregroundStyle(Palette.success)
+                }
+                .monospacedDigit()
+            } else {
+                Text("ponecháno beze změny").foregroundStyle(Palette.text3)
+            }
+        } else if let s = row.suggestion {
+            HStack(spacing: 6) {
+                Text(s.current).foregroundStyle(Palette.text3)
+                Text("→")
+                Text(s.proposed).fontWeight(.semibold)
+            }
+            .monospacedDigit()
+            ForEach(s.reasons, id: \.self) { r in
+                Text("· \(r)").font(Typo.small).foregroundStyle(Palette.text2).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rowActions(_ row: Row, month: String) -> some View {
+        if let entry = row.entry, let index = row.entryIndex {
+            Button("Vrátit") { undo(index, entry) }.buttonStyle(.study(.ghost, size: .small))
+        } else if let s = row.suggestion {
+            Button("Použít") { apply(s, month: month) }.buttonStyle(.study(.primary, size: .small)).accessibilityIdentifier("calibration.apply.\(s.key.rawValue)")
+            Button("Ponechat") { keep(s, month: month) }.buttonStyle(.study(.ghost, size: .small))
+        }
     }
 
     /// Hodnota z historie návrhů v čitelné podobě (`describe`).

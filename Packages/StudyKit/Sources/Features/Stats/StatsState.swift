@@ -130,10 +130,7 @@ public struct StatsState: Sendable {
             secBySubject[s.subjectId, default: 0] += s.durationSec
             listBySubject[s.subjectId, default: []].append(s)
         }
-        let ranked = order.enumerated().sorted { a, b in
-            let x = secBySubject[a.element]!, y = secBySubject[b.element]!
-            return x != y ? x > y : a.offset < b.offset
-        }.map(\.element)
+        let ranked = order.stableSorted { (secBySubject[$0] ?? 0) > (secBySubject[$1] ?? 0) }
         subjects = ranked.map { id in
             let sec = secBySubject[id]!, list = listBySubject[id]!
             return SubjectRow(subject: lookup[id], sec: sec, percent: Int(JS.round(Double(sec) / Double(max(1, total)) * 100)),
@@ -175,10 +172,9 @@ public struct StatsState: Sendable {
             }
             perBucket[s.subjectId]![i] += Double(s.durationSec) / 60
         }
-        let series = bucketOrder.enumerated().sorted { a, b in
-            let x = perBucket[a.element]!.reduce(0, +), y = perBucket[b.element]!.reduce(0, +)
-            return x != y ? x > y : a.offset < b.offset
-        }.map(\.element)
+        var bucketTotal: [String: Double] = [:]
+        for (id, values) in perBucket { bucketTotal[id] = values.reduce(0, +) }
+        let series = bucketOrder.stableSorted { (bucketTotal[$0] ?? 0) > (bucketTotal[$1] ?? 0) }
         stacked = series.flatMap { id in
             buckets.indices.map { BucketValue(bucket: $0, label: buckets[$0].label, subject: lookup[id], minutes: perBucket[id]![$0]) }
         }

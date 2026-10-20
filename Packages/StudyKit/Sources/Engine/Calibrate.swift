@@ -58,9 +58,7 @@ public enum Calibrate {
 
     /// Vážený kvantil (`weightedQuantile`): hodnoty seřazené stabilně, váhy se sčítají do `q`.
     public static func weightedQuantile(_ values: [Double], _ weights: [Double], _ q: Double) -> Double {
-        let pairs = zip(values, weights).enumerated().sorted { a, b in
-            a.element.0 != b.element.0 ? a.element.0 < b.element.0 : a.offset < b.offset
-        }.map(\.element)
+        let pairs = Array(zip(values, weights)).stableSorted { $0.0 < $1.0 }
         let total = pairs.reduce(0) { $0 + $1.1 }
         var acc = 0.0
         for (v, w) in pairs {
@@ -181,7 +179,7 @@ public enum Calibrate {
                 }
                 shares.append((s, sum / wSum))
             }
-            let behind = Array(shares.filter { $0.share < 0.5 }.enumerated().sorted(by: Self.lessShare).map(\.element).prefix(2))
+            let behind = Array(shares.filter { $0.share < 0.5 }.stableSorted { $0.share < $1.share }.prefix(2))
             if !behind.isEmpty {
                 let names = behind.map { "\($0.subject.name) (\(Int(JS.round($0.share * 100))) %)" }
                 reasons.append("Nejvíc zaostává: \(names.joined(separator: ", ")).")
@@ -193,11 +191,6 @@ public enum Calibrate {
         for n in next { after[n.id] = .number(Double(n.weeklyGoalMin)) }
         return Suggestion(key: .weeklyGoals, title: "Týdenní cíle předmětů", current: "\(fmtMin(G)) týdně", proposed: "\(fmtMin(newG)) týdně",
                           reasons: reasons, settings: [:], subjects: next, before: .object(before), after: .object(after))
-    }
-
-    /// Stabilní řazení podle plnění vzestupně (`sort((a, b) => a.c - b.c)`).
-    private static func lessShare(_ a: (offset: Int, element: (subject: Subject, share: Double)), _ b: (offset: Int, element: (subject: Subject, share: Double))) -> Bool {
-        a.element.share != b.element.share ? a.element.share < b.element.share : a.offset < b.offset
     }
 
     // MARK: - Časové okno ranního plánu

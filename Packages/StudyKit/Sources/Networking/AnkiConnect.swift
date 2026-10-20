@@ -105,8 +105,8 @@ public struct AnkiConnectClient: AnkiConnecting {
             }
         }
         // `reviews.sort((a, b) => a.time - b.time)` – stabilní, při shodě v pořadí balíčků
-        let ordered = reviews.enumerated().sorted { $0.element.time != $1.element.time ? $0.element.time < $1.element.time : $0.offset < $1.offset }
-        return AnkiConnectResult(decks: decks, reviewedToday: reviewedToday, reviews: ordered.map(\.element), reviewsFetched: true)
+        let ordered = stableSorted(reviews) { $0.time < $1.time }
+        return AnkiConnectResult(decks: decks, reviewedToday: reviewedToday, reviews: ordered, reviewsFetched: true)
     }
 
     /// „Medicína::Anatomie“ → „Medicína“
@@ -117,20 +117,21 @@ public struct AnkiConnectClient: AnkiConnecting {
     /// Jako na webu: `Object.values` (číselné klíče = id balíčků vzestupně), jen neprázdné, podle počtu
     /// karet k opakování sestupně (stabilně).
     static func sorted(_ stats: [String: DeckStats]) -> [AnkiConnectDeck] {
-        let byKey = stats.sorted { a, b in
-            switch (Int(a.key), Int(b.key)) {
-            case let (x?, y?): x < y
-            case (.some, nil): true
-            case (nil, .some): false
-            case (nil, nil): a.key < b.key
-            }
-        }
+        let byKey = stats.sorted { a, b in Self.objectKeyOrder(a.key, b.key) }
         let decks = byKey.map {
             AnkiConnectDeck(name: $0.value.name, newCount: $0.value.new_count, learnCount: $0.value.learn_count,
                             reviewCount: $0.value.review_count, total: $0.value.total_in_deck)
         }
         .filter { $0.total > 0 }
-        return decks.enumerated().sorted { $0.element.due != $1.element.due ? $0.element.due > $1.element.due : $0.offset < $1.offset }.map(\.element)
+        return stableSorted(decks) { $0.due > $1.due }
+    }
+
+    /// Pořadí klíčů objektu v JS: celočíselné vzestupně, pak ostatní (tady podle abecedy).
+    static func objectKeyOrder(_ a: String, _ b: String) -> Bool {
+        if let x = Int(a), let y = Int(b) { return x < y }
+        if Int(a) != nil { return true }
+        if Int(b) != nil { return false }
+        return a < b
     }
 
     struct DeckStats: Decodable {
@@ -173,6 +174,17 @@ public struct AnkiConnectClient: AnkiConnecting {
         guard let result = envelope.result else { throw .failed("Anki odpověděla nečekaně (\(action)).") }
         return result
     }
+}
+
+/// Stabilní řazení (`Array.prototype.sort` v JS): při shodě zůstává původní pořadí.
+private func stableSorted<T>(_ list: [T], by less: (T, T) -> Bool) -> [T] {
+    var indexed: [(offset: Int, element: T)] = list.enumerated().map { ($0.offset, $0.element) }
+    indexed.sort { a, b in
+        if less(a.element, b.element) { return true }
+        if less(b.element, a.element) { return false }
+        return a.offset < b.offset
+    }
+    return indexed.map(\.element)
 }
 
 extension URLSession {

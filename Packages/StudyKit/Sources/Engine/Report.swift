@@ -193,8 +193,7 @@ public enum Report {
         if let i = cur.weekdayAvg.firstIndex(of: topAvg), topAvg > 0 {
             out.append("Nejvíc se učíš \(weekdayIn[i]) – v průměru \(Format.duration(topAvg * 60)).")
         }
-        let focused = cur.dayparts.enumerated().filter { $0.element.focus != nil && $0.element.min >= 30 }
-            .sorted { a, b in a.element.focus! != b.element.focus! ? a.element.focus! > b.element.focus! : a.offset < b.offset }.map(\.element)
+        let focused = cur.dayparts.filter { $0.focus != nil && $0.min >= 30 }.stableSorted { ($0.focus ?? 0) > ($1.focus ?? 0) }
         if focused.count >= 2, let top = focused.first, let low = focused.last, top.focus! - low.focus! >= 0.3 {
             out.append("Nejlépe se soustředíš \(daypartWhen[top.label]!) (\(Format.decimal(top.focus!)) / 5), nejhůř \(daypartWhen[low.label]!) (\(Format.decimal(low.focus!))).")
         }
