@@ -93,6 +93,16 @@ struct PlanAheadTests {
         #expect(!plan[1].items.contains { $0.activity == .exam })
     }
 
+    @Test("Obsazený čas více dnů najednou je stejný jako po dnech")
+    func busyDays() {
+        let d = document { $0.upsert([block("p1", "a", at(20, 9)), block("p2", "b", at(21, 13))], now: 2) }
+        let external = [BusyInterval(start: at(21, 18), end: at(21, 19))]
+        let all = DayPlan.busyIntervals(d, days: [day(20), day(21)], excluding: ["p2"], clock: clock, external: external)
+        for x in [day(20), day(21)] {
+            #expect(all[x] == DayPlan.busyIntervals(d, day: x, excluding: ["p2"], clock: clock, external: external))
+        }
+    }
+
     @Test("Dny před dneškem se neplánují")
     func pastDays() {
         #expect(DayPlan.propose(document(), days: [day(18), day(19)], now: now, clock: clock).map(\.day) == [day(19)])

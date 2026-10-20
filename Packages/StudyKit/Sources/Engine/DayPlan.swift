@@ -80,6 +80,15 @@ public enum DayPlan {
         busyIntervals(doc, sessions: SessionFacts.alive(in: doc), day: day, excluding: exclude, external: external, clock: clock)
     }
 
+    /// Obsazené úseky více dnů najednou (sezení se z dat čtou jednou) – pro plán na víc dní.
+    /// `excluding` = přesouvané bloky, které se nepočítají.
+    public static func busyIntervals(_ doc: AppDocument, days: [Int], excluding exclude: Set<String> = [], clock: StudyClock,
+                                     external: [BusyInterval] = []) -> [Int: [BusyInterval]] {
+        let sessions = SessionFacts.alive(in: doc)
+        return Dictionary(days.map { ($0, busyIntervals(doc, sessions: sessions, day: $0, excluding: exclude, external: external, clock: clock)) },
+                          uniquingKeysWith: { a, _ in a })
+    }
+
     static func busyIntervals(_ doc: AppDocument, sessions: [SessionFacts], day: Int, excluding exclude: Set<String>,
                               external: [BusyInterval] = [], clock: StudyClock) -> [BusyInterval] {
         let next = clock.addDays(day, 1)

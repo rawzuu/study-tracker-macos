@@ -77,6 +77,7 @@ struct DayPlanSheet: View {
         let now = store.nowMs
         let doc = store.document
         let single = plan.count == 1
+        let busy = busy(doc: doc)
         EditorSheet(title(now: now), width: 760) {
             HStack(spacing: 16) {
                 Picker("Plánovat", selection: Binding(get: { span }, set: { change(to: $0) })) {
@@ -94,7 +95,7 @@ struct DayPlanSheet: View {
                 }
             }
             if single, let day = plan.first {
-                DayAxis(items: day.items, busy: busy(day, doc: doc), range: DayPlan.dayRange(doc.settings, day: day.day, clock: store.clock),
+                DayAxis(items: day.items, busy: busy[day.day] ?? [], range: DayPlan.dayRange(doc.settings, day: day.day, clock: store.clock),
                         to: bounds(day, doc: doc).to, now: now, clock: store.clock)
                 if day.items.isEmpty {
                     Text("Na \(span == .tomorrow ? "zítřek" : "dnešek") nic dalšího nenavrhuji – cíl je splněný nebo naplánovaný. Přidat můžeš tlačítkem „Další blok“.")
@@ -106,7 +107,7 @@ struct DayPlanSheet: View {
             } else {
                 scrolling(maxHeight: Self.daysHeight) {
                     VStack(alignment: .leading, spacing: 18) {
-                        ForEach(plan.indices, id: \.self) { i in dayGroup(i, doc: doc, now: now) }
+                        ForEach(plan.indices, id: \.self) { i in dayGroup(i, busy: busy[plan[i].day] ?? [], doc: doc, now: now) }
                     }
                 }
             }
@@ -149,9 +150,10 @@ struct DayPlanSheet: View {
         DayPlan.dayBounds(doc.settings, now: day.now, clock: store.clock)
     }
 
-    private func busy(_ day: DayPlan.PlannedDay, doc: AppDocument) -> [BusyInterval] {
-        DayPlan.busyIntervals(doc, day: day.day, excluding: Set(day.items.compactMap { $0.carry?.id }), clock: store.clock,
-                              external: appleCalendar.busyIntervals)
+    /// Obsazený čas všech plánovaných dnů najednou (sezení se projdou jednou, ne za každý den).
+    private func busy(doc: AppDocument) -> [Int: [BusyInterval]] {
+        DayPlan.busyIntervals(doc, days: plan.map(\.day), excluding: Set(plan.flatMap { $0.items.compactMap { $0.carry?.id } }),
+                              clock: store.clock, external: appleCalendar.busyIntervals)
     }
 
     @ViewBuilder
@@ -166,14 +168,14 @@ struct DayPlanSheet: View {
     }
 
     /// Den v plánu na víc dní: nadpis s počtem bloků, časová osa a bloky.
-    private func dayGroup(_ i: Int, doc: AppDocument, now: Int) -> some View {
+    private func dayGroup(_ i: Int, busy: [BusyInterval], doc: AppDocument, now: Int) -> some View {
         let day = plan[i]
         let chosen = day.items.filter { $0.include && $0.isPlaced }
         let meta = chosen.isEmpty ? "nic nenavrhuji"
             : "\(chosen.count) \(Format.plural(chosen.count, "blok", "bloky", "bloků")) · \(Format.duration(chosen.reduce(0) { $0 + $1.minutes } * 60))"
         return VStack(alignment: .leading, spacing: 8) {
             ListHeading(Format.date(day.day, .weekdayDayNumericMonth, clock: store.clock), meta: meta)
-            DayAxis(items: day.items, busy: busy(day, doc: doc), range: DayPlan.dayRange(doc.settings, day: day.day, clock: store.clock),
+            DayAxis(items: day.items, busy: busy, range: DayPlan.dayRange(doc.settings, day: day.day, clock: store.clock),
                     to: bounds(day, doc: doc).to, now: now, clock: store.clock)
             if day.items.isEmpty {
                 Text("Cíl dne je splněný nebo naplánovaný, nebo se do dne nic nevejde.").font(Typo.small).foregroundStyle(Palette.text3)
@@ -279,7 +281,9 @@ struct DayPlanSheet: View {
     }
 }
 
-/// Jeden navržený blok: zaškrtnutí, začátek, předmět a důvody, délka, odebrání.
+/// Jeden navržený blok: zaškrtnutí, začátek, předmět a důvody, délka, odebrání. Bez ovládacích prvků AppKitu –
+/// v plánu na týden je řádků přes třicet a každý prvek AppKitu se při prvním posunu do obrazu kreslí zvlášť
+/// (posun se pak seká). Čas se mění v malém okně po kliknutí, délka tlačítky −/+.
 private struct DayPlanRow: View {
     @Environment(AppStore.self) private var store
     @Binding var item: DayPlanItem
@@ -289,16 +293,30 @@ private struct DayPlanRow: View {
     let clock: StudyClock
     let resize: @MainActor (Int) -> Void
     let remove: @MainActor () -> Void
+    @State private var editsStart = false
 
     var body: some View {
         let subject = SubjectInfo(item.subjectId, in: store.document)
         ListRow {
-            Toggle("Zařadit", isOn: $item.include).labelsHidden().toggleStyle(.checkbox)
+            Button { item.include.toggle() } label: { BlockCheck(item.include ? .done : .open) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Zařadit")
+                .accessibilityValue(item.include ? "ano" : "ne")
                 .accessibilityIdentifier("dayplan.include.\(item.key)")
-            DatePicker("Začátek", selection: start, displayedComponents: .hourAndMinute)
-                .labelsHidden()
-                .opacity(item.isPlaced ? 1 : 0.45)
-                .frame(width: 76)
+            Button { editsStart = true } label: {
+                Text(Format.time(item.isPlaced ? item.start : placeholder, clock: clock))
+                    .font(.system(size: 13, weight: .medium)).monospacedDigit()
+                    .foregroundStyle(item.isPlaced ? Palette.text : Palette.text3)
+                    .frame(width: 52, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Změnit začátek")
+            .popover(isPresented: $editsStart, arrowEdge: .bottom) {
+                DatePicker("Začátek", selection: start, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .padding(12)
+            }
             ColorMark(color: subject.color)
             VStack(alignment: .leading, spacing: 2) {
                 (Text(subject.name).fontWeight(.medium).foregroundStyle(Palette.text) + Text("  \(item.displayTitle)").foregroundStyle(Palette.text2))
@@ -307,11 +325,12 @@ private struct DayPlanRow: View {
                     .font(Typo.small).foregroundStyle(Palette.text3).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Picker("Délka", selection: Binding(get: { item.minutes }, set: { resize($0) })) {
-                ForEach(durations, id: \.self) { Text("\($0) min").tag($0) }
+            HStack(spacing: 2) {
+                step("minus", to: shorter, label: "Kratší")
+                Text("\(item.minutes) min").font(.system(size: 12.5)).monospacedDigit().foregroundStyle(Palette.text2)
+                    .frame(minWidth: 50)
+                step("plus", to: longer, label: "Delší")
             }
-            .labelsHidden()
-            .fixedSize()
             Button { remove() } label: { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)) }
                 .buttonStyle(.study(.ghost, size: .small))
                 .help("Odebrat")
@@ -322,10 +341,17 @@ private struct DayPlanRow: View {
         .accessibilityIdentifier("dayplan.row.\(item.key)")
     }
 
-    /// Délky v nabídce – i neobvyklá délka přesouvaného bloku.
-    private var durations: [Int] {
-        DayPlanSheet.durations.contains(item.minutes) ? DayPlanSheet.durations : (DayPlanSheet.durations + [item.minutes]).sorted()
+    private func step(_ symbol: String, to minutes: Int?, label: String) -> some View {
+        Button { minutes.map(resize) } label: { Image(systemName: symbol).font(.system(size: 10, weight: .bold)) }
+            .buttonStyle(.study(.ghost, size: .small))
+            .disabled(minutes == nil)
+            .help(label)
+            .accessibilityLabel(label)
     }
+
+    /// Nejbližší kratší a delší délka z nabídky (i z neobvyklé délky přesouvaného bloku).
+    private var shorter: Int? { DayPlanSheet.durations.last { $0 < item.minutes } }
+    private var longer: Int? { DayPlanSheet.durations.first { $0 > item.minutes } }
 
     /// Ruční změna začátku blok zařadí (bez nového rozmístění, jako na webu).
     private var start: Binding<Date> {
