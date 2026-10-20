@@ -57,7 +57,7 @@ public struct DashboardView: View {
                                running: running(now: now), recommendations: advisor.recommendations(now: now))
         let metrics = PageMetrics(width: width)
         let list = listColumn(summary, today, now: now, metrics: metrics)
-        let side = SummaryColumn(state: summary, now: now, openPage: openPage)
+        let side = SummaryColumn(state: summary, now: now, columns: metrics.size == .wide ? 2 : 1, openPage: openPage)
         return Group {
             if metrics.size == .compact {
                 VStack(alignment: .leading, spacing: 40) {
@@ -65,17 +65,21 @@ public struct DashboardView: View {
                     side.padding(.horizontal, metrics.padding).padding(.bottom, 40)
                 }
             } else {
+                // Na velkém monitoru má souhrn dva sloupce a seznam dne zabere zbytek (bez prázdného pruhu
+                // mezi nimi); na ještě širší ploše zůstane celek uprostřed.
                 HStack(alignment: .top, spacing: 0) {
-                    list.frame(maxWidth: metrics.size == .wide ? 1180 : .infinity, alignment: .leading)
+                    list.frame(maxWidth: metrics.size == .wide ? 1440 : .infinity, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     side
                         .padding(.horizontal, metrics.size == .wide ? 44 : 32)
                         .padding(.top, 60)
                         .padding(.bottom, 40)
-                        .frame(width: metrics.size == .wide ? 460 : 340, alignment: .topLeading)
+                        .frame(width: metrics.size == .wide ? 900 : 340, alignment: .topLeading)
                         .frame(minHeight: 600, alignment: .top)
                         .overlay(alignment: .leading) { Rectangle().fill(Palette.line).frame(width: 1) }
                 }
+                .frame(maxWidth: metrics.size == .wide ? 2340 : .infinity)
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -447,20 +451,39 @@ private struct SummaryColumn: View {
     @Environment(AnkiSync.self) private var anki
     let state: DashboardState
     let now: Int
+    /// 1, nebo 2 na velkém monitoru: vlevo dnešek, časovač, Anki a týden, vpravo předměty, zkoušky a poslední sezení.
+    let columns: Int
     let openPage: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 34) {
-            TodaySummary(state: state)
-            DashTimer(openTimer: { openPage("casovac") })
-            // Anki jako na webu: když je propojená, nebo už je známý stav z jiného zařízení.
-            if anki.enabled || AnkiImport.today(store.document, now: now, clock: store.clock) != nil { AnkiSummary(now: now) }
-            WeekSummary(state: state)
-            if !state.weekRows.isEmpty { SubjectsSummary(rows: state.weekRows) }
-            if !state.exams.isEmpty { ExamsSummary(rows: state.exams) }
-            if !state.recent.isEmpty { RecentSummary(rows: Array(state.recent.prefix(4)), openHistory: { openPage("historie") }) }
+        Group {
+            if columns > 1 {
+                HStack(alignment: .top, spacing: 48) {
+                    VStack(alignment: .leading, spacing: 34) { current }.frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 34) { overview }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 34) {
+                    current
+                    overview
+                }
+            }
         }
         .font(.system(size: 13))
+    }
+
+    @ViewBuilder private var current: some View {
+        TodaySummary(state: state)
+        DashTimer(openTimer: { openPage("casovac") })
+        // Anki jako na webu: když je propojená, nebo už je známý stav z jiného zařízení.
+        if anki.enabled || AnkiImport.today(store.document, now: now, clock: store.clock) != nil { AnkiSummary(now: now) }
+        WeekSummary(state: state)
+    }
+
+    @ViewBuilder private var overview: some View {
+        if !state.weekRows.isEmpty { SubjectsSummary(rows: state.weekRows) }
+        if !state.exams.isEmpty { ExamsSummary(rows: state.exams) }
+        if !state.recent.isEmpty { RecentSummary(rows: Array(state.recent.prefix(4)), openHistory: { openPage("historie") }) }
     }
 }
 
