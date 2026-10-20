@@ -78,6 +78,9 @@ struct RootView: View {
             case .historie: HistoryView()
             case .predmety: SubjectsView()
             case .nastaveni: SettingsPage()
+            case .statistiky: StatsView()
+            case .report: ReportView()
+            case .reflexe: ReflectionView(openPage: open)
             case let other: PlaceholderPage(page: other)
             }
         }

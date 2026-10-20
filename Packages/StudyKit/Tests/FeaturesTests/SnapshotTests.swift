@@ -138,6 +138,27 @@ struct SnapshotTests {
                    name: "apple-calendar-\(enabled ? "on" : "off")", size: CGSize(width: 780, height: enabled ? 760 : 300))
     }
 
+    @Test("Statistiky", arguments: Screen.allCases)
+    func stats(_ screen: Screen) async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        try render(StatsView(snapshotWidth: screen.size.width, now: now).environment(app),
+                   name: "stats-\(screen)", size: CGSize(width: screen.size.width, height: screen == .laptop ? 2100 : 1500))
+    }
+
+    @Test("Měsíční report a reflexe")
+    func reportAndReflection() async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        let c = app.clock.calendar.dateComponents([.year, .month], from: app.clock.date(now))
+        try render(ReportView(snapshotWidth: 1440, now: now, month: (c.year!, c.month! - 1)).environment(app),
+                   name: "report", size: CGSize(width: 1440, height: 1500))
+        try render(ReflectionView(snapshotWidth: 1440, now: now).environment(app).environment(Toasts()),
+                   name: "reflection", size: CGSize(width: 1440, height: 1100))
+    }
+
     @Test("Anki v Nastavení: zapnuto, balíčky přiřazené k předmětům")
     func ankiSettings() async throws {
         let now = Int(Date().timeIntervalSince1970 * 1000)

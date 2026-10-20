@@ -41,6 +41,19 @@ final class NavigationUITests: XCTestCase {
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Časovač")
         attachScreenshot(app, "Časovač")
 
+        app.staticTexts["nav.statistiky"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Statistiky")
+        XCTAssertTrue(app.descendants(matching: .any)["stats.facts"].waitForExistence(timeout: 3), "souhrn z ukázkových dat")
+        attachScreenshot(app, "Statistiky")
+
+        app.staticTexts["nav.report"].click()
+        XCTAssertTrue(app.buttons["report.prev"].waitForExistence(timeout: 3))
+        attachScreenshot(app, "Měsíční report")
+
+        app.staticTexts["nav.reflexe"].click()
+        XCTAssertTrue(app.buttons["reflection.save"].waitForExistence(timeout: 3))
+        attachScreenshot(app, "Reflexe")
+
         app.staticTexts["nav.nastaveni"].click()
         XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Nastavení")
         attachScreenshot(app, "Nastavení")
@@ -292,7 +305,8 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.descendants(matching: .any)["dash.anki"].exists, "bez propojení a bez stavu Anki se souhrn neukazuje")
         app.staticTexts["nav.nastaveni"].click()
-        let toggle = app.switches["settings.anki.enabled"]
+        // Přepínač (.switch) se v macOS hlásí jako zaškrtávací políčko.
+        let toggle = app.checkBoxes["settings.anki.enabled"]
         reveal(toggle, app)
         toggle.click()
         attachScreenshot(app, "Anki v Nastavení")
