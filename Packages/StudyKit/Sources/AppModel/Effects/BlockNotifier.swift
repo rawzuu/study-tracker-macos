@@ -9,7 +9,7 @@ import UserNotifications
 /// přepínání do aplikace.
 @MainActor
 final class BlockNotifier: NSObject, UNUserNotificationCenterDelegate {
-    static let requestId = "study-timer"
+    nonisolated static let requestId = "study-timer"
 
     private let center = UNUserNotificationCenter.current()
     private var scheduled: (at: Int, phase: TimerPhase, category: String)?
@@ -44,8 +44,34 @@ final class BlockNotifier: NSObject, UNUserNotificationCenterDelegate {
             }
         }
         for autoWork in [false, true] { out.insert(category(.short, autoBreak: false, autoWork: autoWork, rating: false)) }
+        out.insert(UNNotificationCategory(identifier: awayCategory, actions: [TimerAction.resume, .countAway].map {
+            UNNotificationAction(identifier: $0.identifier, title: $0.title, options: [])
+        }, intentIdentifiers: []))
         return out
     }()
+
+    static let awayId = "study-away"
+    static let awayCategory = "st.away"
+
+    /// Blok se pozastavil, protože uživatel odešel od Macu – po návratu nabídne pokračovat (s pauzou i bez).
+    func notifyAway(minutes: Int) {
+        let duration = Format.duration(minutes * 60)
+        post(id: Self.awayId, title: "Blok je pozastavený",
+             body: "Byl jsi pryč \(duration) – ten čas se nezapočítal. Učil ses mimo Mac? Započítej ho.", category: Self.awayCategory)
+    }
+
+    /// Okamžité oznámení; kliknutí otevře `url` (stránku aplikace).
+    func post(id: String, title: String, body: String, category: String? = nil, url: URL? = nil) {
+        Task {
+            guard await authorize() else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            if let category { content.categoryIdentifier = category }
+            if let url { content.userInfo = ["url": url.absoluteString] }
+            try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+        }
+    }
 
     private static func category(_ phase: TimerPhase, autoBreak: Bool, autoWork: Bool, rating: Bool) -> UNNotificationCategory {
         let actions = actions(phase: phase, autoBreak: autoBreak, autoWork: autoWork, rating: rating).map { a in
@@ -100,12 +126,20 @@ final class BlockNotifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        await MainActor.run { NSApp.isActive } ? [] : [.banner, .list]
+        // Konec bloku ohlásí v aplikaci zvonek; ostatní oznámení (nepřítomnost, souhrn) jsou vidět vždy.
+        guard notification.request.identifier == Self.requestId else { return [.banner, .list] }
+        return await MainActor.run { NSApp.isActive } ? [] : [.banner, .list]
     }
 
-    /// Tlačítko v oznámení → časovač. Klik na samotné oznámení jen otevře aplikaci (to udělá systém).
+    /// Tlačítko v oznámení → časovač. Klik na samotné oznámení otevře aplikaci (to udělá systém),
+    /// případně na stránce z odkazu v oznámení.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let action = TimerAction(identifier: response.actionIdentifier) else { return }
-        await MainActor.run { self.onAction?(action) }
+        if let action = TimerAction(identifier: response.actionIdentifier) {
+            await MainActor.run { self.onAction?(action) }
+        } else if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+                  let link = response.notification.request.content.userInfo["url"] as? String, let url = URL(string: link) {
+            // Odkaz na stránku (`studytracker://statistiky`) zpracuje aplikace sama.
+            await MainActor.run { _ = NSWorkspace.shared.open(url) }
+        }
     }
 }

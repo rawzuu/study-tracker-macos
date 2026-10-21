@@ -17,10 +17,16 @@ public protocol TimerEffects: AnyObject {
     func previewChime(volume: Double)
     /// Kam poslat tlačítko stisknuté v oznámení.
     func setActionHandler(_ handler: @escaping @MainActor (TimerAction) -> Void)
+    /// Blok se pozastavil kvůli nepřítomnosti a uživatel je zpátky.
+    func awayPaused(minutes: Int)
+    /// Samostatné oznámení (pondělní souhrn); kliknutí otevře `url`.
+    func notify(id: String, title: String, body: String, url: URL?)
 }
 
 public extension TimerEffects {
     func setActionHandler(_ handler: @escaping @MainActor (TimerAction) -> Void) {}
+    func awayPaused(minutes: Int) {}
+    func notify(id: String, title: String, body: String, url: URL?) {}
 }
 
 /// Skutečné zvuky a systémové notifikace.
@@ -97,6 +103,14 @@ public final class LiveTimerEffects: TimerEffects {
     public func setActionHandler(_ handler: @escaping @MainActor (TimerAction) -> Void) {
         // Oznámení musí mít příjemce hned po spuštění – aplikaci mohlo spustit právě tlačítko v oznámení.
         if notifications { notifier.onAction = handler }
+    }
+
+    public func awayPaused(minutes: Int) {
+        if notifications { notifier.notifyAway(minutes: minutes) }
+    }
+
+    public func notify(id: String, title: String, body: String, url: URL?) {
+        if notifications { notifier.post(id: id, title: title, body: body, url: url) }
     }
 
     public func previewChime(volume: Double) {

@@ -312,10 +312,14 @@ public struct SettingsPage: View {
                         VStack(alignment: .leading, spacing: 36) {
                             TimerSoundSettings()
                             PresetsSettings()
-                            MenuBarSettings()
+                            AwaySettings()
+                            BlockShortcutSettings()
                         }
                         VStack(alignment: .leading, spacing: 36) {
                             FeaturesSettings()
+                            HotKeySettings()
+                            WeeklySummarySettings()
+                            MenuBarSettings()
                             AppleCalendarSettings()
                             AnkiSettingsSection()
                         }

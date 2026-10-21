@@ -17,6 +17,15 @@ public final class TimerStore {
     public private(set) var pendingRating: String?
     /// Krátké oznámení pro uživatele (např. že se krátký blok neuložil).
     public var notice: String?
+    /// Blok pozastavený kvůli nepřítomnosti (zamčený Mac, nečinnost) – kdy a do kdy byl uživatel pryč.
+    public private(set) var away: Away?
+
+    public struct Away: Equatable, Sendable {
+        /// Okamžik, ke kterému se blok pozastavil (poslední aktivita nebo zamčení).
+        public let since: Int
+        /// Návrat; `nil` = ještě pryč.
+        public var until: Int?
+    }
 
     /// Šum, zvonky a notifikace (v testech `nil`).
     @ObservationIgnored public let effects: (any TimerEffects)?
@@ -71,6 +80,39 @@ public final class TimerStore {
     /// „Ukončit“ – uloží rozpracovaný blok a ukončí sérii.
     public func stop() { mutate { s, t, _, rules in s.stop(now: t, rules: rules) } }
 
+    /// Uživatel odešel od Macu: pozastaví běžící blok učení zpětně k okamžiku `since`, aby se doba
+    /// nepřítomnosti nezapočítala. Pauzy a odpočinek se nepozastavují.
+    public func pauseAway(since: Int) {
+        refresh()
+        guard state.status == .running, state.phase == .work else { return }
+        let at = min(now(), max(state.segmentStart ?? since, since))
+        mutate { s, _, _, _ in
+            s.pause(now: at)
+            return []
+        }
+        away = Away(since: at)
+    }
+
+    /// Uživatel je zpátky. Vrací, kolik minut byl pryč (`nil` = blok nebyl pozastavený kvůli nepřítomnosti).
+    @discardableResult
+    public func awayReturned(at t: Int) -> Int? {
+        guard var a = away, a.until == nil, state.status == .paused else { return nil }
+        a.until = max(a.since, t)
+        away = a
+        return (a.until! - a.since) / StudyClock.minute
+    }
+
+    /// Pokračovat a dobu nepřítomnosti přece jen započítat (třeba učení z knihy bez dotyku Macu).
+    public func resumeCountingAway() {
+        guard let a = away, state.status == .paused else { return resume() }
+        let gap = (a.until ?? now()) - a.since
+        mutate { s, t, _, _ in
+            s.accumulated += max(0, gap)
+            s.resume(now: t)
+            return []
+        }
+    }
+
     /// Mezerník: spustí, pozastaví nebo pokračuje.
     public func toggle() {
         switch state.status {
@@ -112,6 +154,10 @@ public final class TimerStore {
             if state.phase == .work && state.status == .ready { start() }
         case .endSeries:
             if !onBreak && (state.status == .running || state.status == .paused) { stop() } else { discard() }
+        case .resume:
+            if state.status == .paused { resume() }
+        case .countAway:
+            resumeCountingAway()
         }
     }
 
@@ -187,6 +233,8 @@ public final class TimerStore {
             state = next
             persist()
         }
+        // Nepřítomnost platí jen pro právě pozastavený blok.
+        if state.status != .paused { away = nil }
         handle(events, at: t)
         schedule(from: t)
         updateEffects(at: t)
@@ -239,6 +287,8 @@ public final class TimerStore {
 /// Tlačítka v oznámení na konci bloku a pauzy.
 public enum TimerAction: Sendable, Hashable {
     case startBreak, skipBreak, startWork, endSeries
+    /// Pokračovat v bloku pozastaveném kvůli nepřítomnosti – s dobou nepřítomnosti, nebo bez ní.
+    case resume, countAway
     /// Soustředění 1–5 k bloku, který právě skončil.
     case focus(Int)
 
@@ -248,6 +298,8 @@ public enum TimerAction: Sendable, Hashable {
         case .skipBreak: "st.skipBreak"
         case .startWork: "st.startWork"
         case .endSeries: "st.endSeries"
+        case .resume: "st.resume"
+        case .countAway: "st.countAway"
         case .focus(let n): "st.focus.\(n)"
         }
     }
@@ -258,6 +310,8 @@ public enum TimerAction: Sendable, Hashable {
         case "st.skipBreak": self = .skipBreak
         case "st.startWork": self = .startWork
         case "st.endSeries": self = .endSeries
+        case "st.resume": self = .resume
+        case "st.countAway": self = .countAway
         default:
             guard identifier.hasPrefix("st.focus."), let n = Int(identifier.dropFirst("st.focus.".count)), (1...5).contains(n) else { return nil }
             self = .focus(n)
@@ -270,6 +324,8 @@ public enum TimerAction: Sendable, Hashable {
         case .skipBreak: "Bez pauzy – další blok"
         case .startWork: "Začít další blok"
         case .endSeries: "Ukončit sérii"
+        case .resume: "Pokračovat"
+        case .countAway: "Pokračovat a započítat i pauzu"
         case .focus(let n): "Soustředění \(n) – \(Format.focusLabels[n].lowercased())"
         }
     }

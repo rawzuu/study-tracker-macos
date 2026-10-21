@@ -27,6 +27,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.advisor)
                 .environment(delegate.appleCalendar)
                 .environment(delegate.anki)
+                .environment(delegate.macPrefs)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -98,6 +99,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var appleCalendar = AppleCalendarSync(app: store, service: Self.uiTesting ? DemoCalendars.service() : EventKitCalendarService())
     // Anki na tomto Macu (AnkiConnect); UI testy mají Anki v paměti – nikdy nesahají na skutečnou Anki.
     lazy var anki = Self.uiTesting ? AnkiSync(app: store, service: DemoAnki.service()) : AnkiSync(app: store)
+    // Nastavení jen pro tento Mac: automatická pauza, zkratky při bloku, klávesové zkratky, souhrn týdne.
+    lazy var macPrefs = MacPreferences(defaults: store.defaults)
+    lazy var away = AwayMonitor(timer: timer, prefs: macPrefs)
+    lazy var automation = BlockAutomation(timer: timer, prefs: macPrefs)
+    lazy var weekly = WeeklySummaryNotifier(app: store, prefs: macPrefs) { [timer] text in
+        timer.effects?.notify(id: "study-weekly", title: text.title, body: text.body, url: URL(string: "studytracker://statistiky"))
+    }
+    lazy var hotKeys = HotKeyCenter { [weak self] action in self?.hotKey(action) }
     // Úspěchy: nově získané se uloží do dat a krátce se o nich dá vědět.
     lazy var achievements = AchievementWatcher(app: store, toasts: toasts) { [navigator] in navigator.page = .uspechy }
     private var wakeObserver: NSObjectProtocol?
@@ -125,6 +134,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Anki: jen když je na tomto Macu zapnutá.
             anki.start()
             achievements.start()
+            // V UI testech bez sledování nečinnosti, zkratek a oznámení – testy běží potichu.
+            if !Self.uiTesting {
+                away.start()
+                automation.start()
+                weekly.start()
+                applyHotKeys()
+            }
             // Měření výkonu s běžícím blokem (Tools/dev/idle-cpu.sh casovac) – jen s ukázkovými daty.
             if Self.uiTesting, let page = Self.measurePage {
                 timer.configure(TimerSetup(subjectId: "demo-anat", topic: "Lebka"))
@@ -184,9 +200,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Zaregistruje klávesové zkratky a po každé změně v Nastavení znovu.
+    private func applyHotKeys() {
+        observeHotKeys()
+    }
+
+    private func observeHotKeys() {
+        withObservationTracking {
+            macPrefs.hotKeyConflicts = Set(hotKeys.set([.toggle: macPrefs.toggleHotKey, .show: macPrefs.showHotKey]))
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeHotKeys() }
+        }
+    }
+
+    /// Klávesová zkratka odkudkoli: spustit, pozastavit nebo pokračovat; otevřít okno.
+    private func hotKey(_ action: HotKeyCenter.Action) {
+        switch action {
+        case .toggle:
+            timer.refresh()
+            switch timer.state.status {
+            case .running: timer.pause()
+            case .paused: timer.resume()
+            case .idle, .ready:
+                let actions = StudyActions(store: store, timer: timer, advisor: advisor)
+                // Bez předmětu (nebo dat) zkratka otevře časovač, ať je vidět proč.
+                if (try? actions.start(subjectId: nil, topic: nil, modeId: nil)) == nil { show(.casovac) }
+            }
+        case .show:
+            show(navigator.page ?? .prehled)
+        }
+    }
+
+    /// Okno dopředu na stránce `page` (odkaz okno vytvoří, i když bylo zavřené).
+    private func show(_ page: Page) {
+        if let url = URL(string: "\(TimerLink.scheme)://\(page.rawValue)") { NSWorkspace.shared.open(url) }
+    }
+
     func applicationDidBecomeActive(_ notification: Notification) {
         timer.refresh()
         anki.refreshIfDue()
+        if !Self.uiTesting { weekly.check() }
         Task { await store.setActive(true) }
     }
 

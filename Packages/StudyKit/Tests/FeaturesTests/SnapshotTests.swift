@@ -175,13 +175,18 @@ struct SnapshotTests {
         await app.start()
         if let s = app.document.alive(Session.self).first { app.remove(.sessions, id: s.id) }
         let timer = TimerStore(app: app) { now }
-        let column = { (views: AnyView) in views.environment(app).environment(timer).environment(Toasts()).frame(width: 640, alignment: .topLeading) }
+        let prefs = MacPreferences(defaults: app.defaults)
+        prefs.shortcutsEnabled = true
+        prefs.startShortcut = "Nerušit zapnout"
+        let column = { (views: AnyView) in
+            views.environment(app).environment(timer).environment(Toasts()).environment(prefs).frame(width: 640, alignment: .topLeading)
+        }
         let page = HStack(alignment: .top, spacing: 64) {
             column(AnyView(VStack(alignment: .leading, spacing: 36) { GoalsSettings(); BackupSettings(); TrashSettings(); AboutDataSettings() }))
             column(AnyView(VStack(alignment: .leading, spacing: 36) { TimerSoundSettings(); PresetsSettings() }))
-            column(AnyView(FeaturesSettings()))
+            column(AnyView(VStack(alignment: .leading, spacing: 36) { FeaturesSettings(); HotKeySettings(); WeeklySummarySettings(); AwaySettings(); BlockShortcutSettings() }))
         }
-        try render(page.padding(32).background(Palette.bg), name: "settings", size: CGSize(width: 2160, height: 1250))
+        try render(page.padding(32).background(Palette.bg), name: "settings", size: CGSize(width: 2160, height: 1500))
     }
 
     @Test("Anki v Nastavení: zapnuto, balíčky přiřazené k předmětům")

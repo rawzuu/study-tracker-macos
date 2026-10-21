@@ -84,7 +84,7 @@ ST_SNAPSHOT_DIR=/tmp/nahledy swift test --package-path Packages/StudyKit --filte
 
 Spotřeba v klidu (vývojové sestavení s ukázkovými daty v paměti, spuštěné skrytě): `Tools/dev/idle-cpu.sh` – CPU má být ≈ 0 %.
 
-Instalace sestavené verze do /Applications (předchozí verze se přesune do zálohy, nic se nemaže):
+Instalace sestavené verze do /Applications (předchozí verze se uloží jako ZIP do zálohy, nic se nemaže). `Tools/package-release.sh` připraví složku pro uživatele ve Stažených souborech: `StudyTracker.zip` + `Nainstalovat.command`. Aplikace je všude jen v ZIPu – rozbalenou kopii (Stažené soubory, zálohy) by si macOS zaregistroval i s widgety a galerie by ukazovala staré widgety vedle nových:
 
 ```bash
 xcodebuild build -project StudyTracker.xcodeproj -scheme StudyTracker -configuration Release -derivedDataPath build/DerivedData
@@ -132,6 +132,12 @@ V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained tok
 ## Anki
 
 Nastavení má stejné volby jako web (motiv, denní cíl, chování časovače, volitelné funkce, vlastní režimy časovače) – jsou synchronizované, změna na Macu platí i na webu. **Záloha** uloží data do souboru (JSON, bajtově stejný jako `data.json` na GitHubu) nebo sezení do CSV pro Excel/Numbers; import zálohu sloučí s aktuálními daty a nic nesmaže. **Koš** ukáže smazané položky za 30 dní a vrátí je jedním kliknutím. Koš a CSV jsou ověřené kontrolními daty z kódu webu (`Tools/parity/generate-backup.ts`).
+
+**Jen na tomto Macu** (UserDefaults, web je nemá):
+- **Automatická pauza** – po nastavené době bez myši a klávesnice (výchozí 10 min, jde vypnout) nebo hned při zamčení či uspání se běžící blok učení pozastaví zpětně k poslední aktivitě. Po návratu oznámení nabídne „Pokračovat“, nebo „Pokračovat a započítat i pauzu“ (učení z knihy). Kontroluje se jen během bloku (`AwayMonitor`, nečinnost z `CGEventSource`).
+- **Zkratky při bloku** – volitelně spustí zkratku ze Zkratek na začátku a na konci bloku (třeba zapnout a vypnout Nerušit); pozastavení se nepočítá (`BlockAutomation`, `shortcuts://run-shortcut`).
+- **Klávesové zkratky odkudkoli** – spustit / pozastavit blok (výchozí ⌃⌥P) a otevřít okno; nahrávají se v Nastavení (`HotKeyCenter`, Carbon `RegisterEventHotKey` – bez oprávnění Zpřístupnění, i v sandboxu).
+- **Pondělní souhrn** – v pondělí od 8:00 jedno oznámení: čas proti týdennímu cíli, nejlepší den, změna proti týdnu předtím a blížící se zkouška (`WeeklySummary`); kliknutí otevře Statistiky.
 
 Nastavení → Anki: jednou do desktopové Anki doplněk AnkiConnect (kód 2055492159), pak zapnout „Načítat z Anki na tomto Macu“ (platí jen pro tento Mac, sdílené nastavení `anki.enabled` webu se nemění). Mac se každé 2 minuty a po návratu do aplikace zeptá Anki na `127.0.0.1:8765` (výjimka ATS jen pro místní adresy), zapíše dnešní stav balíčků (`anki` → `snapshot`) a opakování jako sezení `anki-<balíček>-<začátek>` – stejně jako web v2.6.7 (`runAnkiSync`), ověřeno kontrolními daty z jeho kódu (`Tools/parity/generate-anki.ts`). Přiřazení balíčků k předmětům, počítání času a délka historie jsou sdílené s webem. Testy a UI testy používají Anki v paměti, nikdy skutečnou Anki.
 
