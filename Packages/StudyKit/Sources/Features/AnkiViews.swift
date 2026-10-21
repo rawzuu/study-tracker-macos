@@ -5,14 +5,18 @@ import DesignSystem
 import Engine
 import SwiftUI
 
-/// Desktopová Anki (`net.ankiweb.dtop`).
+/// Desktopová Anki: novější verze mají `net.ankiweb.anki`, starší `net.ankiweb.dtop`.
 enum AnkiApp {
-    static let bundleId = "net.ankiweb.dtop"
+    static let bundleIds = ["net.ankiweb.anki", "net.ankiweb.dtop"]
 
-    static var isInstalled: Bool { NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) != nil }
+    private static var url: URL? {
+        bundleIds.lazy.compactMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }.first
+    }
+
+    static var isInstalled: Bool { url != nil }
 
     static func open() {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else { return }
+        guard let url else { return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 }
