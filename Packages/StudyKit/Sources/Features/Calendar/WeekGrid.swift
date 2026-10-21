@@ -309,12 +309,21 @@ private struct DayColumn: View {
         return Format.time(drag.movedStart(start, clock: clock), clock: clock)
     }
 
+    /// Překreslí mřížku, jen když se tažení posunulo o celý krok (15 min, den, 5 min délky) –
+    /// pohyb myši mezi kroky nic nepřekresluje.
+    private func update(_ next: BlockDrag) {
+        if drag != next { drag = next }
+    }
+
     /// Klik otevře blok, tažení (od 4 bodů) ho přesouvá – jako `onPlanDown` na webu.
+    ///
+    /// Posun se měří v souřadnicích okna, ne bloku: tažený blok se sám posouvá (`offset`), a v jeho
+    /// vlastních souřadnicích by každý posun změnil i naměřené tažení – blok by poskakoval tam a zpět.
     private func moveGesture(_ item: CalendarWeekState.Item, blockId: String) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { v in
                 guard drag != nil || hypot(v.translation.width, v.translation.height) >= 4 else { return }
-                drag = .move(blockId, translation: v.translation, columnWidth: columnWidth)
+                update(.move(blockId, translation: v.translation, columnWidth: columnWidth))
             }
             .onEnded { _ in
                 let done = drag
@@ -327,12 +336,13 @@ private struct DayColumn: View {
             }
     }
 
+    /// Úchyt se posouvá se spodním okrajem bloku – i tady se měří v souřadnicích okna.
     private func resizeGesture(_ item: CalendarWeekState.Item, blockId: String) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { v in
                 guard drag != nil || abs(v.translation.height) >= 3 else { return }
                 let minutes = Int((Double(item.item.fullEnd - item.item.fullStart) / Double(StudyClock.minute)).rounded())
-                drag = .resize(blockId, translation: v.translation.height, durationMin: minutes)
+                update(.resize(blockId, translation: v.translation.height, durationMin: minutes))
             }
             .onEnded { _ in
                 let done = drag
