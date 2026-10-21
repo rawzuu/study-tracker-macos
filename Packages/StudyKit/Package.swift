@@ -26,7 +26,7 @@ let package = Package(
     targets: [
         .target(name: "Core"),
         .target(name: "Engine", dependencies: ["Core"]),
-        .target(name: "Networking"),
+        .target(name: "Networking", dependencies: ["Core"]),
         .target(
             name: "Persistence",
             dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")]

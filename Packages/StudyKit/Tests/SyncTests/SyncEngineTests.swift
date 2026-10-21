@@ -389,6 +389,31 @@ struct SyncEngineTests {
         #expect(names(try await store.load()?.document) == ["s1": "A", "s2": "B"])
     }
 
+    @Test("Ukončení během rozběhnuté synchronizace počká, až odešle i nejnovější změnu")
+    func terminationWaitsForRunningSync() async throws {
+        actor Outcome {
+            var names: [String: String]?
+            func set(_ value: [String: String]) { names = value }
+        }
+        let remote = FakeGitHub(document: doc(("s1", "A", 1_000)))
+        let timing = SyncEngine.Timing(debounce: .seconds(3600), interval: .seconds(3600), persistDelay: .seconds(3600))
+        let engine = SyncEngine(store: try LocalStore.inMemory(), stored: nil, remote: remote, mode: .readWrite, timing: timing)
+        await engine.syncNow()
+        let outcome = Outcome()
+        // Uprostřed pravidelné kontroly přijde změna a hned nato ukončení aplikace.
+        await remote.duringNextCheck {
+            await engine.localDidChange(adding(await engine.document, "s2", "B", at: 2_000))
+            Task {
+                await engine.prepareForTermination()
+                await outcome.set(names(try? await remote.document))
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        await engine.syncNow()
+        while await outcome.names == nil { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(await outcome.names == ["s1": "A", "s2": "B"])
+    }
+
     @Test("Odpojení zastaví synchronizaci, data zůstanou na Macu")
     func disconnect() async throws {
         let remote = FakeGitHub(document: doc(("s1", "A", 1_000)))

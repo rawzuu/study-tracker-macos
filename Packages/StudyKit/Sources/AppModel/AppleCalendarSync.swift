@@ -51,10 +51,10 @@ public final class AppleCalendarSync {
     @ObservationIgnored private var refreshing: Task<Void, Never>?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var again = false
-    /// Co Mac do kalendáře naposledy zapsal a kolikrát to musel zapsat znovu beze změny v datech.
-    /// Kdyby kalendář událost pokaždé uložil jinak, zápis se po třetím pokusu vzdá – nikdy nevznikne smyčka.
     /// Události z kalendářů, jak přišly (před odebráním hodin z rozvrhu).
     @ObservationIgnored private var fetched: [ExternalBusy] = []
+    /// Co Mac do kalendáře naposledy zapsal a kolikrát to musel zapsat znovu beze změny v datech.
+    /// Kdyby kalendář událost pokaždé uložil jinak, zápis se po třetím pokusu vzdá – nikdy nevznikne smyčka.
     @ObservationIgnored private var written: [CalendarMirror.Key: (event: CalendarMirror.Event, rewrites: Int)] = [:]
 
     static let preferencesKey = "st.appleCalendar"
@@ -291,15 +291,10 @@ public final class AppleCalendarSync {
     }
 
     private func observeDocument() {
-        withObservationTracking {
-            _ = app.document
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.filterExternal()
-                self?.schedule()
-                self?.observeDocument()
-            }
-        }
+        observeChanges({ [weak self] in _ = self?.app.document }, react: { [weak self] in
+            self?.filterExternal()
+            self?.schedule()
+        })
     }
 
     /// Změna v kalendářích (i z iPhonu přes iCloud): nové kalendáře a obsazený čas, a kalendář aplikace

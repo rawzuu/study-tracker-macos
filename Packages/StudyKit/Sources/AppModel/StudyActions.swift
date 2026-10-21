@@ -77,11 +77,11 @@ public struct StudyActions {
             }
         }
         if let subjectId {
-            guard store.document.record(Subject.self, id: subjectId) != nil else { throw .noSubject }
+            guard isActiveSubject(subjectId) else { throw .noSubject }
             timer.setup(TimerSetup(subjectId: subjectId, topic: topic ?? "", modeId: modeId))
         } else if let top = advisor.recommendations(now: store.nowMs).first(where: { $0.subjectId != nil }) {
             timer.setup(TimerSetup(subjectId: top.subjectId, topic: topic ?? top.topic, modeId: modeId ?? top.modeId, planBlockId: top.planBlockId))
-        } else if !state.subjectId.isEmpty, store.document.record(Subject.self, id: state.subjectId) != nil {
+        } else if isActiveSubject(state.subjectId) {
             timer.setup(TimerSetup(topic: topic, modeId: modeId))
         } else {
             throw .noSubject
@@ -160,6 +160,13 @@ public struct StudyActions {
         let now = timer.currentTime()
         if let left = s.remaining(at: now) { return "zbývá \(Format.clock(ms: left))" }
         return "uběhlo \(Format.clock(ms: s.elapsed(at: now)))"
+    }
+
+    /// Předmět, na který jde spustit blok: existuje, není smazaný ani archivovaný (odkaz nebo zkratka
+    /// mohou nést id, které už neplatí).
+    private func isActiveSubject(_ id: String) -> Bool {
+        guard let subject = store.document.record(Subject.self, id: id) else { return false }
+        return !subject.isDeleted && !subject.archived
     }
 
     private func subjectName(_ id: String) -> String {

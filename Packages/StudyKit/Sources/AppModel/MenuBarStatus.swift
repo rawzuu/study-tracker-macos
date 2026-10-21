@@ -17,7 +17,8 @@ public final class MenuBarStatus {
 
     public init(timer: TimerStore) {
         self.timer = timer
-        observe()
+        observeChanges({ [weak self] in _ = self?.timer.state }, react: { [weak self] in self?.update() })
+        update()
     }
 
     /// Stav pro daný okamžik (bez tikání – testy).
@@ -35,18 +36,6 @@ public final class MenuBarStatus {
             symbol = state.status == .paused ? "pause.circle" : work ? "book" : "cup.and.saucer"
             title = Format.clock(ms: state.remaining(at: now) ?? state.elapsed(at: now))
         }
-    }
-
-    private func observe() {
-        withObservationTracking {
-            _ = timer.state
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.update()
-                self?.observe()
-            }
-        }
-        update()
     }
 
     private func update() {

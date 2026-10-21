@@ -127,22 +127,29 @@ struct TimetableSheet: View {
 
     private func load(_ url: URL, replaceId: String?) {
         error = nil
+        let clock = store.clock
+        Task {
+            // Čtení a rozbalení opakování může u velkého exportu chvíli trvat – mimo hlavní vlákno.
+            let parsed = await Task.detached(priority: .userInitiated) { Result { try Self.parse(url, clock: clock) } }.value
+            switch parsed {
+            case .success(let result) where result.events.isEmpty:
+                error = "V souboru nejsou žádné hodiny s časem začátku a konce."
+            case .success(let result):
+                let fileName = url.deletingPathExtension().lastPathComponent
+                pending = Pending(result: result, replaceId: replaceId, name: result.name.isEmpty ? (fileName.isEmpty ? "Rozvrh" : fileName) : result.name)
+            case .failure(let failure):
+                error = failure.localizedDescription
+            }
+        }
+    }
+
+    private nonisolated static func parse(_ url: URL, clock: StudyClock) throws -> ICal.Result {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
-        do {
-            // Jako `file.text()` na webu: UTF-8, neplatné bajty jako náhradní znak, bez BOM.
-            var text = String(decoding: try Data(contentsOf: url), as: UTF8.self)
-            if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
-            let result = try ICal.parse(text, clock: store.clock)
-            guard !result.events.isEmpty else {
-                error = "V souboru nejsou žádné hodiny s časem začátku a konce."
-                return
-            }
-            let fileName = url.deletingPathExtension().lastPathComponent
-            pending = Pending(result: result, replaceId: replaceId, name: result.name.isEmpty ? (fileName.isEmpty ? "Rozvrh" : fileName) : result.name)
-        } catch {
-            self.error = error.localizedDescription
-        }
+        // Jako `file.text()` na webu: UTF-8, neplatné bajty jako náhradní znak, bez BOM.
+        var text = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+        if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
+        return try ICal.parse(text, clock: clock)
     }
 
     private func confirm() {

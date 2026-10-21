@@ -52,14 +52,7 @@ public final class AchievementWatcher {
     }
 
     private func observe() {
-        withObservationTracking {
-            _ = app.document
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.schedule()
-                self?.observe()
-            }
-        }
+        observeChanges({ [weak self] in _ = self?.app.document }, react: { [weak self] in self?.schedule() })
     }
 
     private func schedule() {

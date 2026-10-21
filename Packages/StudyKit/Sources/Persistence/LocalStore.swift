@@ -67,15 +67,19 @@ public final class LocalStore: Sendable {
             guard let row = try DocumentRow.fetchOne(db, key: 1) else { return nil }
             let value = try JSONValue.parse(row.json)
             let version = value.objectValue?.number("schemaVersion").map(Int.init) ?? 1
-            if version < Schema.version {
-                try Self.insertSnapshot(db, json: row.json, reason: "před migrací z verze \(version)", keep: Self.defaultKeep)
-            }
-            return StoredDocument(
+            let stored = StoredDocument(
                 document: try AppDocument(normalizing: value),
                 dirty: row.dirty,
                 remoteSha: row.remoteSha,
                 savedAt: row.savedAt
             )
+            if version < Schema.version {
+                try Self.insertSnapshot(db, json: row.json, reason: "před migrací z verze \(version)", keep: Self.defaultKeep)
+                // Převedená data hned uložit – jinak by každé další spuštění zálohovalo znovu
+                // a limit záloh by vytlačil starší, cenné zálohy.
+                try DocumentRow(stored).save(db)
+            }
+            return stored
         }
     }
 

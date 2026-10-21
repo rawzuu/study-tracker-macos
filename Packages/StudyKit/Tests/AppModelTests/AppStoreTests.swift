@@ -60,7 +60,7 @@ private func remoteDocument() -> AppDocument {
 private func makeStore(
     backup: FakeBackup,
     local: LocalStore? = nil,
-    secrets: InMemorySecretStore = InMemorySecretStore(),
+    secrets: any SecretStore = InMemorySecretStore(),
     defaults: UserDefaults? = nil,
     seed: AppDocument? = nil
 ) throws -> AppStore {
@@ -169,6 +169,25 @@ struct AppStoreTests {
         #expect(second.document.alive(Subject.self).map(\.name) == ["Anatomie"])
     }
 
+    @Test("Token, který z Klíčenky nejde smazat: odpojí se a řekne to")
+    func disconnectKeychainFailure() async throws {
+        final class Undeletable: SecretStore {
+            let inner = InMemorySecretStore()
+            func secret(for account: String) throws -> String? { try inner.secret(for: account) }
+            func setSecret(_ value: String?, for account: String) throws {
+                guard value != nil else { throw CocoaError(.userCancelled) }
+                try inner.setSecret(value, for: account)
+            }
+        }
+        let secrets = Undeletable()
+        let store = try makeStore(backup: FakeBackup(remote: FakeRemote(document: remoteDocument())), secrets: secrets)
+        await store.start()
+        try await store.connect(token: "t", location: RepoLocation(owner: ""))
+        await #expect(throws: AppStore.ConnectError.self) { try await store.disconnect() }
+        #expect(store.backup == nil)
+        #expect(try secrets.secret(for: "github") == "t")
+    }
+
     @Test("Odpojení smaže token, data zůstanou")
     func disconnect() async throws {
         let secrets = InMemorySecretStore()
@@ -176,7 +195,7 @@ struct AppStoreTests {
         await store.start()
         try await store.connect(token: "t", location: RepoLocation(owner: ""))
         #expect(await eventually { !store.document.alive(Subject.self).isEmpty })
-        await store.disconnect()
+        try await store.disconnect()
         #expect(try secrets.secret(for: "github") == nil)
         #expect(store.backup == nil)
         #expect(await eventually { store.sync.status == .off })
@@ -214,7 +233,7 @@ struct AppStoreTests {
         await store.start()
         try await store.connect(token: "t", location: RepoLocation(owner: ""))
         #expect(await eventually { !store.document.alive(Subject.self).isEmpty })
-        await store.disconnect()
+        try await store.disconnect()
 
         var other = AppDocument.empty
         other.upsert(Subject(raw: ["id": "x", "name": "Jiné repo"]), now: 5)

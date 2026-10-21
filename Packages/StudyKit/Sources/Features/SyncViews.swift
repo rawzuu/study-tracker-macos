@@ -167,7 +167,11 @@ public struct SyncSettingsView: View {
             }
         }
         .confirmationDialog("Odpojit GitHub?", isPresented: $confirmsDisconnect) {
-            Button("Odpojit", role: .destructive) { Task { await store.disconnect() } }
+            Button("Odpojit", role: .destructive) {
+                Task {
+                    do { try await store.disconnect() } catch { self.error = error.localizedDescription }
+                }
+            }
         } message: {
             Text("Data v repu i na Macu zůstanou, jen se přestanou synchronizovat. Token se smaže z Klíčenky.")
         }

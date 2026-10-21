@@ -112,6 +112,8 @@ public final class AppStore {
         case emptyToken
         case github(GitHubError, owner: String, repo: String)
         case keychain(String)
+        /// Odpojeno, ale token zůstal v Klíčence.
+        case keychainRemove(String)
 
         public var errorDescription: String? {
             switch self {
@@ -119,6 +121,8 @@ public final class AppStore {
             case .github(.notFound, let owner, let repo): "Repo \(owner)/\(repo) se nenašlo, nebo k němu token nemá přístup."
             case .github(let e, _, _): e.localizedDescription
             case .keychain(let detail): "Token se nepodařilo uložit do Klíčenky: \(detail)"
+            case .keychainRemove(let detail):
+                "Záloha je odpojená, ale token se nepodařilo smazat z Klíčenky (\(detail)). Smaž položku „Study Tracker – github“ v aplikaci Klíčenka."
             }
         }
     }
@@ -150,11 +154,14 @@ public final class AppStore {
     }
 
     /// Odpojí zálohu. Data na GitHubu i na Macu zůstanou, jen se přestanou synchronizovat.
-    public func disconnect() async {
-        try? environment.secrets.setSecret(nil, for: Self.tokenAccount)
+    /// Odpojí se vždy; chyba jen hlásí, že token v Klíčence zůstal.
+    public func disconnect() async throws(ConnectError) {
+        var removal: Error?
+        do { try environment.secrets.setSecret(nil, for: Self.tokenAccount) } catch { removal = error }
         config.backup = nil
         backup = nil
         await engine?.configure(remote: nil, mode: config.syncMode)
+        if let removal { throw .keychainRemove(removal.localizedDescription) }
     }
 
     public func setTokenExpiry(_ day: String?) {

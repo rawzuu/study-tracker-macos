@@ -1,3 +1,4 @@
+import Core
 import Foundation
 
 /// Balíček nejvyšší úrovně a jeho dnešní počty (`DeckStat` v `anki.ts` na webu).
@@ -105,7 +106,7 @@ public struct AnkiConnectClient: AnkiConnecting {
             }
         }
         // `reviews.sort((a, b) => a.time - b.time)` – stabilní, při shodě v pořadí balíčků
-        let ordered = stableSorted(reviews) { $0.time < $1.time }
+        let ordered = reviews.stableSorted { $0.time < $1.time }
         return AnkiConnectResult(decks: decks, reviewedToday: reviewedToday, reviews: ordered, reviewsFetched: true)
     }
 
@@ -123,7 +124,7 @@ public struct AnkiConnectClient: AnkiConnecting {
                             reviewCount: $0.value.review_count, total: $0.value.total_in_deck)
         }
         .filter { $0.total > 0 }
-        return stableSorted(decks) { $0.due > $1.due }
+        return decks.stableSorted { $0.due > $1.due }
     }
 
     /// Pořadí klíčů objektu v JS: celočíselné vzestupně, pak ostatní (tady podle abecedy).
@@ -174,17 +175,6 @@ public struct AnkiConnectClient: AnkiConnecting {
         guard let result = envelope.result else { throw .failed("Anki odpověděla nečekaně (\(action)).") }
         return result
     }
-}
-
-/// Stabilní řazení (`Array.prototype.sort` v JS): při shodě zůstává původní pořadí.
-private func stableSorted<T>(_ list: [T], by less: (T, T) -> Bool) -> [T] {
-    var indexed: [(offset: Int, element: T)] = list.enumerated().map { ($0.offset, $0.element) }
-    indexed.sort { a, b in
-        if less(a.element, b.element) { return true }
-        if less(b.element, a.element) { return false }
-        return a.offset < b.offset
-    }
-    return indexed.map(\.element)
 }
 
 extension URLSession {

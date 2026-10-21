@@ -148,15 +148,10 @@ public final class WidgetBridge {
     }
 
     private func observe() {
-        withObservationTracking {
-            _ = app.document
-            _ = timer.state
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.schedule()
-                self?.observe()
-            }
-        }
+        observeChanges({ [weak self] in
+            _ = self?.app.document
+            _ = self?.timer.state
+        }, react: { [weak self] in self?.schedule() })
     }
 
     // MARK: - Příkazy z widgetů

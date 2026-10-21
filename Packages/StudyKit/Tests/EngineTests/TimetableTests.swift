@@ -53,6 +53,23 @@ struct TimetableTests {
         #expect(ICal.jsNumber("abc") == nil && ICal.jsNumber("inf") == nil && ICal.jsNumber("Infinity") == .infinity)
     }
 
+    @Test("Obří nebo nekonečný INTERVAL dá jen první výskyt a nespadne", arguments: ["Infinity", "1e20", "100000"])
+    func hugeInterval(_ interval: String) throws {
+        for freq in ["DAILY", "WEEKLY"] {
+            let ics = """
+                BEGIN:VCALENDAR
+                BEGIN:VEVENT
+                SUMMARY:Anatomie
+                DTSTART;TZID=Europe/Prague:20261019T091500
+                DTEND;TZID=Europe/Prague:20261019T104500
+                RRULE:FREQ=\(freq);INTERVAL=\(interval)
+                END:VEVENT
+                END:VCALENDAR
+                """
+            #expect(try ICal.parse(ics, clock: clock).events.map(\.start) == [at(10, 19, 9, 15)])
+        }
+    }
+
     @Test("Nový rozvrh má klíče jako na webu; nová verze zachová proběhlé hodiny a skryté řady")
     func replace() {
         func event(_ series: String, _ start: Int) -> TimetableEvent {

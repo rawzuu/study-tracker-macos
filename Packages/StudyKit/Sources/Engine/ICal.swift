@@ -396,7 +396,9 @@ public enum ICal {
             r[kv[0].uppercased()] = String(kv[1])
         }
         guard let freq = r["FREQ"], freq == "WEEKLY" || freq == "DAILY" else { return [start.wall] } // jiné se v rozvrzích nevyskytují
-        let interval = max(1, jsNumber(r["INTERVAL"] ?? "").flatMap { $0 == 0 ? nil : $0 } ?? 1)
+        // Krok delší než celé okno dá stejně jen první výskyt – strop drží převod na Int v mezích
+        // (INTERVAL=Infinity nebo 1e20 by jinak aplikaci shodil).
+        let interval = min(max(1, jsNumber(r["INTERVAL"] ?? "").flatMap { $0 == 0 ? nil : $0 } ?? 1), Double(maxSpanDays + 1))
         let count = r["COUNT"].map(jsNumber) ?? .infinity
         guard let count else { return [] } // COUNT, které není číslo: web nevrátí nic (porovnání s NaN)
         let startMs = tz.ms(start)

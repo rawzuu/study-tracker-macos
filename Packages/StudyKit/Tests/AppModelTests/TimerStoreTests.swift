@@ -266,6 +266,13 @@ struct StudyActionsTests {
         #expect(timer.state.subjectId == "anat")
         _ = try actions.stop()
         #expect(throws: StudyActions.Failure.noSubject) { try actions.start(subjectId: "neexistuje", topic: nil, modeId: nil) }
+        // Odkaz nebo zkratka se starým id: smazaný ani archivovaný předmět blok nespustí.
+        let (stale, staleTimer, _, staleApp) = try await self.actions()
+        staleApp.upsert(Subject(raw: ["id": "old", "name": "Latina", "color": "#7d9cc0", "weeklyGoalMin": 0, "archived": true]))
+        #expect(throws: StudyActions.Failure.noSubject) { try stale.start(subjectId: "old", topic: nil, modeId: nil) }
+        staleApp.remove(.subjects, id: "anat")
+        #expect(throws: StudyActions.Failure.noSubject) { try stale.start(subjectId: "anat", topic: nil, modeId: nil) }
+        #expect(staleTimer.state.status == .idle)
         let (empty, _, _, app) = try await self.actions()
         app.remove(.subjects, id: "anat")
         #expect(throws: StudyActions.Failure.noSubject) { try empty.start(subjectId: nil, topic: nil, modeId: nil) }

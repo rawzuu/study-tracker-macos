@@ -160,7 +160,16 @@ public actor SyncEngine {
         intervalTask?.cancel()
         intervalTask = nil
         await persistNow()
-        if remote != nil, state.mode == .readWrite, state.dirty { await syncNow() }
+        guard remote != nil, state.mode == .readWrite else { return }
+        if syncing {
+            // Rozběhnutá synchronizace má po sobě odeslat i nejnovější změny – počkat, až doběhne.
+            if state.dirty { syncAgain = true }
+            while syncing {
+                do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+            }
+        } else if state.dirty {
+            await syncNow()
+        }
     }
 
     // MARK: - Synchronizace

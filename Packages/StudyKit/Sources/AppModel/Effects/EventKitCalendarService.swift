@@ -41,9 +41,11 @@ public actor EventKitCalendarService: CalendarService {
             return existing.calendarIdentifier
         }
         guard let source = source(accountId) else { throw CalendarServiceError.noAccount }
-        // Jiný Mac už kalendář založil – použít ho, ať nejsou dva.
+        // Jiný Mac už kalendář založil – použít ho, ať nejsou dva. Jen když v něm nejsou cizí události:
+        // synchronizace by je jinak smazala (třeba ručně založený kalendář se stejným názvem).
         if let found = store.calendars(for: .event).first(where: {
-            $0.title == title && $0.type != .subscription && $0.allowsContentModifications && $0.source?.sourceIdentifier == source.sourceIdentifier
+            $0.title == title && $0.type != .subscription && $0.allowsContentModifications
+                && $0.source?.sourceIdentifier == source.sourceIdentifier && onlyMirrorEvents($0)
         }) {
             return found.calendarIdentifier
         }
@@ -57,6 +59,17 @@ public actor EventKitCalendarService: CalendarService {
             throw CalendarServiceError.failed("Kalendář se nepodařilo založit v účtu \(Self.title(of: source)): \(error.localizedDescription)")
         }
         return calendar.calendarIdentifier
+    }
+
+    /// Obsahuje kalendář jen události Study Trackeru (s odkazem `studytracker://planovac…`)? Prohledá
+    /// rok zpátky a čtyři dopředu (EventKit hledá nejvýš 4 roky najednou).
+    private func onlyMirrorEvents(_ calendar: EKCalendar) -> Bool {
+        let now = Date()
+        let year: TimeInterval = 365 * 86_400
+        return [(-year, 0.0), (0.0, 4 * year - 86_400)].allSatisfy { from, to in
+            let predicate = store.predicateForEvents(withStart: now + from, end: now + to, calendars: [calendar])
+            return store.events(matching: predicate).allSatisfy { CalendarMirror.Key(url: $0.url) != nil }
+        }
     }
 
     public func calendarExists(id: String) -> Bool { store.calendar(withIdentifier: id) != nil }
