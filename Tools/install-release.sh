@@ -23,6 +23,9 @@ fi
 ditto "$NEW" "$APP"
 codesign --verify --deep --strict "$APP"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP"
+# Proces widgetů ze staré verze běží dál i po výměně aplikace a macOS jeho výstup odmítá
+# („Bundle version did not match“) – widgety pak zůstanou prázdné. Ukončit; systém spustí nový.
+pkill -x StudyTrackerWidgets 2>/dev/null || true
 Tools/dev/unregister-dev.sh >/dev/null
 open "$APP"
 echo "Nainstalováno: Study Tracker $VERSION"
