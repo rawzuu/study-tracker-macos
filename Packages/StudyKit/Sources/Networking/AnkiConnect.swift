@@ -91,8 +91,7 @@ public struct AnkiConnectClient: AnkiConnecting {
         let names: [String] = try await invoke("deckNames")
         var tops: [String] = []
         for name in names.map(Self.topLevel) where !tops.contains(name) { tops.append(name) }
-        let stats: [String: DeckStats] = try await invoke("getDeckStats", ["decks": tops])
-        let decks = Self.sorted(stats)
+        let decks = Self.sorted(try await deckStats(tops))
         let reviewedToday: Int = try await invoke("getNumCardsReviewedToday")
         if let knownReviewedToday, knownReviewedToday == reviewedToday {
             return AnkiConnectResult(decks: decks, reviewedToday: reviewedToday, reviews: [], reviewsFetched: false)
@@ -108,6 +107,32 @@ public struct AnkiConnectClient: AnkiConnecting {
         // `reviews.sort((a, b) => a.time - b.time)` – stabilní, při shodě v pořadí balíčků
         let ordered = reviews.stableSorted { $0.time < $1.time }
         return AnkiConnectResult(decks: decks, reviewedToday: reviewedToday, reviews: ordered, reviewsFetched: true)
+    }
+
+    /// Počty balíčků. AnkiConnect od verze z října 2026 odmítne celý dotaz, když některý balíček počty
+    /// nemá (prázdný skrytý „Default“) – pak po jednom a balíčky bez počtů přeskočit, jako starší verze.
+    private func deckStats(_ decks: [String]) async throws(AnkiConnectError) -> [String: DeckStats] {
+        let batchError: AnkiConnectError
+        do {
+            return try await invoke("getDeckStats", ["decks": decks])
+        } catch .failed(let message) {
+            batchError = .failed(message)
+        } catch {
+            throw error
+        }
+        var out: [String: DeckStats] = [:]
+        for deck in decks {
+            do {
+                let one: [String: DeckStats] = try await invoke("getDeckStats", ["decks": [deck]])
+                out.merge(one) { first, _ in first }
+            } catch .failed {
+                continue
+            } catch {
+                throw error
+            }
+        }
+        if out.isEmpty, !decks.isEmpty { throw batchError }
+        return out
     }
 
     /// „Medicína::Anatomie“ → „Medicína“

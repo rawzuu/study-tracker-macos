@@ -48,6 +48,34 @@ struct AnkiConnectTests {
         #expect(server.requests.filter { $0.json?["action"] as? String == "cardReviews" }.count == 4, "každý balíček zvlášť")
     }
 
+    @Test("AnkiConnect 2026: balíček bez počtů (skrytý Default) shodí celý dotaz – načte se po jednom")
+    func deckWithoutCounts() async throws {
+        let server = StubServer { r in
+            let stats: [String: [String: Any]] = [
+                "Latina": ["deck_id": 20, "name": "Latina", "new_count": 5, "learn_count": 0, "review_count": 10, "total_in_deck": 80],
+                "Medicína": ["deck_id": 3, "name": "Medicína", "new_count": 10, "learn_count": 2, "review_count": 3, "total_in_deck": 900],
+            ]
+            let action = r.json?["action"] as? String ?? ""
+            let decks = (r.json?["params"] as? [String: Any])?["decks"] as? [String] ?? []
+            switch action {
+            case "requestPermission": return .json(200, ["result": ["permission": "granted"], "error": NSNull()])
+            case "deckNames": return .json(200, ["result": ["Default", "Medicína::Anatomie", "Latina"], "error": NSNull()])
+            case "getDeckStats":
+                // Jako nová verze doplňku: neznámé počty u kteréhokoli balíčku = chyba celého dotazu
+                guard decks.allSatisfy({ stats[$0] != nil }) else { return .json(200, ["result": NSNull(), "error": "Deck counts unavailable."]) }
+                var out: [String: Any] = [:]
+                for d in decks { out[String(stats[d]!["deck_id"] as! Int)] = stats[d] }
+                return .json(200, ["result": out, "error": NSNull()])
+            case "getNumCardsReviewedToday": return .json(200, ["result": 3, "error": NSNull()])
+            case "cardReviews": return .json(200, ["result": [], "error": NSNull()])
+            default: return .json(200, ["result": NSNull(), "error": "unsupported action"])
+            }
+        }
+        let result = try await client(server).fetch(since: 0, knownReviewedToday: nil)
+        #expect(result.decks.map(\.name) == ["Medicína", "Latina"])
+        #expect(result.reviewedToday == 3)
+    }
+
     @Test("Bez nového opakování se historie nestahuje")
     func known() async throws {
         let server = anki(reviewedToday: 7)

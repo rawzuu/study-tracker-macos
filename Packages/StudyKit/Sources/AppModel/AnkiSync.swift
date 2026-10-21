@@ -3,6 +3,7 @@ import Engine
 import Foundation
 import Networking
 import Observation
+import OSLog
 
 /// Synchronizace s Anki (`useAnkiSync.ts` na webu): každé 2 minuty a po návratu do aplikace načte z Anki
 /// na tomto Macu počty k opakování a z historie opakování udělá sezení (`AnkiImport`). Zapisuje jen při
@@ -34,6 +35,7 @@ public final class AnkiSync {
     @ObservationIgnored private var lastSeen: (day: Int, reviewedToday: Int)?
 
     static let enabledKey = "st.anki.mac"
+    private static let log = Logger(subsystem: "cz.rawzuu.studytracker", category: "anki")
 
     public init(app: AppStore, service: any AnkiConnecting, interval: Duration = .seconds(120)) {
         self.app = app
@@ -96,6 +98,8 @@ public final class AnkiSync {
             lastSeen = (day, result.reviewedToday)
             status = .ok(at: app.nowMs)
         } catch {
+            // Důvod do systémového logu (bez obsahu karet) – podle něj jde poznat, co Anki vrátila.
+            Self.log.error("Anki nenačtena: \(error.localizedDescription, privacy: .public)")
             status = .failed(error, at: app.nowMs)
         }
     }

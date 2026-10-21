@@ -15,8 +15,8 @@ settings:
     ARCHS: arm64
     DEAD_CODE_STRIPPING: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    MARKETING_VERSION: 0.10.0
-    CURRENT_PROJECT_VERSION: 14
+    MARKETING_VERSION: 0.10.1
+    CURRENT_PROJECT_VERSION: 15
   configs:
     Release:
       SWIFT_COMPILATION_MODE: wholemodule
@@ -90,7 +90,11 @@ targets:
   StudyTrackerWidgets:
     type: app-extension
     platform: macOS
-    sources: [Widgets]
+    # Vlastní kopie ikony aplikace: galerie widgetů ji jinak nemusí najít a ukáže prázdné místo.
+    sources:
+      - Widgets
+      - path: App/AppIcon.icon
+        buildPhase: resources
     dependencies:
       - package: StudyKit
         product: WidgetUI
@@ -117,6 +121,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.widgets
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ST_APP_BUNDLE_ID: cz.rawzuu.studytracker
         ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker
         APP_DISPLAY_NAME: Study Tracker
