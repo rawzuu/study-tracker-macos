@@ -422,8 +422,9 @@ final class NavigationUITests: XCTestCase {
         let areas = app.scrollViews.containing(.any, identifier: element.identifier).allElementsBoundByIndex.reversed()
             + [app.windows.firstMatch]
         for area in areas where !element.isHittable {
-            for delta in [-150.0, 150.0] {
-                for _ in 0..<10 where !element.isHittable {
+            // Nastavení je na malé obrazovce dlouhé (všechny sekce pod sebou) – posouvá se až 40 kroků.
+            for delta in [-300.0, 300.0] {
+                for _ in 0..<40 where !element.isHittable {
                     area.scroll(byDeltaX: 0, deltaY: delta)
                 }
             }
