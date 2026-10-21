@@ -1,5 +1,6 @@
 import AppKit
 import AppModel
+import Core
 import DesignSystem
 import Engine
 import Foundation
@@ -165,6 +166,22 @@ struct SnapshotTests {
         let app = AppStore(environment: .uiTesting(now: now))
         await app.start()
         try render(AchievementsView(snapshotWidth: 1440, now: now).environment(app), name: "achievements", size: CGSize(width: 1440, height: 1700))
+    }
+
+    @Test("Nastavení: cíle, časovač, funkce, režimy, záloha, koš")
+    func settings() async throws {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let app = AppStore(environment: .uiTesting(now: now))
+        await app.start()
+        if let s = app.document.alive(Session.self).first { app.remove(.sessions, id: s.id) }
+        let timer = TimerStore(app: app) { now }
+        let column = { (views: AnyView) in views.environment(app).environment(timer).environment(Toasts()).frame(width: 640, alignment: .topLeading) }
+        let page = HStack(alignment: .top, spacing: 64) {
+            column(AnyView(VStack(alignment: .leading, spacing: 36) { GoalsSettings(); BackupSettings(); TrashSettings(); AboutDataSettings() }))
+            column(AnyView(VStack(alignment: .leading, spacing: 36) { TimerSoundSettings(); PresetsSettings() }))
+            column(AnyView(FeaturesSettings()))
+        }
+        try render(page.padding(32).background(Palette.bg), name: "settings", size: CGSize(width: 2160, height: 1250))
     }
 
     @Test("Anki v Nastavení: zapnuto, balíčky přiřazené k předmětům")

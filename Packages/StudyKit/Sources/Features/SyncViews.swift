@@ -289,7 +289,8 @@ public struct SyncSettingsView: View {
     }
 }
 
-/// Stránka Nastavení (v M1 jen synchronizace; zbytek v M6).
+/// Stránka Nastavení: synchronizace, vzhled a cíle, časovač, funkce, propojení (Apple Kalendář, Anki),
+/// vlastní režimy, záloha do souboru, koš a horní lišta.
 public struct SettingsPage: View {
     public init() {}
 
@@ -298,17 +299,25 @@ public struct SettingsPage: View {
             let metrics = PageMetrics(width: proxy.size.width)
             ScrollView {
                 VStack(alignment: .leading, spacing: 32) {
-                    PageHeader("Nastavení", subtitle: "Synchronizace, kalendáře, zvuky a horní lišta", glyph: .settings)
+                    PageHeader("Nastavení", subtitle: "Synchronizace, cíle, časovač, propojení a záloha", glyph: .settings)
                     // Na velkém monitoru skupiny vedle sebe, jinak pod sebou.
                     ColumnsLayout(columns: metrics.size == .wide ? 3 : 1, spacing: 64, rowSpacing: 40) {
-                        SyncSettingsView()
                         VStack(alignment: .leading, spacing: 36) {
-                            AppleCalendarSettings()
-                            AnkiSettingsSection()
+                            SyncSettingsView()
+                            GoalsSettings()
+                            BackupSettings()
+                            TrashSettings()
+                            AboutDataSettings()
                         }
                         VStack(alignment: .leading, spacing: 36) {
                             TimerSoundSettings()
+                            PresetsSettings()
                             MenuBarSettings()
+                        }
+                        VStack(alignment: .leading, spacing: 36) {
+                            FeaturesSettings()
+                            AppleCalendarSettings()
+                            AnkiSettingsSection()
                         }
                     }
                 }

@@ -242,29 +242,3 @@ struct AnkiSettingsSection: View {
         return String(first).uppercased(with: Locale(identifier: "cs_CZ")) + deck.dropFirst()
     }
 }
-
-/// Přepínač s popisem; přepínač vpravo.
-private struct SettingSwitch: View {
-    let title: String
-    let detail: String
-    @Binding var isOn: Bool
-    var id = ""
-
-    init(_ title: String, detail: String, isOn: Binding<Bool>, id: String = "") {
-        self.title = title
-        self.detail = detail
-        _isOn = isOn
-        self.id = id
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                Text(detail).font(Typo.small).foregroundStyle(Palette.text3).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            Toggle(title, isOn: $isOn).labelsHidden().toggleStyle(.switch).accessibilityIdentifier(id)
-        }
-    }
-}

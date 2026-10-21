@@ -90,8 +90,8 @@ struct JSONWriter {
 }
 
 /// Převod čísla na text podle ECMAScript `Number::toString` (to používá `JSON.stringify`).
-enum JSNumber {
-    static func format(_ value: Double) -> String {
+public enum JSNumber {
+    public static func format(_ value: Double) -> String {
         guard value.isFinite else { return "null" }
         if value == 0 { return "0" }  // i −0
         // Rychlá cesta: celá čísla do 2⁵³ (časy, počty) jsou přesná.

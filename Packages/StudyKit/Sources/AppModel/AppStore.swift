@@ -180,6 +180,23 @@ public final class AppStore {
         await engine?.configure(remote: currentRemote(), mode: mode)
     }
 
+    /// Jde měnit sdílená data a nastavení? V režimu „jen čtení“ by změny zůstaly jen na Macu.
+    public var canEditShared: Bool { sync.mode == .readWrite || !isConnected }
+
+    // MARK: - Záloha do souboru
+
+    /// Obsah zálohy – stejný text, jaký jde na GitHub (`serialize` na webu).
+    public func backupText() -> String {
+        Merge.serialize(document)
+    }
+
+    /// Sloučí zálohu ze souboru s aktuálními daty (`replaceAll` na webu): nic nepřepíše ani nesmaže,
+    /// u každé položky vyhraje novější verze.
+    public func importBackup(_ data: Data) throws {
+        let incoming = try AppDocument(parsing: data)
+        update { $0 = Merge.mergeData(local: $0, remote: incoming) }
+    }
+
     /// Okamžik pro razítka `updatedAt` (ms).
     public var nowMs: Int { Int(Date().timeIntervalSince1970 * 1000) }
 

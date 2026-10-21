@@ -188,6 +188,20 @@ struct AppStoreTests {
         #expect(try secrets.secret(for: "github") == "t")
     }
 
+    @Test("Záloha do souboru: export je text pro GitHub, import sloučí a nic nesmaže")
+    func backupFile() async throws {
+        let store = try makeStore(backup: FakeBackup(remote: FakeRemote(document: remoteDocument())))
+        await store.start()
+        store.upsert(Subject(raw: ["id": "mine", "name": "Latina", "color": "#7d9cc0", "weeklyGoalMin": 0, "archived": false]))
+        var other = AppDocument.empty
+        other.upsert(Subject(raw: ["id": "imported", "name": "Fyziologie", "color": "#7d9cc0", "weeklyGoalMin": 0, "archived": false]), now: 5)
+        try store.importBackup(Data(Merge.serialize(other).utf8))
+        #expect(Set(store.document.alive(Subject.self).map(\.id)) == ["mine", "imported"])
+        #expect(store.backupText() == Merge.serialize(store.document))
+        #expect(throws: (any Error).self) { try store.importBackup(Data("není json".utf8)) }
+        #expect(throws: SchemaError.tooNew(version: 99)) { try store.importBackup(Data(#"{"schemaVersion":99}"#.utf8)) }
+    }
+
     @Test("Odpojení smaže token, data zůstanou")
     func disconnect() async throws {
         let secrets = InMemorySecretStore()

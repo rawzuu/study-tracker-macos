@@ -17,7 +17,7 @@ struct NoiseSection: View {
     var body: some View {
         let settings = store.document.settings
         let active = timer.state.status == .running && timer.state.phase == .work
-        let editable = store.sync.mode == .readWrite || !store.isConnected
+        let editable = store.canEditShared
         PageSection("Šum na soustředění") {
             VStack(alignment: .leading, spacing: 12) {
                 Picker("Šum", selection: Binding(
@@ -82,14 +82,11 @@ public struct TimerSoundSettings: View {
 
     public var body: some View {
         let settings = store.document.settings
-        let editable = store.sync.mode == .readWrite || !store.isConnected
+        let editable = store.canEditShared
         PageSection("Časovač") {
             VStack(alignment: .leading, spacing: 16) {
-                Toggle(isOn: Binding(get: { settings.sound }, set: { v in store.updateSettings { $0.sound = v } })) {
-                    settingLabel("Zvonek na konci bloku a pauzy", "Jemná zvonkohra, vygenerovaná v aplikaci.")
-                }
-                .toggleStyle(.switch)
-                .accessibilityIdentifier("settings.sound")
+                SettingSwitch("Zvonek na konci bloku a pauzy", detail: "Jemná zvonkohra, vygenerovaná v aplikaci.",
+                              isOn: Binding(get: { settings.sound }, set: { v in store.updateSettings { $0.sound = v } }), id: "settings.sound")
                 if settings.sound {
                     HStack(spacing: 12) {
                         Text("Hlasitost").foregroundStyle(Palette.text2)
@@ -107,24 +104,15 @@ public struct TimerSoundSettings: View {
                     }
                     .padding(.leading, 2)
                 }
-                Toggle(isOn: Binding(get: { settings.notifications }, set: { v in
-                    store.updateSettings { $0.notifications = v }
-                    timer.syncEffects()
-                })) {
-                    settingLabel("Systémové notifikace", "Upozornění na konec bloku, když je aplikace na pozadí. macOS se při prvním bloku zeptá na povolení.")
-                }
-                .toggleStyle(.switch)
-                .accessibilityIdentifier("settings.notifications")
+                SettingSwitch("Systémové notifikace", detail: "Upozornění na konec bloku, když je aplikace na pozadí. macOS se při prvním bloku zeptá na povolení.",
+                              isOn: Binding(get: { settings.notifications }, set: { v in
+                                  store.updateSettings { $0.notifications = v }
+                                  timer.syncEffects()
+                              }), id: "settings.notifications")
+                TimerBehaviorRows()
             }
             .frame(maxWidth: 720, alignment: .leading)
             .disabled(!editable)
-        }
-    }
-
-    private func settingLabel(_ title: String, _ detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-            Text(detail).font(Typo.small).foregroundStyle(Palette.text3)
         }
     }
 }
