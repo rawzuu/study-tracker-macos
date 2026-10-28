@@ -405,6 +405,32 @@ final class NavigationUITests: XCTestCase {
         app.buttons["timer.stop"].click()
     }
 
+    /// Soustředění: seznam ze šablony a plán „během učení“ (dočasná složka, Strážce neběží).
+    @MainActor
+    func testFocusListAndPlan() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.soustredeni"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Soustředění")
+        let add = app.descendants(matching: .any)["focus.addList"].firstMatch
+        reveal(add, app)
+        choose("Sociální sítě", in: add, app)
+        let saveList = app.buttons["focusList.save"]
+        XCTAssertTrue(saveList.waitForExistence(timeout: 3))
+        attachScreenshot(app, "Soustředění – seznam")
+        saveList.click()
+        XCTAssertTrue(app.staticTexts["Sociální sítě"].waitForExistence(timeout: 3))
+        let addPlan = app.descendants(matching: .any)["focus.addPlan"].firstMatch
+        reveal(addPlan, app)
+        addPlan.click()
+        let savePlan = app.buttons["focusPlan.save"]
+        XCTAssertTrue(savePlan.waitForExistence(timeout: 3))
+        attachScreenshot(app, "Soustředění – plán")
+        savePlan.click()
+        XCTAssertTrue(app.staticTexts["Během učení"].waitForExistence(timeout: 3))
+        attachScreenshot(app, "Soustředění")
+    }
+
     @MainActor
     func testLaunchPerformance() {
         measure(metrics: [XCTApplicationLaunchMetric()]) {

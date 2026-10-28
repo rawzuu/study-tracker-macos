@@ -23,6 +23,8 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
     func running() -> [RunningApp] { all }
     func hide(_ app: RunningApp) { hidden.append(app.bundleId) }
     func quit(_ app: RunningApp) { quit.append(app.bundleId) }
+    var opened: [String] = []
+    func open(bundleId: String) { opened.append(bundleId) }
 }
 
 @MainActor private final class FakeSafari: SafariControl {
@@ -40,6 +42,8 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
         left += 1
         url = URL(string: "about:blank")
     }
+    var opened: [URL] = []
+    func open(_ url: URL) { opened.append(url) }
 }
 
 @MainActor private final class FakeShield: ShieldControl {
@@ -55,6 +59,7 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
 @MainActor private final class Harness {
     var t = at(10)
     var idle: Double = 0
+    var boot = 1
     var config: FocusConfig
     let apps = FakeApps()
     let safari = FakeSafari()
@@ -72,7 +77,8 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
         guardian = Guardian(Guardian.Dependencies(
             apps: apps, safari: safari, shield: shield, store: store, files: files,
             readConfig: { [unowned self] in self.config }, readSnapshot: { nil },
-            now: { [unowned self] in self.t }, idleSeconds: { [unowned self] in self.idle }, clock: clock, version: "test"))
+            now: { [unowned self] in self.t }, idleSeconds: { [unowned self] in self.idle }, clock: clock, version: "test",
+            bootTime: { [unowned self] in self.boot }))
     }
 
     deinit { try? FileManager.default.removeItem(at: dir) }
@@ -89,13 +95,20 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
     return c
 }
 
+/// Obrazovka se aktualizuje v úloze na pozadí – nechat ji doběhnout.
+@MainActor private func settle() async throws {
+    for _ in 0..<5 { await Task.yield() }
+    try await Task.sleep(for: .milliseconds(20))
+}
+
 @MainActor @Suite struct GuardianTests {
     @Test func blockedAppIsHiddenWithShieldAndCounted() async throws {
         let h = try Harness(locked())
         await h.guardian.refresh()
         await h.guardian.appActivated(discord)
         #expect(h.apps.hidden == ["com.hnc.Discord"])
-        #expect(h.shield.shown.last == ShieldInfo(name: "Discord", isSite: false, lists: ["Sociální sítě"], attempt: 1, until: at(12), locked: false))
+        #expect(h.shield.shown.last == ShieldInfo(name: "Discord", isSite: false, lists: ["Sociální sítě"], attempt: 1, until: at(12), locked: false,
+                                                  unlock: .request("Odemknout na 5 min")))
         // Opakované kliknutí v Docku hned potom je stejný pokus.
         h.t += 1000
         await h.guardian.appActivated(discord)
@@ -220,6 +233,81 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         let rows = try await h.store.usage(fromDay: "2026-10-26", toDay: "2026-10-26")
         #expect(rows.map(\.bundleId) == ["com.apple.Notes"])
         #expect(rows.first?.ms == 30_000)
+    }
+
+    @Test func softUnlockIsOneClick() async throws {
+        let h = try Harness(locked())
+        await h.guardian.refresh()
+        await h.guardian.appActivated(discord)
+        #expect(h.shield.shown.last?.unlock == .request("Odemknout na 5 min"))
+        await h.guardian.requestUnlock()
+        #expect(!h.shield.isShown)
+        #expect(h.apps.opened == ["com.hnc.Discord"])
+        let unlocks = try await h.store.events(from: at(0), to: at(23)).filter { $0.kind == .unlock }
+        #expect(unlocks.map(\.until) == [h.t + 5 * 60_000])
+        // Odemčeno na 5 minut: Discord se neblokuje, pak zase ano.
+        h.apps.hidden = []
+        await h.guardian.appActivated(discord)
+        #expect(h.apps.hidden.isEmpty)
+        h.t += 5 * 60_000
+        await h.guardian.refresh()
+        await h.guardian.appActivated(discord)
+        #expect(h.apps.hidden == ["com.hnc.Discord"])
+    }
+
+    @Test func typingAndDelayUnlock() async throws {
+        let h = try Harness(locked(strictness: Strictness(delayMinutes: 2, typingCharacters: 10)))
+        await h.guardian.refresh()
+        await h.guardian.appActivated(discord)
+        await h.guardian.requestUnlock()
+        #expect(h.shield.shown.last?.unlock == .wait(until: h.t + 2 * 60_000))
+        h.t += 2 * 60_000
+        await h.guardian.requestUnlock()
+        guard case let .type(text) = h.shield.shown.last?.unlock else {
+            Issue.record("čeká se opsání textu")
+            return
+        }
+        await h.guardian.submit(typed: "spatne")
+        #expect(h.shield.shown.last?.error != nil)
+        #expect(h.shield.isShown)
+        // Žádost přežije restart Strážce (je v databázi).
+        await h.guardian.submit(typed: text)
+        #expect(!h.shield.isShown)
+        #expect(try await h.store.unlockRequests().isEmpty)
+    }
+
+    @Test func restartAndPasswordUnlock() async throws {
+        let h = try Harness(locked(strictness: Strictness(requireRestart: true, password: Unlock.makePassword("kamarad"))))
+        await h.guardian.refresh()
+        await h.guardian.appActivated(discord)
+        await h.guardian.requestUnlock()
+        #expect(h.shield.shown.last?.unlock == .restart)
+        #expect(try await h.store.unlockRequests().count == 1)
+        h.boot = 2
+        await h.guardian.refresh()
+        await h.guardian.requestUnlock()
+        #expect(h.shield.shown.last?.unlock == .password)
+        await h.guardian.submit(password: "spatne")
+        #expect(h.shield.shown.last?.error == "Heslo nesouhlasí.")
+        await h.guardian.submit(password: "kamarad")
+        #expect(!h.shield.isShown)
+    }
+
+    @Test func strictCannotUnlockAndSafariUnlockReturnsToPage() async throws {
+        let h = try Harness(locked(strictness: .strict))
+        await h.guardian.refresh()
+        await h.guardian.appActivated(discord)
+        await h.guardian.requestUnlock()
+        #expect(h.shield.shown.last?.unlock == .unavailable("Přísný zámek – do konce bloku nejde zrušit."))
+        #expect(try await h.store.unlockRequests().isEmpty)
+
+        let soft = try Harness(locked())
+        await soft.guardian.refresh()
+        try soft.files.send(SafariAttempt(at: soft.t, host: "youtube.com", path: "/watch", unlock: true, url: "https://youtube.com/watch?v=1"))
+        await soft.guardian.ingestSafariAttempts()
+        await soft.guardian.requestUnlock()
+        #expect(soft.safari.opened == [URL(string: "https://youtube.com/watch?v=1")!])
+        #expect(try await soft.store.events(from: at(0), to: at(23)).map(\.kind) == [.unlock])
     }
 
     @Test func dailyLimit() async throws {

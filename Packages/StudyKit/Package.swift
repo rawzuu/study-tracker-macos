@@ -44,7 +44,7 @@ let package = Package(
         .target(name: "Focus", dependencies: ["Engine", "WidgetData"]),
         .target(name: "FocusStore", dependencies: ["Focus", "Engine", .product(name: "GRDB", package: "GRDB.swift")]),
         .target(name: "FocusGuard", dependencies: ["Focus", "FocusStore", "Engine", "WidgetData", "DesignSystem"]),
-        .target(name: "Features", dependencies: ["Core", "Engine", "Networking", "Sync", "AppModel", "DesignSystem", "Focus"]),
+        .target(name: "Features", dependencies: ["Core", "Engine", "Networking", "Sync", "AppModel", "DesignSystem", "Focus", "FocusStore"]),
         .testTarget(
             name: "CoreTests",
             dependencies: ["Core"],

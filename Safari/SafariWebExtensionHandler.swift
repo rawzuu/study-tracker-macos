@@ -25,15 +25,22 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             return out
         }
         var attempts = report.attemptsToday[hit.target.key] ?? 0
-        if message["type"] as? String == "attempt" {
+        switch message["type"] as? String {
+        case "attempt":
             try? files.send(SafariAttempt(at: now, host: target.host, path: target.path))
             attempts += 1
+        case "unlock":
+            // Odemyká se na obrazovce Strážce (stejné překážky jako u aplikací).
+            try? files.send(SafariAttempt(at: now, host: target.host, path: target.path, unlock: true, url: text))
+        default:
+            break
         }
         out["blocked"] = true
         out["name"] = hit.name
         out["lists"] = hit.listNames
         out["attempts"] = attempts
         out["locked"] = hit.strictness.locked
+        out["canUnlock"] = hit.strictness.canUnlock
         if let until = hit.until { out["until"] = until }
         return out
     }

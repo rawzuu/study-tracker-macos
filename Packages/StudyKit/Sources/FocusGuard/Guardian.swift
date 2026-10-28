@@ -22,10 +22,13 @@ public final class Guardian {
         public var idleSeconds: () -> Double
         public var clock: StudyClock
         public var version: String
+        /// Kdy Mac naposledy nastartoval (ms) – zámek „odemknout po restartu“.
+        public var bootTime: () -> Int
 
         public init(apps: any AppControl, safari: any SafariControl, shield: any ShieldControl, store: FocusStore, files: FocusFiles?,
                     readConfig: @escaping () -> FocusConfig?, readSnapshot: @escaping () -> WidgetSnapshot?,
-                    now: @escaping () -> Int, idleSeconds: @escaping () -> Double, clock: StudyClock, version: String) {
+                    now: @escaping () -> Int, idleSeconds: @escaping () -> Double, clock: StudyClock, version: String,
+                    bootTime: @escaping () -> Int = { 0 }) {
             self.apps = apps
             self.safari = safari
             self.shield = shield
@@ -37,6 +40,7 @@ public final class Guardian {
             self.idleSeconds = idleSeconds
             self.clock = clock
             self.version = version
+            self.bootTime = bootTime
         }
     }
 
@@ -64,6 +68,9 @@ public final class Guardian {
     /// Zablokovaná adresa v Safari a od kdy (rozšíření dostane chvilku, než zasáhne Strážce).
     private var blockedPage: (key: String, since: Int)?
     private var tamperReported: [String: String] = [:]
+    /// Co ukazuje blokovací obrazovka (odemykání se týká toho).
+    private var shown: (hit: FocusHit, attempt: Int, url: String?)?
+    private var requests: [String: UnlockRequest] = [:]
 
     /// Opakovaný pokus o totéž do tolika ms se počítá jako jeden.
     static let attemptDedupMs = 4000
@@ -94,6 +101,7 @@ public final class Guardian {
         let today = d.clock.startOfDay(t)
         do {
             commitments = try await d.store.commitments(now: t)
+            requests = Dictionary(try await d.store.unlockRequests().map { ($0.target.key, $0) }, uniquingKeysWith: { _, b in b })
             let exceptions = try await d.store.activeExceptions(now: t)
             attemptsToday = try await d.store.attemptCounts(since: today)
             let usage = config.plans.contains { if case .dailyLimit = $0.trigger { $0.enabled } else { false } }
@@ -109,7 +117,7 @@ public final class Guardian {
             }
             let changed = next.rules != state.rules || next.protectionApps != state.protectionApps || next.exceptions != state.exceptions
             state = next
-            if changed { enforceRunning() }
+            if changed { await enforceRunning() }
         } catch {
             Self.log.error("Soustředění: databáze nedostupná: \(error.localizedDescription, privacy: .public)")
         }
@@ -122,12 +130,12 @@ public final class Guardian {
     }
 
     /// Pravidla začala (nebo se změnila): běžící zakázané aplikace hned schovat nebo ukončit.
-    func enforceRunning() {
+    func enforceRunning() async {
         let front = d.apps.frontmost()
         for app in d.apps.running() {
             guard let hit = state.check(app: app.bundleId, name: app.name) else { continue }
             if hit.appAction == .quit { d.apps.quit(app) } else { d.apps.hide(app) }
-            if app.pid == front?.pid { showShield(hit, attempt: attemptsToday[hit.target.key] ?? 0) }
+            if app.pid == front?.pid { await showShield(hit, attempt: attemptsToday[hit.target.key] ?? 0) }
         }
     }
 
@@ -136,17 +144,94 @@ public final class Guardian {
     /// Aplikace přešla do popředí (nebo se spustila).
     public func appActivated(_ app: RunningApp) async {
         guard let hit = state.check(app: app.bundleId, name: app.name) else {
-            if d.shield.isShown, !Self.isGuard(app.bundleId) { d.shield.close() }
+            if d.shield.isShown, !Self.isGuard(app.bundleId) {
+                d.shield.close()
+                shown = nil
+            }
             return
         }
         if hit.appAction == .quit { d.apps.quit(app) } else { d.apps.hide(app) }
         let attempt = await recordAttempt(hit, at: now)
-        showShield(hit, attempt: attempt)
+        await showShield(hit, attempt: attempt)
     }
 
-    private func showShield(_ hit: FocusHit, attempt: Int) {
+    private func showShield(_ hit: FocusHit, attempt: Int, url: String? = nil) async {
+        shown = (hit, attempt, url)
+        await updateShield()
+    }
+
+    /// Obrazovka s aktuálním krokem odemykání.
+    private func updateShield(error: String? = nil) async {
+        guard let (hit, attempt, _) = shown else { return }
+        let step = Unlock.step(hit, request: requests[hit.target.key], allowanceLeft: await allowanceLeft(hit), now: now,
+                               bootTime: d.bootTime(), clock: d.clock)
         d.shield.show(ShieldInfo(name: hit.name, isSite: { if case .site = hit.target { true } else { false } }(), lists: hit.listNames,
-                                 attempt: max(1, attempt), until: hit.until, locked: hit.strictness.locked))
+                                 attempt: max(1, attempt), until: hit.until, locked: hit.strictness.locked, unlock: step, error: error))
+    }
+
+    private func allowanceLeft(_ hit: FocusHit) async -> Int? {
+        guard hit.strictness.weeklyAllowance != nil else { return nil }
+        let used = (try? await d.store.unlockLists(since: d.clock.startOfWeek(now))) ?? []
+        return ActiveFocus.allowanceLeft(hit, unlocksThisWeek: used)
+    }
+
+    // MARK: - Odemykání
+
+    /// „Odemknout…“ / „Pokračovat“ na blokovací obrazovce: založí žádost, nebo posune další krok.
+    public func requestUnlock() async {
+        guard let (hit, _, url) = shown else { return }
+        let key = hit.target.key
+        if requests[key] == nil {
+            guard hit.strictness.canUnlock, await allowanceLeft(hit) != 0 else { return await updateShield() }
+            let request = UnlockRequest(target: hit.target, name: hit.name, listIds: hit.listIds, requestedAt: now, bootTime: d.bootTime(),
+                                        challenge: Unlock.challenge(length: hit.strictness.typingCharacters), url: url)
+            requests[key] = request
+            try? await d.store.save(request)
+        }
+        await advance()
+    }
+
+    /// Opsaný text.
+    public func submit(typed: String) async {
+        guard let (hit, _, _) = shown, var request = requests[hit.target.key] else { return }
+        guard Unlock.matches(typed, request.challenge) else { return await updateShield(error: "Text nesouhlasí – opiš ho přesně, včetně velkých písmen.") }
+        request.typed = true
+        requests[hit.target.key] = request
+        try? await d.store.save(request)
+        await advance()
+    }
+
+    /// Heslo (zadává ho ten, kdo ho zná).
+    public func submit(password: String) async {
+        guard let (hit, _, _) = shown, var request = requests[hit.target.key], let lock = hit.strictness.password else { return }
+        guard Unlock.verify(password, lock) else { return await updateShield(error: "Heslo nesouhlasí.") }
+        request.passwordOK = true
+        requests[hit.target.key] = request
+        try? await d.store.save(request)
+        await advance()
+    }
+
+    private func advance() async {
+        guard let (hit, _, _) = shown else { return }
+        let step = Unlock.step(hit, request: requests[hit.target.key], allowanceLeft: await allowanceLeft(hit), now: now,
+                               bootTime: d.bootTime(), clock: d.clock)
+        if step == .ready { await grant(hit) } else { await updateShield() }
+    }
+
+    /// Všechny překážky splněné: výjimka na `unlockMinutes`, zapíše se do statistik.
+    private func grant(_ hit: FocusHit) async {
+        let t = now
+        let request = requests.removeValue(forKey: hit.target.key)
+        try? await d.store.removeRequest(hit.target)
+        try? await d.store.record(FocusEvent(at: t, kind: .unlock, target: hit.target, name: hit.name, listIds: hit.listIds,
+                                             until: t + hit.strictness.unlockMinutes * StudyClock.minute))
+        shown = nil
+        d.shield.close()
+        await refresh()
+        switch hit.target {
+        case let .app(bundleId): d.apps.open(bundleId: bundleId)
+        case .site: if let url = request?.url.flatMap(URL.init(string:)) { d.safari.open(url) }
+        }
     }
 
     /// Zapíše pokus (opakování do pár sekund = jeden pokus). Vrací kolikátý je dnes.
@@ -195,7 +280,7 @@ public final class Guardian {
         blockedPage = nil
         d.safari.leaveBlockedPage()
         let attempt = await recordAttempt(hit, at: t)
-        showShield(hit, attempt: attempt)
+        await showShield(hit, attempt: attempt, url: url.absoluteString)
     }
 
     /// Porušení (jednou denně za druh) – ukáže se ve statistikách.
@@ -206,12 +291,16 @@ public final class Guardian {
         try? await d.store.record(FocusEvent(at: t, kind: .tamper, target: nil, name: app, detail: detail))
     }
 
-    /// Pokusy, které zachytilo rozšíření Safari.
+    /// Pokusy (a žádosti o odemknutí), které poslalo rozšíření Safari.
     public func ingestSafariAttempts() async {
         guard let files = d.files else { return }
         for a in files.takeAttempts() {
             guard let hit = state.check(host: a.host, path: a.path) else { continue }
-            await recordAttempt(hit, at: a.at)
+            if a.unlock == true {
+                await showShield(hit, attempt: attemptsToday[hit.target.key] ?? 1, url: a.url)
+            } else {
+                await recordAttempt(hit, at: a.at)
+            }
         }
     }
 
@@ -280,4 +369,10 @@ public final class Guardian {
         lastReportAt = t
         try? d.files?.write(report)
     }
+}
+
+extension Guardian: ShieldActions {
+    public func shieldRequestUnlock() { Task { await requestUnlock() } }
+    public func shieldSubmit(typed: String) { Task { await submit(typed: typed) } }
+    public func shieldSubmit(password: String) { Task { await submit(password: password) } }
 }

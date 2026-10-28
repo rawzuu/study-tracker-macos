@@ -36,10 +36,12 @@ public struct FocusView: View {
                 }
             } else {
                 ColumnsLayout(columns: min(2, metrics.columns), spacing: 56, rowSpacing: 40) {
-                    GuardSection(now: now)
                     NowSection(state: state, now: now)
-                    FocusListsSection()
-                    FocusPlansSection(now: now)
+                    FocusListsSection(state: state)
+                    FocusPlansSection(state: state, now: now)
+                    FocusStatsSection()
+                    GuardSection(now: now)
+                    FocusMoreSection(state: state)
                 }
             }
         }
@@ -64,12 +66,7 @@ enum FocusText {
     }
 
     static func until(_ t: Int?) -> String? {
-        guard let t else { return nil }
-        let date = Date(timeIntervalSince1970: Double(t) / 1000)
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "cs_CZ")
-        f.dateFormat = Calendar.current.isDateInToday(date) ? "H:mm" : "EEEE H:mm"
-        return "do \(f.string(from: date))"
+        t.map { FocusFormat.until($0) }
     }
 
     static func strictness(_ s: Strictness) -> String {
@@ -78,6 +75,9 @@ enum FocusText {
         if s.delayMinutes > 0 { parts.append("odklad \(s.delayMinutes) min") }
         if s.typingCharacters > 0 { parts.append("opsat \(s.typingCharacters) znaků") }
         if let n = s.weeklyAllowance { parts.append("\(n)× týdně") }
+        if s.requireRestart { parts.append("po restartu") }
+        if s.password != nil { parts.append("heslo") }
+        if !s.unlockWindows.isEmpty { parts.append("jen \(Unlock.windowsText(s.unlockWindows))") }
         return parts.isEmpty ? "Volná" : parts.joined(separator: ", ")
     }
 
@@ -92,7 +92,7 @@ enum FocusText {
 
     static let strictnessPresets: [(String, Strictness)] = [
         ("Volná – jen odkliknout", .soft), ("Odklad 5 minut", .delay), ("Opsat 120 znaků", .typing),
-        ("3 odemknutí týdně", .allowance), ("Přísná – do konce nejde zrušit", .strict),
+        ("3 odemknutí týdně", .allowance), ("Až po restartu Macu", .restart), ("Přísná – do konce nejde zrušit", .strict),
     ]
 }
 
@@ -221,82 +221,80 @@ private struct NowSection: View {
 
 // MARK: - Seznamy
 
+/// Seznam v přísném zámku, který právě běží: měnit ani mazat ho nejde (Strážce by stejně vynucoval
+/// zapamatovanou podobu, tak ať je to vidět).
+func isLocked(_ listId: String, _ state: ActiveFocus) -> Bool {
+    state.rules.contains { $0.list.id == listId && $0.strictness.locked }
+}
+
 private struct FocusListsSection: View {
     @Environment(FocusController.self) private var focus
+    let state: ActiveFocus
+    @State private var editing: FocusList?
+    @State private var isNew = false
 
     var body: some View {
         PageSection("Seznamy", accessory: {
-            Menu("Přidat ze šablony") {
-                ForEach([FocusTemplates.studyOnly] + FocusTemplates.all) { t in
-                    Button(t.name) { add(t) }
+            HStack(spacing: 10) {
+                Menu("Ze šablony") {
+                    ForEach([FocusTemplates.studyOnly] + FocusTemplates.all) { t in
+                        Button(t.name) { open(template(t), isNew: true) }
+                    }
                 }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .accessibilityIdentifier("focus.addList")
+                Button("Nový") { open(FocusList(name: ""), isNew: true) }.buttonStyle(.study(.ghost, size: .small))
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .accessibilityIdentifier("focus.addList")
         }) {
             if focus.config.lists.isEmpty {
                 Text("Zatím žádný seznam. Začni šablonou – třeba Sociální sítě a Video.").font(Typo.body).foregroundStyle(Palette.text3).padding(.vertical, 8)
             }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(focus.config.lists) { list in
-                    ListRow {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    let locked = isLocked(list.id, state)
+                    Button { if !locked { open(list, isNew: false) } } label: {
+                        ListRow {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(list.name)
+                                Text(list.name).foregroundStyle(Palette.text)
                                 Text(detail(list)).font(Typo.small).foregroundStyle(Palette.text3)
                             }
                             Spacer()
-                            Menu(FocusText.strictness(list.strictness)) {
-                                ForEach(FocusText.strictnessPresets, id: \.0) { name, s in
-                                    Button(name) { set(list.id) { $0.strictness = s } }
-                                }
-                                Divider()
-                                Picker("Aplikace", selection: Binding(get: { list.appAction }, set: { a in set(list.id) { $0.appAction = a } })) {
-                                    Text("Schovat a ukázat obrazovku").tag(FocusList.AppAction.shield)
-                                    Text("Ukončit").tag(FocusList.AppAction.quit)
-                                }
-                                Divider()
-                                Button("Smazat seznam", role: .destructive) { remove(list.id) }
+                            if locked {
+                                Label("v přísném zámku", systemImage: "lock.fill").font(Typo.small).foregroundStyle(Palette.text3)
+                            } else {
+                                Text(FocusText.strictness(list.strictness)).font(Typo.small).foregroundStyle(Palette.text2)
+                                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.text3)
                             }
-                            .menuStyle(.borderlessButton)
-                            .fixedSize()
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .help(locked ? "Během přísného zámku nejde seznam měnit." : "Upravit seznam")
                 }
             }
         }
+        .sheet(item: $editing) { list in FocusListEditor(list: list, isNew: isNew).environment(focus) }
+    }
+
+    private func template(_ t: FocusTemplates.Template) -> FocusList {
+        var list = t.makeList()
+        if t.id == FocusTemplates.studyOnly.id { list.mode = .allowOnly }
+        return list
+    }
+
+    private func open(_ list: FocusList, isNew: Bool) {
+        self.isNew = isNew
+        editing = list
     }
 
     private func detail(_ list: FocusList) -> String {
         let mode = list.mode == .allowOnly ? "povolit jen tyhle" : "blokovat"
-        func count(_ n: Int, _ one: String, _ few: String, _ many: String) -> String { "\(n) \(n == 1 ? one : n < 5 ? few : many)" }
-        return [mode, count(list.apps.count, "aplikace", "aplikace", "aplikací"), count(list.sites.count, "web", "weby", "webů")].joined(separator: " · ")
-    }
-
-    private func add(_ t: FocusTemplates.Template) {
-        var list = t.makeList()
-        if t.id == FocusTemplates.studyOnly.id { list.mode = .allowOnly }
-        let id = list.id
-        // Nový seznam se přidá i do plánů (nejčastěji je jen „během bloku učení“).
-        focus.update {
-            $0.lists.append(list)
-            for i in $0.plans.indices { $0.plans[i].listIds.append(id) }
-        }
-    }
-
-    private func set(_ id: String, _ change: (inout FocusList) -> Void) {
-        focus.update { c in
-            if let i = c.lists.firstIndex(where: { $0.id == id }) { change(&c.lists[i]) }
-        }
-    }
-
-    private func remove(_ id: String) {
-        focus.update { c in
-            c.lists.removeAll { $0.id == id }
-            for i in c.plans.indices { c.plans[i].listIds.removeAll { $0 == id } }
-            for i in c.locks.indices { c.locks[i].listIds.removeAll { $0 == id } }
-        }
+        func count(_ n: Int, _ one: String, _ few: String, _ many: String) -> String { "\(n) \(n == 1 ? one : n > 1 && n < 5 ? few : many)" }
+        var parts = [mode, count(list.apps.count, "aplikace", "aplikace", "aplikací"), count(list.sites.count, "web", "weby", "webů")]
+        if !list.keywords.isEmpty { parts.append(count(list.keywords.count, "slovo", "slova", "slov")) }
+        if list.appAction == .quit { parts.append("ukončit") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -304,69 +302,151 @@ private struct FocusListsSection: View {
 
 private struct FocusPlansSection: View {
     @Environment(FocusController.self) private var focus
+    let state: ActiveFocus
     let now: Int
+    @State private var editing: FocusPlan?
+    @State private var isNew = false
+    @State private var lockMinutes = 60
 
     var body: some View {
         PageSection("Plány", accessory: {
-            Menu("Přidat") {
-                Button("Během bloku učení") { add("Během učení", .studyBlock(StudyBlockOptions())) }
-                Button("Během Studijního plánu") { add("Studijní plán", .studyPlan) }
-                Button("Všední dny 8–16") { add("Všední dny", .schedule([TimeWindow(weekdays: [0, 1, 2, 3, 4], start: 8 * 60, end: 16 * 60)])) }
-                Button("Denní limit 30 minut") { add("Denní limit", .dailyLimit(minutes: 30)) }
-                Divider()
-                ForEach([30, 60, 120, 240], id: \.self) { m in
-                    Button("Zamknout teď na \(m < 60 ? "\(m) min" : "\(m / 60) h")") { lock(minutes: m) }
-                }
+            Button("Nový") {
+                isNew = true
+                editing = FocusPlan(name: "Během učení", listIds: focus.config.lists.map(\.id), trigger: .studyBlock(StudyBlockOptions()))
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            .buttonStyle(.study(.ghost, size: .small))
             .disabled(focus.config.lists.isEmpty)
             .accessibilityIdentifier("focus.addPlan")
         }) {
-            if focus.config.plans.isEmpty, activeLocks.isEmpty {
-                Text("Kdy blokovat: nejčastěji během bloku učení. Plán použije všechny seznamy.")
-                    .font(Typo.body).foregroundStyle(Palette.text3).padding(.vertical, 8)
+            if focus.config.plans.isEmpty {
+                Text("Kdy blokovat – nejčastěji během bloku učení.").font(Typo.body).foregroundStyle(Palette.text3).padding(.vertical, 8)
             }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(focus.config.plans) { plan in
+                    let locked = plan.listIds.contains { isLocked($0, state) } && state.rules.contains { $0.sources.contains(plan.name) }
                     ListRow {
-                        SettingRow(plan.name, detail: "\(FocusText.trigger(plan.trigger)) · \(plan.listIds.count) seznam\(plan.listIds.count == 1 ? "" : plan.listIds.count < 5 ? "y" : "ů")") {
-                            HStack(spacing: 8) {
-                                Toggle(plan.name, isOn: Binding(get: { plan.enabled }, set: { v in setPlan(plan.id) { $0.enabled = v } }))
-                                    .labelsHidden().toggleStyle(.switch)
-                                Button { focus.update { $0.plans.removeAll { $0.id == plan.id } } } label: { Image(systemName: "xmark") }
-                                    .buttonStyle(.study(.ghost, size: .small)).help("Smazat plán")
+                        Button {
+                            if !locked {
+                                isNew = false
+                                editing = plan
                             }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(plan.name).foregroundStyle(Palette.text)
+                                Text(detail(plan)).font(Typo.small).foregroundStyle(Palette.text3)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
-                    }
-                }
-                ForEach(activeLocks) { lock in
-                    ListRow {
-                        SettingRow("Ruční zámek", detail: FocusText.until(lock.end) ?? "") {
-                            Image(systemName: "lock").foregroundStyle(Palette.text3)
+                        .buttonStyle(.plain)
+                        if locked {
+                            Image(systemName: "lock.fill").foregroundStyle(Palette.text3).help("Běží přísný zámek – plán do konce nejde měnit.")
+                        } else {
+                            Toggle(plan.name, isOn: Binding(get: { plan.enabled }, set: { v in setPlan(plan.id) { $0.enabled = v } }))
+                                .labelsHidden().toggleStyle(.switch)
                         }
                     }
                 }
             }
+            lockRow
+        }
+        .sheet(item: $editing) { plan in FocusPlanEditor(plan: plan, isNew: isNew).environment(focus) }
+    }
+
+    /// Ruční zámek: všechny seznamy na zvolenou dobu, přísnost podle seznamů.
+    private var lockRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(focus.config.locks.filter { $0.end > now }) { lock in
+                Label("Ruční zámek \(FocusText.until(lock.end) ?? "")\(lock.strictness?.locked == true ? " · přísný" : "")", systemImage: "lock")
+                    .font(Typo.small).foregroundStyle(Palette.text2)
+            }
+            HStack(spacing: 8) {
+                Text("Zamknout teď na").foregroundStyle(Palette.text2)
+                Picker("Délka", selection: $lockMinutes) {
+                    ForEach([15, 30, 60, 90, 120, 180, 240, 480], id: \.self) { m in Text(m < 60 ? "\(m) min" : m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min").tag(m) }
+                }
+                .labelsHidden()
+                .fixedSize()
+                Menu("Zamknout") {
+                    Button("Podle přísnosti seznamů") { lock(nil) }
+                    Button("Přísně – do konce nejde zrušit") { lock(.strict) }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .disabled(focus.config.lists.isEmpty)
+            }
+            .padding(.top, 10)
         }
     }
 
-    private var activeLocks: [FocusLock] { focus.config.locks.filter { $0.end > now } }
-
-    private func add(_ name: String, _ trigger: FocusPlan.Trigger) {
-        focus.update { $0.plans.append(FocusPlan(name: name, listIds: $0.lists.map(\.id), trigger: trigger)) }
+    private func detail(_ plan: FocusPlan) -> String {
+        var parts = [FocusText.trigger(plan.trigger)]
+        let names = plan.listIds.compactMap { focus.config.list($0)?.name }
+        if !names.isEmpty { parts.append(names.joined(separator: ", ")) }
+        if let s = plan.strictness { parts.append(FocusText.strictness(s)) }
+        return parts.joined(separator: " · ")
     }
 
-    private func lock(minutes: Int) {
+    private func lock(_ strictness: Strictness?) {
+        let end = now + lockMinutes * 60_000
         focus.update {
             $0.locks.removeAll { $0.end <= now }
-            $0.locks.append(FocusLock(listIds: $0.lists.map(\.id), start: now, end: now + minutes * 60_000))
+            $0.locks.append(FocusLock(listIds: $0.lists.map(\.id), start: now, end: end, strictness: strictness))
         }
     }
 
     private func setPlan(_ id: String, _ change: (inout FocusPlan) -> Void) {
         focus.update { c in
             if let i = c.plans.firstIndex(where: { $0.id == id }) { change(&c.plans[i]) }
+        }
+    }
+}
+
+// MARK: - Další nastavení
+
+private struct FocusMoreSection: View {
+    @Environment(FocusController.self) private var focus
+    let state: ActiveFocus
+    @State private var confirmDelete = false
+
+    var body: some View {
+        PageSection("Další nastavení") {
+            VStack(alignment: .leading, spacing: 16) {
+                SettingRow("Přísněji před zkouškou", detail: "Pár dní před zkouškou platí ke všem plánům přísný zámek.") {
+                    HStack(spacing: 6) {
+                        if let boost = focus.config.examBoost {
+                            NumberField(value: Binding(get: { boost.daysBefore }, set: { v in focus.update { $0.examBoost?.daysBefore = v } }), in: 0...30)
+                            Text("dní").foregroundStyle(Palette.text3)
+                        }
+                        Toggle("Přísněji před zkouškou", isOn: Binding(get: { focus.config.examBoost != nil },
+                                                                     set: { v in focus.update { $0.examBoost = v ? ExamBoost() : nil } }))
+                            .labelsHidden().toggleStyle(.switch)
+                    }
+                }
+                SettingSwitch("Pojistka: nástroje", detail: "Během přísného zámku blokovat Monitor aktivity a terminály, kterými by šel Strážce vypnout.",
+                              isOn: Binding(get: { focus.config.protection.systemTools }, set: { v in focus.update { $0.protection.systemTools = v } }))
+                SettingSwitch("Pojistka: Nastavení systému", detail: "Během přísného zámku blokovat i Nastavení systému (Položky při přihlášení).",
+                              isOn: Binding(get: { focus.config.protection.systemSettings }, set: { v in focus.update { $0.protection.systemSettings = v } }))
+                SettingRow("Nečinnost", detail: "Po kolika minutách bez myši a klávesnice se čas u obrazovky přestane počítat.") {
+                    Picker("Nečinnost", selection: Binding(get: { focus.config.tracking.idleMinutes }, set: { v in focus.update { $0.tracking.idleMinutes = v } })) {
+                        ForEach([2, 5, 10, 15, 30], id: \.self) { Text("\($0) min").tag($0) }
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                SettingRow("Uchovávat historii", detail: "Starší měření a pokusy se mažou.") {
+                    Picker("Uchovávat", selection: Binding(get: { focus.config.tracking.retentionDays }, set: { v in focus.update { $0.tracking.retentionDays = v } })) {
+                        ForEach([30, 90, 180, 365], id: \.self) { Text("\($0) dní").tag($0) }
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                SettingRow("Smazat historii", detail: "Měření, pokusy, odemknutí a porušení. Běžící přísný zámek zůstane.") {
+                    Button("Smazat…") { confirmDelete = true }.buttonStyle(.study(.ghost, size: .small))
+                }
+            }
+            .frame(maxWidth: 720, alignment: .leading)
+        }
+        .confirmationDialog("Smazat celou historii Soustředění?", isPresented: $confirmDelete) {
+            Button("Smazat", role: .destructive) { Task { try? await focus.store?.deleteHistory() } }
         }
     }
 }

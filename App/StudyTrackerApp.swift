@@ -5,6 +5,7 @@ import AppModel
 import Core
 import Engine
 import Features
+import Focus
 import SwiftUI
 import WidgetData
 import WidgetKit
@@ -102,8 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var anki = Self.uiTesting ? AnkiSync(app: store, service: DemoAnki.service()) : AnkiSync(app: store)
     // Nastavení jen pro tento Mac: automatická pauza, zkratky při bloku, klávesové zkratky, souhrn týdne.
     lazy var macPrefs = MacPreferences(defaults: store.defaults)
-    /// Soustředění: v UI testech bez sdíleného kontejneru (nic skutečného se neblokuje ani nečte).
-    lazy var focus = Self.uiTesting ? FocusController(files: nil) : FocusController()
+    /// Soustředění: v UI testech dočasná složka místo sdíleného kontejneru (Strážce se nespouští, nic skutečného
+    /// se neblokuje ani nečte).
+    lazy var focus = Self.uiTesting
+        ? FocusController(files: FocusFiles(directory: URL.temporaryDirectory.appending(path: "focus-uitest-\(UUID().uuidString)"), group: "uitest"))
+        : FocusController()
     lazy var away = AwayMonitor(timer: timer, prefs: macPrefs)
     lazy var automation = BlockAutomation(timer: timer, prefs: macPrefs)
     lazy var weekly = WeeklySummaryNotifier(app: store, prefs: macPrefs) { [timer] text in

@@ -1,6 +1,15 @@
 import AppKit
 import CoreServices
+import Darwin
 import Focus
+
+/// Kdy Mac naposledy nastartoval (ms od 1970) – `kern.boottime`.
+public func systemBootTime() -> Int {
+    var tv = timeval()
+    var size = MemoryLayout<timeval>.size
+    guard sysctlbyname("kern.boottime", &tv, &size, nil, 0) == 0 else { return 0 }
+    return Int(tv.tv_sec) * 1000 + Int(tv.tv_usec) / 1000
+}
 
 /// Spuštěná aplikace, jak ji vidí Strážce.
 public struct RunningApp: Sendable, Equatable {
@@ -23,6 +32,8 @@ public protocol AppControl: AnyObject {
     func running() -> [RunningApp]
     func hide(_ app: RunningApp)
     func quit(_ app: RunningApp)
+    /// Po odemknutí: otevřít (vrátit dopředu) aplikaci.
+    func open(bundleId: String)
 }
 
 /// Adresa aktivní záložky Safari přes Apple Events.
@@ -35,6 +46,8 @@ public protocol SafariControl: AnyObject {
     func currentURL() -> URL?
     /// Odejít ze zablokované stránky (když ji rozšíření nezastavilo).
     func leaveBlockedPage()
+    /// Po odemknutí webu: otevřít původní adresu.
+    func open(_ url: URL)
 }
 
 /// Blokovací obrazovka.
@@ -55,15 +68,30 @@ public struct ShieldInfo: Sendable, Equatable {
     public var attempt: Int
     public var until: Int?
     public var locked: Bool
+    /// Kde je uživatel v odemykání.
+    public var unlock: UnlockStep
+    /// Špatně opsaný text, špatné heslo.
+    public var error: String?
 
-    public init(name: String, isSite: Bool, lists: [String], attempt: Int, until: Int?, locked: Bool) {
+    public init(name: String, isSite: Bool, lists: [String], attempt: Int, until: Int?, locked: Bool,
+                unlock: UnlockStep = .unavailable(""), error: String? = nil) {
         self.name = name
         self.isSite = isSite
         self.lists = lists
         self.attempt = attempt
         self.until = until
         self.locked = locked
+        self.unlock = unlock
+        self.error = error
     }
+}
+
+/// Tlačítka blokovací obrazovky → Strážce.
+@MainActor
+public protocol ShieldActions: AnyObject {
+    func shieldRequestUnlock()
+    func shieldSubmit(typed: String)
+    func shieldSubmit(password: String)
 }
 
 // MARK: - Systém
@@ -81,6 +109,11 @@ public final class SystemApps: AppControl {
 
     public func hide(_ app: RunningApp) {
         NSRunningApplication(processIdentifier: app.pid)?.hide()
+    }
+
+    public func open(bundleId: String) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
     /// Slušné ukončení (aplikace se může zeptat na uložení). Když odmítne, zůstane schovaná.
@@ -132,6 +165,10 @@ public final class SystemSafari: SafariControl {
                 tell application "Safari" to if (count of windows) > 0 then set URL of current tab of front window to "about:blank"
             end timeout
             """)
+    }
+
+    public func open(_ url: URL) {
+        NSWorkspace.shared.open([url], withApplicationAt: URL(filePath: "/Applications/Safari.app"), configuration: NSWorkspace.OpenConfiguration())
     }
 
     private func run(_ source: String) -> NSAppleEventDescriptor? {

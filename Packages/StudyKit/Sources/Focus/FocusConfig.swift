@@ -104,7 +104,7 @@ public struct FocusApp: Codable, Sendable, Hashable {
 public struct Strictness: Codable, Sendable, Equatable {
     /// Přísná: do konce nejde odemknout vůbec.
     public var locked: Bool
-    /// Odemknutí začne platit až po tolika minutách (0 = hned).
+    /// Odemknutí začne platit až po tolika minutách od žádosti (0 = hned).
     public var delayMinutes: Int
     /// Před odemknutím ručně opsat náhodný text o tolika znacích (0 = bez opisování).
     public var typingCharacters: Int
@@ -112,13 +112,36 @@ public struct Strictness: Codable, Sendable, Equatable {
     public var weeklyAllowance: Int?
     /// Na jak dlouho odemknutí platí.
     public var unlockMinutes: Int
+    /// Odemknout jde až po restartu Macu (žádost → restart → odemknout).
+    public var requireRestart: Bool
+    /// Heslo, které zná někdo jiný (uložený jen otisk SHA-256 se solí).
+    public var password: PasswordLock?
+    /// Odemykat jde jen v těchto oknech (prázdné = kdykoli).
+    public var unlockWindows: [TimeWindow]
 
-    public init(locked: Bool = false, delayMinutes: Int = 0, typingCharacters: Int = 0, weeklyAllowance: Int? = nil, unlockMinutes: Int = 5) {
+    public init(locked: Bool = false, delayMinutes: Int = 0, typingCharacters: Int = 0, weeklyAllowance: Int? = nil, unlockMinutes: Int = 5,
+                requireRestart: Bool = false, password: PasswordLock? = nil, unlockWindows: [TimeWindow] = []) {
         self.locked = locked
         self.delayMinutes = delayMinutes
         self.typingCharacters = typingCharacters
         self.weeklyAllowance = weeklyAllowance
         self.unlockMinutes = unlockMinutes
+        self.requireRestart = requireRestart
+        self.password = password
+        self.unlockWindows = unlockWindows
+    }
+
+    /// Chybějící klíče (starší nastavení) = výchozí hodnoty.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(locked: try c.decodeIfPresent(Bool.self, forKey: .locked) ?? false,
+                  delayMinutes: try c.decodeIfPresent(Int.self, forKey: .delayMinutes) ?? 0,
+                  typingCharacters: try c.decodeIfPresent(Int.self, forKey: .typingCharacters) ?? 0,
+                  weeklyAllowance: try c.decodeIfPresent(Int.self, forKey: .weeklyAllowance),
+                  unlockMinutes: try c.decodeIfPresent(Int.self, forKey: .unlockMinutes) ?? 5,
+                  requireRestart: try c.decodeIfPresent(Bool.self, forKey: .requireRestart) ?? false,
+                  password: try c.decodeIfPresent(PasswordLock.self, forKey: .password),
+                  unlockWindows: try c.decodeIfPresent([TimeWindow].self, forKey: .unlockWindows) ?? [])
     }
 
     /// Volná: odkliknout (zapíše se do statistik).
@@ -126,6 +149,7 @@ public struct Strictness: Codable, Sendable, Equatable {
     public static let delay = Strictness(delayMinutes: 5)
     public static let typing = Strictness(typingCharacters: 120)
     public static let allowance = Strictness(weeklyAllowance: 3)
+    public static let restart = Strictness(requireRestart: true)
     public static let strict = Strictness(locked: true)
 
     /// Přísnější z obou v každé překážce.
@@ -134,13 +158,32 @@ public struct Strictness: Codable, Sendable, Equatable {
         case let (a?, b?): min(a, b)
         case let (a, b): a ?? b
         }
+        // Okna odemykání: obě omezení zároveň – průnik se těžko vyjádří, bere se to s méně okny.
+        let windows = [unlockWindows, other.unlockWindows].filter { !$0.isEmpty }.min { $0.count < $1.count } ?? []
         return Strictness(locked: locked || other.locked, delayMinutes: max(delayMinutes, other.delayMinutes),
                           typingCharacters: max(typingCharacters, other.typingCharacters), weeklyAllowance: allowance,
-                          unlockMinutes: min(unlockMinutes, other.unlockMinutes))
+                          unlockMinutes: min(unlockMinutes, other.unlockMinutes), requireRestart: requireRestart || other.requireRestart,
+                          password: password ?? other.password, unlockWindows: windows)
     }
 
     /// Jde vůbec odemknout (bez týdenního limitu – ten závisí na tom, kolik odemknutí už padlo).
     public var canUnlock: Bool { !locked && weeklyAllowance != 0 }
+
+    /// Bez jakékoli překážky – stačí kliknout.
+    public var isSoft: Bool {
+        !locked && delayMinutes == 0 && typingCharacters == 0 && weeklyAllowance == nil && !requireRestart && password == nil && unlockWindows.isEmpty
+    }
+}
+
+/// Heslo k odemknutí: jen sůl a otisk, heslo samo se nikde neukládá.
+public struct PasswordLock: Codable, Sendable, Equatable {
+    public var salt: String
+    public var hash: String
+
+    public init(salt: String, hash: String) {
+        self.salt = salt
+        self.hash = hash
+    }
 }
 
 /// Kdy se seznamy blokují.

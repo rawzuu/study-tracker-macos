@@ -59,6 +59,8 @@ browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
 browser.runtime.onMessage.addListener(async (message, sender) => {
   if (message.type === "origin") return origins.get(sender.tab?.id) || null;
   if (message.type === "attempt") return ask({ type: "attempt", url: message.url });
+  if (message.type === "check") return ask({ type: "check", url: message.url });
+  if (message.type === "unlock") return ask({ type: "unlock", url: message.url });
   if (message.type === "close" && sender.tab) return browser.tabs.remove(sender.tab.id);
   return null;
 });

@@ -38,6 +38,8 @@ targets:
         product: Features
       - package: StudyKit
         product: WidgetData
+      - package: StudyKit
+        product: Focus
       # Widgety (rozšíření WidgetKitu) jsou součástí aplikace.
       - target: StudyTrackerWidgets
       # Soustředění: Strážce (pomocník na pozadí, registruje se sám) a rozšíření Safari.

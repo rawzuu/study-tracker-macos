@@ -49,10 +49,16 @@ public struct SafariAttempt: Codable, Sendable, Equatable {
     public var at: Int
     public var host: String
     public var path: String
+    /// Uživatel na blokovací stránce klikl na „Odemknout…“ (Strážce ukáže odemykání).
+    public var unlock: Bool?
+    /// Celá adresa – po odemknutí se na ni Safari vrátí.
+    public var url: String?
 
-    public init(at: Int, host: String, path: String) {
+    public init(at: Int, host: String, path: String, unlock: Bool? = nil, url: String? = nil) {
         self.at = at
         self.host = host
         self.path = path
+        self.unlock = unlock
+        self.url = url
     }
 }

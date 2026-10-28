@@ -86,14 +86,17 @@ public enum GuardRunner {
             self.files = files
             let widgets = WidgetFiles.shared()
             let appId = Bundle.main.object(forInfoDictionaryKey: "STAppBundleId") as? String ?? "cz.rawzuu.studytracker"
+            let shield = ShieldWindow(backToStudy: { Running.openApp(appId) })
             guardian = Guardian(Guardian.Dependencies(
                 apps: SystemApps(), safari: SystemSafari(),
-                shield: ShieldWindow(backToStudy: { Running.openApp(appId) }),
+                shield: shield,
                 store: store, files: files,
                 readConfig: { files.readConfig() }, readSnapshot: { widgets?.readSnapshot() },
                 now: { Int(Date().timeIntervalSince1970 * 1000) }, idleSeconds: { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) },
-                clock: .current, version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+                clock: .current, version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?",
+                bootTime: systemBootTime
             ))
+            shield.actions = guardian
         }
 
         func start() {

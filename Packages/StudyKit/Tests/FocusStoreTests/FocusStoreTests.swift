@@ -80,3 +80,33 @@ private func at(_ day: Int, _ h: Int, _ m: Int = 0) -> Int { clock.atMinutes(clo
         #expect(try await appStore.events(from: 0, to: 10).count == 1)
     }
 }
+
+@Suite struct FocusStatsTests {
+    @Test func aggregates() {
+        let usage = [
+            UsageRow(day: "2026-10-26", hour: 9, bundleId: "com.apple.Safari", appName: "Safari", host: "youtube.com", ms: 30 * minute),
+            UsageRow(day: "2026-10-26", hour: 10, bundleId: "com.apple.Safari", appName: "Safari", host: "youtube.com", ms: 10 * minute),
+            UsageRow(day: "2026-10-27", hour: 10, bundleId: "com.apple.Notes", appName: "Poznámky", host: "", ms: 20 * minute),
+            UsageRow(day: "2026-10-01", hour: 10, bundleId: "x", appName: "Mimo období", host: "", ms: 99 * minute),
+        ]
+        let events = [
+            FocusEvent(at: at(0, 9), kind: .attempt, target: .site("youtube.com"), name: "youtube.com"),
+            FocusEvent(at: at(1, 9, 30), kind: .attempt, target: .site("youtube.com"), name: "youtube.com"),
+            FocusEvent(at: at(1, 22), kind: .attempt, target: .app("d"), name: "Discord"),
+            FocusEvent(at: at(1, 22, 1), kind: .unlock, target: .app("d"), name: "Discord", until: at(1, 22, 6)),
+            FocusEvent(at: at(1, 23), kind: .tamper, target: nil, name: "Safari", detail: "Rozšíření vypnuté"),
+        ]
+        let s = FocusStats.make(usage: usage, events: events, days: 7, now: at(1, 23, 30), clock: clock)
+        #expect(s.days.count == 7)
+        #expect(s.days.last?.key == "2026-10-27")
+        #expect(s.screenMs == 60 * minute)
+        #expect(s.days.suffix(2).map(\.attempts) == [1, 2])
+        #expect(s.top.map(\.name) == ["youtube.com", "Poznámky"])
+        #expect(s.top.first?.isSite == true)
+        #expect(s.topAttempts.map(\.name) == ["youtube.com", "Discord"])
+        #expect(s.heatmap[1][22] == 1)
+        #expect(s.heatmap[0][9] == 1)
+        #expect(s.unlocks == 1)
+        #expect(s.tamper.map(\.detail) == ["Rozšíření vypnuté"])
+    }
+}

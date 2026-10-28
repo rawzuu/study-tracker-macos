@@ -152,6 +152,26 @@ public final class FocusStore: Sendable {
         }
     }
 
+    // MARK: - Žádosti o odemknutí
+
+    public func unlockRequests() async throws -> [UnlockRequest] {
+        try await db.read { db in
+            try String.fetchAll(db, sql: "SELECT json FROM unlockRequest ORDER BY rowid")
+                .compactMap { try? JSONDecoder().decode(UnlockRequest.self, from: Data($0.utf8)) }
+        }
+    }
+
+    public func save(_ request: UnlockRequest) async throws {
+        let json = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        try await db.write { db in
+            try db.execute(sql: "INSERT OR REPLACE INTO unlockRequest (target, json) VALUES (?, ?)", arguments: [request.target.key, json])
+        }
+    }
+
+    public func removeRequest(_ target: FocusTarget) async throws {
+        try await db.write { db in try db.execute(sql: "DELETE FROM unlockRequest WHERE target = ?", arguments: [target.key]) }
+    }
+
     // MARK: - Přísné závazky
 
     public func commitments(now: Int) async throws -> [Commitment] {
@@ -227,6 +247,12 @@ public final class FocusStore: Sendable {
             try db.create(table: "commitment") { t in
                 t.primaryKey("id", .text)
                 t.column("until", .integer).notNull()
+                t.column("json", .text).notNull()
+            }
+        }
+        m.registerMigration("v2") { db in
+            try db.create(table: "unlockRequest") { t in
+                t.primaryKey("target", .text)
                 t.column("json", .text).notNull()
             }
         }

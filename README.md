@@ -165,7 +165,7 @@ Jen na Macu, samostatná stránka. Data jsou ve sdíleném kontejneru (`Focus/co
 
 - **Seznamy** aplikací a webů (doména se subdoménami, část webu `youtube.com/shorts`, výjimky, slova v adrese), režim „blokovat tyhle“ nebo „povolit jen tyhle“, šablony.
 - **Plány**: během bloku učení, časová okna, Studijní plán, denní limit, ruční zámek; přísnější úroveň před zkouškou.
-- **Přísnost** po seznamech (odklad, opsání textu, týdenní výjimky, přísný zámek). Přísný zámek se známým koncem Strážce uloží jako závazek – platí do konce i po změně nastavení nebo zastavení bloku.
+- **Přísnost** po seznamech (odklad, opsání textu, týdenní limit odemknutí, odemknutí až po restartu, heslo, odemykání jen v daném čase, přísný zámek). Odemyká se na blokovací obrazovce Strážce (i z blokovací stránky v Safari); žádosti se ukládají, takže přežijí restart. Přísný zámek se známým koncem Strážce uloží jako závazek – platí do konce i po změně nastavení nebo zastavení bloku.
 - **Strážce** (`StudyTrackerGuard.app` v `Contents/Library/LoginItems`, modul `FocusGuard`): aplikace bez sandboxu, kterou drží launchd. Sandboxovaná aplikace smí registrovat jen sandboxované pomocníky, proto se Strážce registruje sám (`--register`). Je vidět v Nastavení systému → Položky při přihlášení a jde tam vypnout.
 - **Safari**: rozšíření (`StudyTrackerSafari.appex`) blokuje známé domény přes declarativeNetRequest ještě před načtením a ostatní kontroluje při navigaci; Strážce navíc čte adresu aktivní záložky (Apple Events, souhlas Automatizace) jako pojistku a pro měření času na webech.
 
