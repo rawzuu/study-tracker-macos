@@ -4,6 +4,8 @@ import PackageDescription
 // Moduly aplikace. Core nemá žádné závislosti – drží datový model sdílený s webem.
 // Core → Engine (výpočty) · Networking (GitHub) · Persistence (Mac) → Sync → AppModel → Features (+ DesignSystem)
 // WidgetData (souhrn pro widgety, jen Foundation) → AppModel i WidgetUI (vzhled widgetů, bez dat a sítě)
+// Focus (Soustředění: pravidla blokování a měření, Engine + WidgetData) → FocusStore (databáze ve sdíleném kontejneru)
+//   – obojí používá aplikace i Strážce (pomocník na pozadí), který nic dalšího nepotřebuje.
 // Jediná externí závislost je GRDB (lokální úložiště), připnutá na přesnou verzi.
 let package = Package(
     name: "StudyKit",
@@ -19,6 +21,8 @@ let package = Package(
         .library(name: "Features", targets: ["Features"]),
         .library(name: "WidgetData", targets: ["WidgetData"]),
         .library(name: "WidgetUI", targets: ["WidgetUI"]),
+        .library(name: "Focus", targets: ["Focus"]),
+        .library(name: "FocusStore", targets: ["FocusStore"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
@@ -36,6 +40,8 @@ let package = Package(
         .target(name: "DesignSystem"),
         .target(name: "WidgetData"),
         .target(name: "WidgetUI", dependencies: ["WidgetData", "DesignSystem"]),
+        .target(name: "Focus", dependencies: ["Engine", "WidgetData"]),
+        .target(name: "FocusStore", dependencies: ["Focus", "Engine", .product(name: "GRDB", package: "GRDB.swift")]),
         .target(name: "Features", dependencies: ["Core", "Engine", "Networking", "Sync", "AppModel", "DesignSystem"]),
         .testTarget(
             name: "CoreTests",
@@ -55,6 +61,8 @@ let package = Package(
         .testTarget(name: "SyncTests", dependencies: ["Sync"]),
         .testTarget(name: "AppModelTests", dependencies: ["AppModel", "Core", "Engine", "Networking", "Persistence", "Sync"]),
         .testTarget(name: "FeaturesTests", dependencies: ["Features", "Core", "Engine", "AppModel", "DesignSystem"]),
+        .testTarget(name: "FocusTests", dependencies: ["Focus", "Engine", "WidgetData"]),
+        .testTarget(name: "FocusStoreTests", dependencies: ["FocusStore", "Focus", "Engine"]),
         .testTarget(name: "WidgetTests", dependencies: ["WidgetData", "WidgetUI", "AppModel", "Core", "Engine", "Persistence", "DesignSystem"]),
     ]
 )

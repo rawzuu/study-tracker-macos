@@ -64,6 +64,28 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M5 ✓ | Statistiky, report a kalibrace, reflexe, úspěchy (úspěchy jako seznam místo kovových medailí – bez žluté, vzhled „Seznam“) | v0.9.0 |
 | M6 (část) ✓ | Nastavení jako na webu (cíle, časovač, funkce, vlastní režimy), koš, export JSON/CSV a import se sloučením (Anki už v v0.9.0); zbývá onboarding | v0.10.0 |
 | M6+ ✓ | Jen Mac (schváleno 21. 10. 2026): automatická pauza po nečinnosti, zkratky při bloku, klávesové zkratky odkudkoli, pondělní souhrn | v0.11.0 |
+| M8 | Soustředění (schváleno 28. 10. 2026): blokování aplikací a webů v Safari, čas u obrazovky, přísnost a pojistky proti obcházení, statistiky – viz níže | po krocích F1–F7 |
 | M7 | profilování v Instruments, optimalizace, výkonnostní testy | v1.0.0 |
 
 Cíle výkonu: studený start < 0,4 s, paměť v klidu < 60 MB, CPU v klidu ≈ 0 %.
+
+## M8 Soustředění
+
+Blokování aplikací a webů a měření času u obrazovky, jen na tomto Macu (v `data.json` nic, web beze změny).
+
+Ověřeno 28. 10. 2026 (pokus mimo repo, macOS 27, bezplatný Personal Team):
+- Screen Time API (FamilyControls, ManagedSettings, DeviceActivity) je v SDK macOS 27 `@available(macOS, unavailable)` – pro aplikace na Macu není.
+- Systémový síťový filtr (Network Extension) vyžaduje placený Apple Developer Program – nepoužívá se.
+- Sandboxovaná aplikace nesmí registrovat pomocníka bez sandboxu („SMAppService target executable must be sandboxed because the app is sandboxed“). Řešení: Strážce (aplikace bez sandboxu uvnitř balíčku) se zaregistruje sám (`SMAppService.agent` z vlastního balíčku) – funguje, stav hned `enabled`, launchd ho po pádu znovu spustí (KeepAlive).
+- Sdílený kontejner (app group) čtou i zapisují obě strany bez dotazu systému; Strážce vidí aplikaci v popředí, nečinnost, umí jinou aplikaci schovat i ukončit.
+- Apple Events k Safari (adresa záložky) chtějí jednorázový souhlas uživatele (Automatizace).
+
+| Krok | Obsah |
+|---|---|
+| F1 ✓ | ověření (výše) |
+| F2 ✓ | modul `Focus` (nastavení, seznamy, plány, přísnost, závazky, porovnání webů, měření) a `FocusStore` (databáze ve sdíleném kontejneru), testy |
+| F3 | Strážce: blokování aplikací, blokovací obrazovka, měření času |
+| F4 | Safari: rozšíření (declarativeNetRequest) a pojistka přes adresu záložky |
+| F5 | přísnost a odemykání (odklad, opsání textu, výjimky, přísný zámek), pojistka proti obcházení |
+| F6 | stránka Soustředění: Přehled s grafy, Seznamy, Plány |
+| F7 | napojení na časovač, kalendář, pondělní souhrn, horní lištu |
