@@ -6,6 +6,8 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
     case prehled, casovac, planovac
     case statistiky, report, reflexe, historie, uspechy
     case predmety, nastaveni
+    /// Soustředění (blokování a čas u obrazovky) – jen na Macu, samostatná část.
+    case soustredeni
 
     var id: String { rawValue }
 
@@ -21,6 +23,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .uspechy: "Úspěchy"
         case .predmety: "Předměty"
         case .nastaveni: "Nastavení"
+        case .soustredeni: "Soustředění"
         }
     }
 
@@ -29,6 +32,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .prehled, .casovac, .planovac: .learning
         case .statistiky, .report, .reflexe, .historie, .uspechy: .overview
         case .predmety, .nastaveni: .setup
+        case .soustredeni: .focus
         }
     }
 
@@ -40,6 +44,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .planovac: "M3"
         case .statistiky, .report, .reflexe, .uspechy: "M5"
         case .nastaveni: "M6"
+        case .soustredeni: "M8"
         }
     }
 
@@ -56,6 +61,7 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case .report: .symbol("doc.text")
         case .reflexe: .symbol("text.bubble")
         case .uspechy: .symbol("rosette")
+        case .soustredeni: .symbol("moon.circle")
         }
     }
 
@@ -63,5 +69,6 @@ enum Page: String, CaseIterable, Identifiable, Hashable {
         case learning = "Učení"
         case overview = "Přehledy"
         case setup = "Nastavení"
+        case focus = "Soustředění"
     }
 }

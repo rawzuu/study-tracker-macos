@@ -44,9 +44,13 @@ ditto "$NEW" "$APP"
 codesign --verify --deep --strict "$APP"
 "$LS" -u "$NEW" 2>/dev/null || true
 pluginkit -r "$NEW/Contents/PlugIns/StudyTrackerWidgets.appex" 2>/dev/null || true
+pluginkit -r "$NEW/Contents/PlugIns/StudyTrackerSafari.appex" 2>/dev/null || true
+[ -d "$NEW/Contents/Library/LoginItems/StudyTrackerGuard.app" ] && "$LS" -u "$NEW/Contents/Library/LoginItems/StudyTrackerGuard.app" 2>/dev/null || true
 "$LS" -f "$APP"
 # Proces widgetů ze staré verze běží dál i po výměně aplikace a macOS jeho výstup odmítá
 # („Bundle version did not match“) – widgety pak zůstanou prázdné. Ukončit; systém spustí nový.
 pkill -x StudyTrackerWidgets 2>/dev/null || true
+# Strážce Soustředění (když je zapnutý) běží ze staré verze – launchd ho spustí znovu s novou.
+launchctl kickstart -k "gui/$(id -u)/cz.rawzuu.studytracker.guard" 2>/dev/null || true
 open "$APP"
 echo "Nainstalováno: Study Tracker ${VERSION}. Složku „Study Tracker ${VERSION}“ ve Stažených souborech můžeš smazat."

@@ -91,6 +91,7 @@ public struct WidgetFiles: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         try encoder.encode(snapshot).write(to: snapshotURL, options: .atomic)
+        notify_post(Self.snapshotNotification(group))
     }
 
     // MARK: - Příkazy
@@ -126,6 +127,9 @@ public struct WidgetFiles: Sendable {
         }
         return false
     }
+
+    /// Darwin oznámení „aplikace zapsala nový souhrn“ (Strážce Soustředění pozná začátek a konec bloku hned).
+    public static func snapshotNotification(_ group: String) -> String { "\(group).widget-snapshot" }
 
     /// Darwin oznámení „widget poslal příkaz“ (jméno začíná identifikátorem kontejneru).
     public static func commandNotification(_ group: String) -> String { "\(group).widget-command" }

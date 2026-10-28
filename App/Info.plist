@@ -44,5 +44,9 @@
 	<string>Study Tracker zapisuje tvůj studijní plán do kalendáře „Studijní plán“ a události z ostatních kalendářů bere v ranním plánu jako obsazený čas. Ostatní kalendáře jen čte.</string>
 	<key>STAppGroup</key>
 	<string>$(ST_APP_GROUP)</string>
+	<key>STGuardBundleId</key>
+	<string>$(ST_GUARD_BUNDLE_ID)</string>
+	<key>STSafariExtensionId</key>
+	<string>$(ST_SAFARI_EXTENSION_ID)</string>
 </dict>
 </plist>

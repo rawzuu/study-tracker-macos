@@ -134,6 +134,29 @@ private let duringBlock = FocusPlan(id: "p1", name: "Během učení", listIds: [
         #expect(state.check(app: "cz.rawzuu.studytracker.dev", name: "Study Tracker") == nil)
     }
 
+    @Test func allowedSitesAndKeywords() {
+        let video = FocusList(id: "video", name: "Video", sites: ["youtube.com"], allowedSites: ["youtube.com/playlist"], keywords: ["serial", "hr"])
+        let lock = FocusLock(listIds: ["video"], start: at(0, 8), end: at(0, 12))
+        let state = FocusEngine.evaluate(config([], lists: [video], locks: [lock]), context: FocusContext(now: at(0, 9)), clock: clock)
+        #expect(state.check(host: "youtube.com", path: "/watch") != nil)
+        #expect(state.check(host: "youtube.com", path: "/playlist") == nil)
+        #expect(state.check(host: "prehraj.cz", path: "/serialy/x")?.target == .site("prehraj.cz"))
+        // Slovo kratší než tři znaky se nepoužije.
+        #expect(state.check(host: "hra.cz") == nil)
+    }
+
+    @Test func dailyLimitCountsListedUsage() {
+        let plan = FocusPlan(name: "Limit", listIds: ["social"], trigger: .dailyLimit(minutes: 30))
+        let usage = [UsageTotal(bundleId: "com.apple.Safari", host: "m.youtube.com", ms: 20 * minute),
+                     UsageTotal(bundleId: "com.hnc.Discord", ms: 9 * minute),
+                     UsageTotal(bundleId: "com.apple.Safari", host: "is.muni.cz", ms: 60 * minute)]
+        #expect(FocusEngine.usedMs(usage, lists: [social]) == 29 * minute)
+        #expect(!FocusEngine.evaluate(config([plan]), context: FocusContext(now: at(0, 15), usageToday: usage), clock: clock).isActive)
+        let over = usage + [UsageTotal(bundleId: "com.apple.Safari", host: "reddit.com", ms: minute)]
+        let state = FocusEngine.evaluate(config([plan]), context: FocusContext(now: at(0, 15), usageToday: over), clock: clock)
+        #expect(state.rules.first?.until == at(1, 0))
+    }
+
     @Test func allowOnlyWithoutAppsDoesNotRestrictApps() {
         var sitesOnly = schoolOnly
         sitesOnly.apps = []
@@ -253,11 +276,11 @@ private let duringBlock = FocusPlan(id: "p1", name: "Během učení", listIds: [
     @Test func allowance() {
         let hit = FocusHit(target: .site("youtube.com"), name: "youtube.com", listIds: ["social"], listNames: ["Sociální sítě"],
                            strictness: Strictness(weeklyAllowance: 3), appAction: .shield, until: nil)
-        #expect(FocusState.allowanceLeft(hit, unlocksThisWeek: [["social"], ["other"], ["social", "x"]]) == 1)
-        #expect(FocusState.allowanceLeft(hit, unlocksThisWeek: [["social"], ["social"], ["social"], ["social"]]) == 0)
+        #expect(ActiveFocus.allowanceLeft(hit, unlocksThisWeek: [["social"], ["other"], ["social", "x"]]) == 1)
+        #expect(ActiveFocus.allowanceLeft(hit, unlocksThisWeek: [["social"], ["social"], ["social"], ["social"]]) == 0)
         var free = hit
         free.strictness = .soft
-        #expect(FocusState.allowanceLeft(free, unlocksThisWeek: [["social"]]) == nil)
+        #expect(ActiveFocus.allowanceLeft(free, unlocksThisWeek: [["social"]]) == nil)
     }
 
     @Test func configRoundTrip() throws {

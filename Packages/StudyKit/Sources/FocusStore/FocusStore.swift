@@ -114,6 +114,26 @@ public final class FocusStore: Sendable {
         }
     }
 
+    /// Pokusy od `since` podle cíle (`FocusTarget.key`).
+    public func attemptCounts(since: Int) async throws -> [String: Int] {
+        try await db.read { db in
+            var out: [String: Int] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT target, COUNT(*) AS n FROM event WHERE kind = 'attempt' AND at >= ? GROUP BY target",
+                                        arguments: [since]) {
+                out[row["target"]] = row["n"]
+            }
+            return out
+        }
+    }
+
+    /// Dnešní součty po aplikacích a doménách (denní limity).
+    public func totals(day: String) async throws -> [UsageTotal] {
+        try await db.read { db in
+            try Row.fetchAll(db, sql: "SELECT bundleId, host, SUM(ms) AS ms FROM usage WHERE day = ? GROUP BY bundleId, host", arguments: [day])
+                .map { UsageTotal(bundleId: $0["bundleId"], host: $0["host"], ms: $0["ms"]) }
+        }
+    }
+
     /// Odemknutí, která ještě platí.
     public func activeExceptions(now: Int) async throws -> [FocusException] {
         try await db.read { db in

@@ -28,6 +28,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.appleCalendar)
                 .environment(delegate.anki)
                 .environment(delegate.macPrefs)
+                .environment(delegate.focus)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -101,6 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var anki = Self.uiTesting ? AnkiSync(app: store, service: DemoAnki.service()) : AnkiSync(app: store)
     // Nastavení jen pro tento Mac: automatická pauza, zkratky při bloku, klávesové zkratky, souhrn týdne.
     lazy var macPrefs = MacPreferences(defaults: store.defaults)
+    /// Soustředění: v UI testech bez sdíleného kontejneru (nic skutečného se neblokuje ani nečte).
+    lazy var focus = Self.uiTesting ? FocusController(files: nil) : FocusController()
     lazy var away = AwayMonitor(timer: timer, prefs: macPrefs)
     lazy var automation = BlockAutomation(timer: timer, prefs: macPrefs)
     lazy var weekly = WeeklySummaryNotifier(app: store, prefs: macPrefs) { [timer] text in
@@ -140,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 automation.start()
                 weekly.start()
                 applyHotKeys()
+                focus.start()
             }
             // Měření výkonu s běžícím blokem (Tools/dev/idle-cpu.sh casovac) – jen s ukázkovými daty.
             if Self.uiTesting, let page = Self.measurePage {

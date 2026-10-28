@@ -82,6 +82,7 @@ struct RootView: View {
             case .report: ReportView()
             case .reflexe: ReflectionView(openPage: open)
             case .uspechy: AchievementsView()
+            case .soustredeni: FocusView()
             case let other: PlaceholderPage(page: other)
             }
         }
@@ -109,6 +110,9 @@ private struct Sidebar: View {
             }
             Section {
                 ForEach(pages.filter { $0.group == .overview }) { row($0, day: day) }
+            }
+            if pages.contains(.soustredeni) {
+                Section { row(.soustredeni, day: day) }
             }
             Section {
                 if pages.contains(.predmety) { row(.predmety, day: day) }

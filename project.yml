@@ -40,6 +40,11 @@ targets:
         product: WidgetData
       # Widgety (rozšíření WidgetKitu) jsou součástí aplikace.
       - target: StudyTrackerWidgets
+      # Soustředění: Strážce (pomocník na pozadí, registruje se sám) a rozšíření Safari.
+      - target: StudyTrackerGuard
+        embed: true
+        copy: { destination: wrapper, subpath: Contents/Library/LoginItems }
+      - target: StudyTrackerSafari
     info:
       path: App/Info.plist
       properties:
@@ -55,6 +60,9 @@ targets:
         # Apple Kalendář: zápis plánu do vlastního kalendáře a obsazený čas z ostatních (jen na žádost v Nastavení).
         # Sdílený kontejner s widgety (souhrn pro widgety a příkazy z jejich tlačítek).
         STAppGroup: $(ST_APP_GROUP)
+        # Strážce Soustředění v Contents/Library/LoginItems a rozšíření Safari.
+        STGuardBundleId: $(ST_GUARD_BUNDLE_ID)
+        STSafariExtensionId: $(ST_SAFARI_EXTENSION_ID)
         # Anki (AnkiConnect) poslouchá jen na http://127.0.0.1:8765 – výjimka ATS jen pro místní adresy.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
@@ -76,6 +84,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker
         APP_DISPLAY_NAME: Study Tracker
         ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker
+        ST_GUARD_BUNDLE_ID: cz.rawzuu.studytracker.guard
+        ST_SAFARI_EXTENSION_ID: cz.rawzuu.studytracker.safari
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # Ikona z Icon Composeru (Liquid Glass); pro macOS 15 z ní Xcode vyrobí klasickou ikonu.
@@ -87,6 +97,8 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.dev
           APP_DISPLAY_NAME: Study Tracker (vývoj)
           ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker.dev
+          ST_GUARD_BUNDLE_ID: cz.rawzuu.studytracker.dev.guard
+          ST_SAFARI_EXTENSION_ID: cz.rawzuu.studytracker.dev.safari
   StudyTrackerWidgets:
     type: app-extension
     platform: macOS
@@ -133,6 +145,113 @@ targets:
           ST_APP_BUNDLE_ID: cz.rawzuu.studytracker.dev
           ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker.dev
           APP_DISPLAY_NAME: Study Tracker (vývoj)
+  # Strážce Soustředění: aplikace bez sandboxu (ovládá ostatní aplikace, čte adresu v Safari), běží na
+  # pozadí přes launchd. Plist pro launchd se generuje s identifikátorem podle konfigurace.
+  StudyTrackerGuard:
+    type: application
+    platform: macOS
+    sources: [Guard]
+    dependencies:
+      - package: StudyKit
+        product: FocusGuard
+    info:
+      path: Guard/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSUIElement: true
+        STAppGroup: $(ST_APP_GROUP)
+        STAppBundleId: $(ST_APP_BUNDLE_ID)
+        NSAppleEventsUsageDescription: Strážce Soustředění čte adresu aktivní záložky Safari, aby zablokoval weby ze tvých seznamů a změřil čas na webech. Nic neodesílá.
+    entitlements:
+      path: Guard/StudyTrackerGuard.entitlements
+      properties:
+        # Sdílený kontejner s aplikací (nastavení, databáze měření a pokusů).
+        com.apple.security.application-groups: [$(ST_APP_GROUP)]
+        # Apple Events k Safari (adresa aktivní záložky) – se souhlasem v Soukromí → Automatizace.
+        com.apple.security.automation.apple-events: true
+    postBuildScripts:
+      - name: Plist pro launchd
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchAgents/$(PRODUCT_BUNDLE_IDENTIFIER).plist
+        script: |
+          DIR="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchAgents"
+          mkdir -p "$DIR"
+          cat > "$DIR/$PRODUCT_BUNDLE_IDENTIFIER.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>Label</key><string>$PRODUCT_BUNDLE_IDENTIFIER</string>
+            <key>BundleProgram</key><string>Contents/MacOS/$EXECUTABLE_NAME</string>
+            <key>AssociatedBundleIdentifiers</key><array><string>$ST_APP_BUNDLE_ID</string></array>
+            <key>RunAtLoad</key><true/>
+            <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+            <key>ThrottleInterval</key><integer>5</integer>
+            <key>LimitLoadToSessionType</key><string>Aqua</string>
+            <key>ProcessType</key><string>Interactive</string>
+          </dict>
+          </plist>
+          PLIST
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.guard
+        PRODUCT_NAME: StudyTrackerGuard
+        APP_DISPLAY_NAME: Study Tracker – Strážce
+        ST_APP_BUNDLE_ID: cz.rawzuu.studytracker
+        ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.dev.guard
+          ST_APP_BUNDLE_ID: cz.rawzuu.studytracker.dev
+          ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker.dev
+          APP_DISPLAY_NAME: Study Tracker – Strážce (vývoj)
+  # Rozšíření Safari: blokuje weby ze seznamů ještě před načtením podle stavu od Strážce.
+  StudyTrackerSafari:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Safari
+        excludes: [Resources]
+      - path: Safari/Resources
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: StudyKit
+        product: Focus
+    info:
+      path: Safari/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        STAppGroup: $(ST_APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    entitlements:
+      path: Safari/StudyTrackerSafari.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [$(ST_APP_GROUP)]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.safari
+        APP_DISPLAY_NAME: Study Tracker – Soustředění
+        ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: cz.rawzuu.studytracker.dev.safari
+          ST_APP_GROUP: $(DEVELOPMENT_TEAM).cz.rawzuu.studytracker.dev
+          APP_DISPLAY_NAME: Study Tracker – Soustředění (vývoj)
   StudyTrackerUITests:
     type: bundle.ui-testing
     platform: macOS

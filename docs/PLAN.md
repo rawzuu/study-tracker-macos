@@ -84,8 +84,8 @@ Ověřeno 28. 10. 2026 (pokus mimo repo, macOS 27, bezplatný Personal Team):
 |---|---|
 | F1 ✓ | ověření (výše) |
 | F2 ✓ | modul `Focus` (nastavení, seznamy, plány, přísnost, závazky, porovnání webů, měření) a `FocusStore` (databáze ve sdíleném kontejneru), testy |
-| F3 | Strážce: blokování aplikací, blokovací obrazovka, měření času |
-| F4 | Safari: rozšíření (declarativeNetRequest) a pojistka přes adresu záložky |
+| F3 ✓ | Strážce: blokování aplikací, blokovací obrazovka, měření času; první stránka Soustředění; navíc denní limit, výjimky v seznamu, slova v adrese, „Jen učení“ |
+| F4 ✓ | Safari: rozšíření (declarativeNetRequest + kontrola při navigaci) a pojistka přes adresu záložky |
 | F5 | přísnost a odemykání (odklad, opsání textu, výjimky, přísný zámek), pojistka proti obcházení |
 | F6 | stránka Soustředění: Přehled s grafy, Seznamy, Plány |
 | F7 | napojení na časovač, kalendář, pondělní souhrn, horní lištu |

@@ -14,6 +14,9 @@ public enum FocusTemplates {
         }
     }
 
+    /// „Jen učení“: povolený jen Study Tracker (doplní se školní aplikace a weby) – zamkne celý Mac.
+    public static let studyOnly = Template(id: "study-only", name: "Jen učení", apps: [], sites: [])
+
     public static let all: [Template] = [
         Template(id: "social", name: "Sociální sítě", apps: [], sites: [
             "facebook.com", "instagram.com", "tiktok.com", "x.com", "twitter.com", "reddit.com", "threads.com", "threads.net",

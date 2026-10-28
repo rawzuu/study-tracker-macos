@@ -159,6 +159,18 @@ Na plochu a do Centra oznámení: **Dnešek** (malý, střední), **Časovač** 
 
 Ikona v horní liště ukazuje odpočet běžícího bloku (překresluje se jen tehdy, když časovač běží – v klidu nestojí žádné CPU). Okénko z lišty: dnešní čas a cíl, běžící blok s ovládáním (pozastavit, hotovo, ukončit), v klidu „Co teď?“ se spuštěním jedním kliknutím a nejbližší blok z plánu. Vypíná se v Nastavení → Horní lišta (jen pro tento Mac).
 
+## Soustředění (blokování a čas u obrazovky)
+
+Jen na Macu, samostatná stránka. Data jsou ve sdíleném kontejneru (`Focus/config.json`, `focus.sqlite`), v `data.json` nic.
+
+- **Seznamy** aplikací a webů (doména se subdoménami, část webu `youtube.com/shorts`, výjimky, slova v adrese), režim „blokovat tyhle“ nebo „povolit jen tyhle“, šablony.
+- **Plány**: během bloku učení, časová okna, Studijní plán, denní limit, ruční zámek; přísnější úroveň před zkouškou.
+- **Přísnost** po seznamech (odklad, opsání textu, týdenní výjimky, přísný zámek). Přísný zámek se známým koncem Strážce uloží jako závazek – platí do konce i po změně nastavení nebo zastavení bloku.
+- **Strážce** (`StudyTrackerGuard.app` v `Contents/Library/LoginItems`, modul `FocusGuard`): aplikace bez sandboxu, kterou drží launchd. Sandboxovaná aplikace smí registrovat jen sandboxované pomocníky, proto se Strážce registruje sám (`--register`). Je vidět v Nastavení systému → Položky při přihlášení a jde tam vypnout.
+- **Safari**: rozšíření (`StudyTrackerSafari.appex`) blokuje známé domény přes declarativeNetRequest ještě před načtením a ostatní kontroluje při navigaci; Strážce navíc čte adresu aktivní záložky (Apple Events, souhlas Automatizace) jako pojistku a pro měření času na webech.
+
+Screen Time API (FamilyControls) na macOS pro aplikace není a systémový síťový filtr vyžaduje placený vývojářský účet – proto vlastní Strážce.
+
 ## Co teď? a ranní plán
 
 - **Co teď?** na Přehledu doporučí, čemu se věnovat, a řekne proč: blízká zkouška, zaostávání za týdenním cílem (podle toho, kdy v týdnu se obvykle učíš), dny bez učení, blok naplánovaný na teď a prostřídání předmětů. Délka bloku vychází z toho, v jaké délce se ti v tuhle denní dobu nejlépe soustředí. „Proč“ ukáže signály všech předmětů. Na stránce Časovač je totéž doporučení s „Použít“.

@@ -18,5 +18,7 @@ chmod +x "$DEST/Nainstalovat.command"
 LS=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 "$LS" -u "$PWD/$APP" 2>/dev/null || true
 pluginkit -r "$PWD/$APP/Contents/PlugIns/StudyTrackerWidgets.appex" 2>/dev/null || true
+pluginkit -r "$PWD/$APP/Contents/PlugIns/StudyTrackerSafari.appex" 2>/dev/null || true
+"$LS" -u "$PWD/$APP/Contents/Library/LoginItems/StudyTrackerGuard.app" 2>/dev/null || true
 Tools/dev/unregister-dev.sh >/dev/null 2>&1 || true
 echo "$DEST"

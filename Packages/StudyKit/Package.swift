@@ -5,7 +5,7 @@ import PackageDescription
 // Core → Engine (výpočty) · Networking (GitHub) · Persistence (Mac) → Sync → AppModel → Features (+ DesignSystem)
 // WidgetData (souhrn pro widgety, jen Foundation) → AppModel i WidgetUI (vzhled widgetů, bez dat a sítě)
 // Focus (Soustředění: pravidla blokování a měření, Engine + WidgetData) → FocusStore (databáze ve sdíleném kontejneru)
-//   – obojí používá aplikace i Strážce (pomocník na pozadí), který nic dalšího nepotřebuje.
+//   – obojí používá aplikace i Strážce (pomocník na pozadí); FocusGuard je Strážce sám (AppKit, blokovací obrazovka).
 // Jediná externí závislost je GRDB (lokální úložiště), připnutá na přesnou verzi.
 let package = Package(
     name: "StudyKit",
@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "WidgetUI", targets: ["WidgetUI"]),
         .library(name: "Focus", targets: ["Focus"]),
         .library(name: "FocusStore", targets: ["FocusStore"]),
+        .library(name: "FocusGuard", targets: ["FocusGuard"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
@@ -36,13 +37,14 @@ let package = Package(
             dependencies: ["Core", .product(name: "GRDB", package: "GRDB.swift")]
         ),
         .target(name: "Sync", dependencies: ["Core", "Networking", "Persistence"]),
-        .target(name: "AppModel", dependencies: ["Core", "Engine", "Networking", "Persistence", "Sync", "WidgetData"]),
+        .target(name: "AppModel", dependencies: ["Core", "Engine", "Networking", "Persistence", "Sync", "WidgetData", "Focus", "FocusStore"]),
         .target(name: "DesignSystem"),
         .target(name: "WidgetData"),
         .target(name: "WidgetUI", dependencies: ["WidgetData", "DesignSystem"]),
         .target(name: "Focus", dependencies: ["Engine", "WidgetData"]),
         .target(name: "FocusStore", dependencies: ["Focus", "Engine", .product(name: "GRDB", package: "GRDB.swift")]),
-        .target(name: "Features", dependencies: ["Core", "Engine", "Networking", "Sync", "AppModel", "DesignSystem"]),
+        .target(name: "FocusGuard", dependencies: ["Focus", "FocusStore", "Engine", "WidgetData", "DesignSystem"]),
+        .target(name: "Features", dependencies: ["Core", "Engine", "Networking", "Sync", "AppModel", "DesignSystem", "Focus"]),
         .testTarget(
             name: "CoreTests",
             dependencies: ["Core"],
@@ -63,6 +65,7 @@ let package = Package(
         .testTarget(name: "FeaturesTests", dependencies: ["Features", "Core", "Engine", "AppModel", "DesignSystem"]),
         .testTarget(name: "FocusTests", dependencies: ["Focus", "Engine", "WidgetData"]),
         .testTarget(name: "FocusStoreTests", dependencies: ["FocusStore", "Focus", "Engine"]),
+        .testTarget(name: "FocusGuardTests", dependencies: ["FocusGuard", "FocusStore", "Focus", "Engine", "WidgetData"]),
         .testTarget(name: "WidgetTests", dependencies: ["WidgetData", "WidgetUI", "AppModel", "Core", "Engine", "Persistence", "DesignSystem"]),
     ]
 )

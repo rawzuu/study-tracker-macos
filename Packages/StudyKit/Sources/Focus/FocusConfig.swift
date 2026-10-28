@@ -17,9 +17,11 @@ public struct FocusConfig: Codable, Sendable, Equatable {
     public var examBoost: ExamBoost?
     public var protection: Protection
     public var tracking: Tracking
+    /// Strážce čte adresu aktivní záložky Safari (pojistka k rozšíření a měření webů; chce souhlas Automatizace).
+    public var watchSafari: Bool
 
     public init(enabled: Bool = false, lists: [FocusList] = [], plans: [FocusPlan] = [], locks: [FocusLock] = [],
-                examBoost: ExamBoost? = nil, protection: Protection = .off, tracking: Tracking = .default) {
+                examBoost: ExamBoost? = nil, protection: Protection = .off, tracking: Tracking = .default, watchSafari: Bool = true) {
         self.enabled = enabled
         self.lists = lists
         self.plans = plans
@@ -27,9 +29,12 @@ public struct FocusConfig: Codable, Sendable, Equatable {
         self.examBoost = examBoost
         self.protection = protection
         self.tracking = tracking
+        self.watchSafari = watchSafari
     }
 
     public static let empty = FocusConfig()
+    /// Bez uloženého nastavení (Soustředění ještě nikdo nenastavil): Strážce nic nedělá – neměří ani se neptá na Safari.
+    public static let inactive = FocusConfig(tracking: Tracking(enabled: false, idleMinutes: 5, retentionDays: 180), watchSafari: false)
 
     public func list(_ id: String) -> FocusList? { lists.first { $0.id == id } }
 }
@@ -56,21 +61,32 @@ public struct FocusList: Codable, Sendable, Equatable, Identifiable {
     public var apps: [FocusApp]
     /// Weby: doména (`youtube.com` i se subdoménami) nebo doména s cestou (`youtube.com/shorts`).
     public var sites: [String]
+    /// Výjimky v blokovaném webu: zůstanou povolené (`youtube.com/playlist` při blokovaném `youtube.com`).
+    public var allowedSites: [String]
+    /// Slova v adrese (doména i cesta), která blokují kterýkoli web – třeba „game“ nebo „serial“.
+    public var keywords: [String]
     public var appAction: AppAction
     public var strictness: Strictness
 
     public init(id: String = UUID().uuidString, name: String, mode: Mode = .block, apps: [FocusApp] = [], sites: [String] = [],
-                appAction: AppAction = .shield, strictness: Strictness = .soft) {
+                allowedSites: [String] = [], keywords: [String] = [], appAction: AppAction = .shield, strictness: Strictness = .soft) {
         self.id = id
         self.name = name
         self.mode = mode
         self.apps = apps
         self.sites = sites
+        self.allowedSites = allowedSites
+        self.keywords = keywords
         self.appAction = appAction
         self.strictness = strictness
     }
 
     public var siteRules: [SiteRule] { sites.compactMap(SiteRule.init) }
+    public var allowedRules: [SiteRule] { allowedSites.compactMap(SiteRule.init) }
+    /// Klíčová slova malými písmeny, aspoň tři znaky (kratší by blokovala skoro všechno).
+    public var keywordRules: [String] {
+        keywords.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { $0.count >= 3 }
+    }
 }
 
 public struct FocusApp: Codable, Sendable, Hashable {
@@ -136,6 +152,8 @@ public struct FocusPlan: Codable, Sendable, Equatable, Identifiable {
         case schedule([TimeWindow])
         /// Během bloků Studijního plánu (plán na dnešek, jak ho ukazuje i Apple Kalendář).
         case studyPlan
+        /// Denní limit: po tolika minutách v aplikacích a na webech ze seznamů se do půlnoci blokuje.
+        case dailyLimit(minutes: Int)
     }
 
     public var id: String

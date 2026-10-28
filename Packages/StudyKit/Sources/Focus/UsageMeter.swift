@@ -15,6 +15,19 @@ public struct UsageActivity: Sendable, Hashable {
     }
 }
 
+/// Dnešní součet času v jedné aplikaci (a doméně).
+public struct UsageTotal: Codable, Sendable, Equatable {
+    public var bundleId: String
+    public var host: String
+    public var ms: Int
+
+    public init(bundleId: String, host: String = "", ms: Int) {
+        self.bundleId = bundleId
+        self.host = host
+        self.ms = ms
+    }
+}
+
 /// Souvislý úsek jedné činnosti.
 public struct UsageSegment: Sendable, Equatable {
     public var activity: UsageActivity

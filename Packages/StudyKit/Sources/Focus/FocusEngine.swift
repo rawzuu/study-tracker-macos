@@ -34,18 +34,21 @@ public struct FocusContext: Sendable, Equatable {
     public var planBlocks: [Interval]
     /// Půlnoci dnů se zkouškou.
     public var examDays: [Int]
+    /// Dnešní čas v jednotlivých aplikacích a na webech (denní limity).
+    public var usageToday: [UsageTotal]
 
-    public init(now: Int, study: Study? = nil, planBlocks: [Interval] = [], examDays: [Int] = []) {
+    public init(now: Int, study: Study? = nil, planBlocks: [Interval] = [], examDays: [Int] = [], usageToday: [UsageTotal] = []) {
         self.now = now
         self.study = study
         self.planBlocks = planBlocks
         self.examDays = examDays
+        self.usageToday = usageToday
     }
 
     /// Ze souhrnu pro widgety. Odpočet, který už doběhl, se nepočítá – bez aplikace na konci fáze
     /// nikdo nepřepne a blok je fakticky u konce.
-    public init(snapshot: WidgetSnapshot?, now: Int) {
-        self.init(now: now)
+    public init(snapshot: WidgetSnapshot?, now: Int, usageToday: [UsageTotal] = []) {
+        self.init(now: now, usageToday: usageToday)
         guard let snapshot else { return }
         let timer = snapshot.timer
         if timer.isActive, timer.phaseEnd.map({ now < $0 }) ?? true {
@@ -57,7 +60,7 @@ public struct FocusContext: Sendable, Equatable {
 }
 
 /// Seznam, který právě platí, s výslednou přísností.
-public struct ActiveRule: Sendable, Equatable {
+public struct ActiveRule: Codable, Sendable, Equatable {
     public var list: FocusList
     public var strictness: Strictness
     /// Kdy nejdřív skončí (`nil` = neví se, třeba stopky).
@@ -92,7 +95,7 @@ public struct Commitment: Codable, Sendable, Equatable {
 }
 
 /// Odemknutí (výjimka) aplikace nebo webu do daného okamžiku.
-public struct FocusException: Sendable, Equatable {
+public struct FocusException: Codable, Sendable, Equatable {
     public var target: FocusTarget
     public var until: Int
 
@@ -103,7 +106,7 @@ public struct FocusException: Sendable, Equatable {
 }
 
 /// Zablokovaná věc: aplikace (bundle id) nebo web (doména).
-public enum FocusTarget: Hashable, Sendable {
+public enum FocusTarget: Hashable, Sendable, Codable {
     case app(String)
     case site(String)
 
@@ -119,10 +122,23 @@ public enum FocusTarget: Hashable, Sendable {
         else if key.hasPrefix("site:") { self = .site(String(key.dropFirst(5))) }
         else { return nil }
     }
+
+    public init(from decoder: any Decoder) throws {
+        let key = try decoder.singleValueContainer().decode(String.self)
+        guard let target = FocusTarget(key: key) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Neznámý cíl \(key)"))
+        }
+        self = target
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(key)
+    }
 }
 
 /// Výsledek kontroly: co blokuje a jak přísně.
-public struct FocusHit: Sendable, Equatable {
+public struct FocusHit: Codable, Sendable, Equatable {
     public var target: FocusTarget
     /// Název aplikace nebo doména.
     public var name: String
@@ -134,7 +150,7 @@ public struct FocusHit: Sendable, Equatable {
 }
 
 /// Pravidla platná v jednom okamžiku.
-public struct FocusState: Sendable, Equatable {
+public struct ActiveFocus: Codable, Sendable, Equatable {
     public var rules: [ActiveRule]
     /// Aplikace pojistky proti obcházení (jen během přísného zámku).
     public var protectionApps: [FocusApp]
@@ -189,14 +205,18 @@ public struct FocusState: Sendable, Equatable {
         guard !visited.isEmpty, visited != "localhost", visited != "127.0.0.1" else { return nil }
         var hits: [(ActiveRule, FocusList.AppAction)] = []
         var name = visited
+        let address = visited + path.lowercased()
         for rule in rules {
             let siteRules = rule.list.siteRules
             let match = siteRules.first { $0.matches(host: visited, path: path) }
             switch rule.list.mode {
             case .block:
+                if rule.list.allowedRules.contains(where: { $0.matches(host: visited, path: path) }) { continue }
                 if let match {
                     hits.append((rule, .shield))
                     name = match.host
+                } else if rule.list.keywordRules.contains(where: address.contains) {
+                    hits.append((rule, .shield))
                 }
             case .allowOnly:
                 if !siteRules.isEmpty, match == nil { hits.append((rule, .shield)) }
@@ -252,7 +272,7 @@ extension [ActiveRule] {
 /// Vyhodnocení pravidel: které seznamy právě platí a jak přísně.
 public enum FocusEngine {
     public static func evaluate(_ config: FocusConfig, context c: FocusContext, commitments: [Commitment] = [],
-                                exceptions: [FocusException] = [], clock: StudyClock) -> FocusState {
+                                exceptions: [FocusException] = [], clock: StudyClock) -> ActiveFocus {
         var rules: [ActiveRule] = []
 
         func add(_ list: FocusList, _ strictness: Strictness?, until: Int?, source: String) {
@@ -268,7 +288,7 @@ public enum FocusEngine {
 
         if config.enabled {
             for plan in config.plans where plan.enabled {
-                guard let until = plan.trigger.activeUntil(c, clock: clock) else { continue }
+                guard let until = plan.trigger.activeUntil(c, lists: plan.listIds.compactMap(config.list), clock: clock) else { continue }
                 for id in plan.listIds { if let list = config.list(id) { add(list, plan.strictness, until: until.value, source: plan.name) } }
             }
             for lock in config.locks where lock.start <= c.now && c.now < lock.end {
@@ -287,17 +307,28 @@ public enum FocusEngine {
                                     sources: [commitment.source]))
         }
         let protection = rules.contains(where: \.strictness.locked) ? config.protection.apps : []
-        return FocusState(rules: rules, protectionApps: protection, exceptions: exceptions, now: c.now)
+        return ActiveFocus(rules: rules, protectionApps: protection, exceptions: exceptions, now: c.now)
     }
 
     /// Nové přísné závazky: přísná pravidla se známým koncem, která ještě nejsou zapamatovaná.
-    public static func newCommitments(_ state: FocusState, existing: [Commitment]) -> [Commitment] {
+    public static func newCommitments(_ state: ActiveFocus, existing: [Commitment]) -> [Commitment] {
         let known = Set(existing.map(\.id))
         return state.rules.compactMap { rule -> Commitment? in
             guard rule.strictness.locked, let until = rule.until, until > state.now,
                   !rule.sources.contains(Commitment.source) else { return nil }
             let c = Commitment(list: rule.list, strictness: rule.strictness, until: until, source: Commitment.source)
             return known.contains(c.id) ? nil : c
+        }
+    }
+
+    /// Dnešní čas v aplikacích a na webech ze seznamů (jen seznamy „blokovat tyhle“).
+    public static func usedMs(_ usage: [UsageTotal], lists: [FocusList]) -> Int {
+        let blockLists = lists.filter { $0.mode == .block }
+        let apps = Set(blockLists.flatMap { $0.apps.map(\.bundleId) })
+        let sites = blockLists.flatMap(\.siteRules)
+        return usage.reduce(0) { sum, u in
+            let counts = u.host.isEmpty ? apps.contains(u.bundleId) : sites.contains { $0.matches(host: u.host) } || apps.contains(u.bundleId)
+            return counts ? sum + u.ms : sum
         }
     }
 
@@ -319,7 +350,7 @@ struct Until {
 
 extension FocusPlan.Trigger {
     /// Platí spouštěč teď? Vrací konec (`Until(nil)` = neznámý), nebo `nil`, když neplatí.
-    func activeUntil(_ c: FocusContext, clock: StudyClock) -> Until? {
+    func activeUntil(_ c: FocusContext, lists: [FocusList], clock: StudyClock) -> Until? {
         switch self {
         case let .studyBlock(options):
             guard let study = c.study else { return nil }
@@ -332,6 +363,9 @@ extension FocusPlan.Trigger {
         case .studyPlan:
             let ends = c.planBlocks.filter { $0.start <= c.now && c.now < $0.end }.map(\.end)
             return ends.max().map { Until(value: $0) }
+        case let .dailyLimit(minutes):
+            guard FocusEngine.usedMs(c.usageToday, lists: lists) >= minutes * StudyClock.minute else { return nil }
+            return Until(value: clock.addDays(clock.startOfDay(c.now), 1))
         }
     }
 }
