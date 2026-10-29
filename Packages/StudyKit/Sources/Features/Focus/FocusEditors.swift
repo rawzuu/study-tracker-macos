@@ -5,6 +5,12 @@ import Focus
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Výška posuvného obsahu formuláře: na malé obrazovce menší, ať jsou tlačítka dole vidět (a nad Dockem).
+func editorHeight(_ preferred: CGFloat) -> CGFloat {
+    let screen = NSScreen.main?.visibleFrame.height ?? 900
+    return max(260, min(preferred, screen - 300))
+}
+
 // MARK: - Seznam
 
 /// Úprava seznamu: název, režim, aplikace, weby, výjimky, slova v adrese, co s aplikací a přísnost.
@@ -59,7 +65,7 @@ struct FocusListEditor: View {
                 }
                 .padding(.trailing, 12)
             }
-            .frame(height: 560)
+            .frame(height: editorHeight(560))
         } footer: {
             if !isNew {
                 Button("Smazat seznam", role: .destructive) {
@@ -333,7 +339,7 @@ struct FocusPlanEditor: View {
                 }
                 .padding(.trailing, 12)
             }
-            .frame(height: 520)
+            .frame(height: editorHeight(520))
         } footer: {
             Spacer()
             Button("Zrušit") { dismiss() }.buttonStyle(.study(.normal)).keyboardShortcut(.cancelAction)
