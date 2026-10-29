@@ -50,7 +50,9 @@ pluginkit -r "$NEW/Contents/PlugIns/StudyTrackerSafari.appex" 2>/dev/null || tru
 # Proces widgetů ze staré verze běží dál i po výměně aplikace a macOS jeho výstup odmítá
 # („Bundle version did not match“) – widgety pak zůstanou prázdné. Ukončit; systém spustí nový.
 pkill -x StudyTrackerWidgets 2>/dev/null || true
-# Strážce Soustředění (když je zapnutý) běží ze staré verze – launchd ho spustí znovu s novou.
+# Strážce Soustředění běží ze staré verze: ukončit každou kopii (i ručně spuštěnou z verze 0.12.0);
+# ten zaregistrovaný launchd hned spustí znovu s novým kódem.
+pkill -x StudyTrackerGuard 2>/dev/null || true
 launchctl kickstart -k "gui/$(id -u)/cz.rawzuu.studytracker.guard" 2>/dev/null || true
 open "$APP"
 echo "Nainstalováno: Study Tracker ${VERSION}. Složku „Study Tracker ${VERSION}“ ve Stažených souborech můžeš smazat."

@@ -44,6 +44,10 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
     }
     var opened: [URL] = []
     func open(_ url: URL) { opened.append(url) }
+    var open: [SafariTab] = []
+    var blanked: [SafariTab] = []
+    func tabs() -> [SafariTab] { open }
+    func blank(_ tabs: [SafariTab]) { blanked += tabs }
 }
 
 @MainActor private final class FakeShield: ShieldControl {
@@ -102,6 +106,28 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
 }
 
 @MainActor @Suite struct GuardianTests {
+    @Test func blockStartClosesBlockedSafariTabs() async throws {
+        let h = try Harness(locked())
+        func tab(_ index: Int, _ url: String, current: Bool = false) -> SafariTab {
+            SafariTab(window: 7, index: index, isCurrent: current, url: URL(string: url)!)
+        }
+        h.safari.open = [tab(1, "https://www.youtube.com/watch?v=1", current: true), tab(2, "https://cs.wikipedia.org/wiki/Graf"),
+                         tab(3, "https://m.youtube.com/"), tab(4, "https://example.com/serial-online")]
+        h.t = at(8, 59)
+        await h.guardian.refresh()
+        #expect(h.safari.blanked.isEmpty)
+        // Zámek začne: zablokované záložky se zavřou, aktivní záložku Safari v popředí řeší obrazovka.
+        h.safari.isFrontmost = true
+        h.t = at(9)
+        await h.guardian.refresh()
+        #expect(h.safari.blanked.map(\.index) == [3, 4])
+        // Safari na pozadí: i aktivní záložka.
+        h.safari.blanked = []
+        h.safari.isFrontmost = false
+        await h.guardian.appActivated(safariApp)
+        #expect(h.safari.blanked.map(\.index) == [1, 3, 4])
+    }
+
     @Test func blockedAppIsHiddenWithShieldAndCounted() async throws {
         let h = try Harness(locked())
         await h.guardian.refresh()

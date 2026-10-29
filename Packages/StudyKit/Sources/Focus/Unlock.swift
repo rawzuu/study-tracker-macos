@@ -131,14 +131,29 @@ public enum Unlock {
 /// Texty časů Soustředění („do 14:00“, „zítra do 0:51“, „do 3. 11. 8:00“) – blokovací obrazovka i stránka.
 public enum FocusFormat {
     public static func until(_ t: Int, now: Int = Int(Date().timeIntervalSince1970 * 1000), clock: StudyClock = .current) -> String {
-        let date = clock.date(t)
-        let c = clock.calendar.dateComponents([.day, .month, .hour, .minute], from: date)
+        let m = moment(t, now: now, clock: clock)
+        return m.hasPrefix("zítra ") ? "zítra do " + m.dropFirst(6) : "do " + m
+    }
+
+    /// „14:00“, „zítra 0:51“, „včera 23:10“, „3. 11. 8:00“.
+    public static func moment(_ t: Int, now: Int = Int(Date().timeIntervalSince1970 * 1000), clock: StudyClock = .current) -> String {
+        let c = clock.calendar.dateComponents([.day, .month, .hour, .minute], from: clock.date(t))
         let time = "\(c.hour ?? 0):\((c.minute ?? 0) < 10 ? "0" : "")\(c.minute ?? 0)"
         let today = clock.startOfDay(now)
         switch clock.startOfDay(t) {
-        case today: return "do \(time)"
-        case clock.addDays(today, 1): return "zítra do \(time)"
-        default: return "do \(c.day ?? 0). \(c.month ?? 0). \(time)"
+        case today: return time
+        case clock.addDays(today, 1): return "zítra \(time)"
+        case clock.addDays(today, -1): return "včera \(time)"
+        default: return "\(c.day ?? 0). \(c.month ?? 0). \(time)"
         }
+    }
+
+    /// „právě teď“, „před 40 s“, „před 3 min“, „před 2 h“.
+    public static func ago(_ t: Int, now: Int = Int(Date().timeIntervalSince1970 * 1000)) -> String {
+        let s = max(0, now - t) / 1000
+        if s < 5 { return "právě teď" }
+        if s < 60 { return "před \(s) s" }
+        if s < 3600 { return "před \(s / 60) min" }
+        return "před \(s / 3600) h"
     }
 }

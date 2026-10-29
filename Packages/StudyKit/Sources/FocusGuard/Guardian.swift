@@ -63,6 +63,8 @@ public final class Guardian {
     private var lastReport: GuardReport?
     private var lastReportAt = 0
     private var lastPrunedDay = ""
+    private var lastSweep = 0
+    static let sweepEveryMs = 20_000
     /// Poslední zaznamenaný pokus podle cíle – opakované kliknutí v Docku je jeden pokus.
     private var lastAttemptAt: [String: Int] = [:]
     /// Zablokovaná adresa v Safari a od kdy (rozšíření dostane chvilku, než zasáhne Strážce).
@@ -81,8 +83,11 @@ public final class Guardian {
     static let flushEveryMs = 60_000
     static let refreshEveryMs = 15_000
 
+    private let startedAt: Int
+
     public init(_ dependencies: Dependencies) {
         d = dependencies
+        startedAt = dependencies.now()
     }
 
     private var now: Int { d.now() }
@@ -129,8 +134,10 @@ public final class Guardian {
         writeReport()
     }
 
-    /// Pravidla začala (nebo se změnila): běžící zakázané aplikace hned schovat nebo ukončit.
+    /// Pravidla začala (nebo se změnila): běžící zakázané aplikace hned schovat nebo ukončit, zablokované
+    /// záložky Safari zavřít.
     func enforceRunning() async {
+        sweepSafari()
         let front = d.apps.frontmost()
         for app in d.apps.running() {
             guard let hit = state.check(app: app.bundleId, name: app.name) else { continue }
@@ -143,6 +150,8 @@ public final class Guardian {
 
     /// Aplikace přešla do popředí (nebo se spustila).
     public func appActivated(_ app: RunningApp) async {
+        // Safari po spuštění obnoví záložky z minula – ty zablokované hned zavřít.
+        if app.bundleId == SystemSafari.bundleId { sweepSafari() }
         guard let hit = state.check(app: app.bundleId, name: app.name) else {
             if d.shield.isShown, !Self.isGuard(app.bundleId) {
                 d.shield.close()
@@ -283,6 +292,20 @@ public final class Guardian {
         await showShield(hit, attempt: attempt, url: url.absoluteString)
     }
 
+    /// Zablokované záložky Safari (i na pozadí) přepne na prázdnou stránku. Aktivní záložku Safari v popředí
+    /// nechá na `checkSafari` – ta k ní ukáže blokovací obrazovku.
+    func sweepSafari() {
+        guard safariWatch == .on, d.safari.isRunning,
+              state.rules.contains(where: { !$0.list.sites.isEmpty || !$0.list.keywords.isEmpty }) else { return }
+        lastSweep = now
+        let frontmost = d.safari.isFrontmost
+        let blocked = d.safari.tabs().filter { tab in
+            guard !(frontmost && tab.isCurrent), let target = SiteRule.target(of: tab.url) else { return false }
+            return state.check(host: target.host, path: target.path) != nil
+        }
+        d.safari.blank(blocked)
+    }
+
     /// Porušení (jednou denně za druh) – ukáže se ve statistikách.
     func reportTamper(_ detail: String, app: String, at t: Int) async {
         let day = d.clock.dayKey(t)
@@ -319,6 +342,7 @@ public final class Guardian {
             host = url.flatMap(SiteRule.target)?.host ?? ""
             if state.isActive { await checkSafari(url) }
         }
+        if t - lastSweep >= Self.sweepEveryMs, state.isActive { sweepSafari() }
         await measure(front: front, host: host, at: t)
         if t - lastReportAt >= 30_000 { writeReport() }
     }
@@ -359,7 +383,7 @@ public final class Guardian {
     func writeReport() {
         let t = now
         let report = GuardReport(generatedAt: t, guardVersion: d.version, state: state, attemptsToday: attemptsToday,
-                                 safari: safariWatch, extensionSeenAt: d.files?.extensionSeenAt())
+                                 safari: safariWatch, extensionSeenAt: d.files?.extensionSeenAt(), startedAt: startedAt)
         // Beze změny stačí jednou za půl minuty (aplikace podle stáří pozná, že Strážce běží).
         var same = report
         same.generatedAt = lastReport?.generatedAt ?? 0

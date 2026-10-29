@@ -48,6 +48,25 @@ public protocol SafariControl: AnyObject {
     func leaveBlockedPage()
     /// Po odemknutí webu: otevřít původní adresu.
     func open(_ url: URL)
+    /// Všechny otevřené záložky (i na pozadí a v soukromých oknech).
+    func tabs() -> [SafariTab]
+    /// Zablokované záložky na pozadí zavřít obsahem (adresa → about:blank).
+    func blank(_ tabs: [SafariTab])
+}
+
+/// Záložka Safari: okno podle id (pořadí oken se mění), záložka podle pořadí v okně.
+public struct SafariTab: Equatable, Sendable {
+    public var window: Int
+    public var index: Int
+    public var isCurrent: Bool
+    public var url: URL
+
+    public init(window: Int, index: Int, isCurrent: Bool, url: URL) {
+        self.window = window
+        self.index = index
+        self.isCurrent = isCurrent
+        self.url = url
+    }
 }
 
 /// Blokovací obrazovka.
@@ -169,6 +188,47 @@ public final class SystemSafari: SafariControl {
 
     public func open(_ url: URL) {
         NSWorkspace.shared.open([url], withApplicationAt: URL(filePath: "/Applications/Safari.app"), configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    public func tabs() -> [SafariTab] {
+        guard isRunning else { return [] }
+        let source = """
+            with timeout of 2 seconds
+                tell application "Safari"
+                    set out to {}
+                    repeat with w in windows
+                        try
+                            set end of out to {id of w, index of current tab of w, URL of every tab of w}
+                        end try
+                    end repeat
+                    return out
+                end tell
+            end timeout
+            """
+        guard let list = run(source), list.numberOfItems > 0 else { return [] }
+        var out: [SafariTab] = []
+        for i in 1...list.numberOfItems {
+            guard let w = list.atIndex(i), w.numberOfItems == 3, let urls = w.atIndex(3), urls.numberOfItems > 0 else { continue }
+            let window = Int(w.atIndex(1)?.int32Value ?? 0)
+            let current = Int(w.atIndex(2)?.int32Value ?? 0)
+            for t in 1...urls.numberOfItems {
+                guard let url = urls.atIndex(t)?.stringValue.flatMap(URL.init(string:)) else { continue }
+                out.append(SafariTab(window: window, index: t, isCurrent: t == current, url: url))
+            }
+        }
+        return out
+    }
+
+    public func blank(_ tabs: [SafariTab]) {
+        guard isRunning, !tabs.isEmpty else { return }
+        let lines = tabs.map { "try\n set URL of tab \($0.index) of window id \($0.window) to \"about:blank\"\nend try" }.joined(separator: "\n")
+        _ = run("""
+            with timeout of 2 seconds
+                tell application "Safari"
+            \(lines)
+                end tell
+            end timeout
+            """)
     }
 
     private func run(_ source: String) -> NSAppleEventDescriptor? {

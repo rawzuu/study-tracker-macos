@@ -57,6 +57,22 @@ public struct FocusFiles: Sendable {
         postDataChanged()
     }
 
+    // MARK: - Registrace Strážce
+
+    /// Výsledek posledního zapnutí nebo vypnutí Strážce (zapisuje Strážce, čte aplikace).
+    public var registrationURL: URL { directory.appendingPathComponent("guard.json") }
+
+    public func readRegistration() -> GuardRegistration? {
+        guard let data = try? Data(contentsOf: registrationURL) else { return nil }
+        return try? JSONDecoder().decode(GuardRegistration.self, from: data)
+    }
+
+    public func write(_ registration: GuardRegistration) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? JSONEncoder().encode(registration).write(to: registrationURL, options: .atomic)
+        postDataChanged()
+    }
+
     // MARK: - Rozšíření Safari
 
     /// Rozšíření: „jsem tu“ (aplikace i Strážce poznají, že je zapnuté).
@@ -99,6 +115,11 @@ public struct FocusFiles: Sendable {
     public static func restart(_ group: String) -> String { "\(group).focus-restart" }
 
     public func postRestart() { notify_post(Self.restart(group)) }
+
+    /// Aplikace žádá běžícího Strážce, ať se odregistruje a skončí (přes argumenty to nejde – sandbox je zahodí).
+    public static func disable(_ group: String) -> String { "\(group).focus-disable" }
+
+    public func postDisable() { notify_post(Self.disable(group)) }
 
     /// Rozšíření Safari poslalo pokus.
     public static func inbox(_ group: String) -> String { "\(group).focus-inbox" }

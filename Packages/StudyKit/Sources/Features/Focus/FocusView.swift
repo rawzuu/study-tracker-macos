@@ -58,6 +58,8 @@ enum FocusText {
         case .unavailable: return "Blokování aplikací a webů"
         case .off: return "Strážce je vypnutý – nic se neblokuje"
         case .starting: return "Strážce se zapíná…"
+        case .stopping: return "Strážce se vypíná…"
+        case .needsApproval: return "Strážce čeká na povolení v Nastavení systému"
         case .running: break
         }
         guard !state.rules.isEmpty else { return enabled ? "Teď se nic neblokuje" : "Blokování je vypnuté" }
@@ -112,33 +114,36 @@ private struct GuardSection: View {
     var body: some View {
         PageSection("Strážce") {
             VStack(alignment: .leading, spacing: 16) {
-                SettingRow("Strážce na pozadí", detail: guardDetail) {
+                StatusRow(guardHealth, "Strážce na pozadí", detail: guardDetail) {
                     switch focus.status {
                     case .running:
                         Button("Vypnout") { focus.disableGuard(now: now) }.buttonStyle(.study(.normal, size: .small))
-                    case .starting:
+                    case .starting, .stopping:
                         ProgressView().controlSize(.small)
+                    case .needsApproval:
+                        HStack(spacing: 6) {
+                            Button("Otevřít Nastavení") { focus.openLoginItemsSettings() }.buttonStyle(.study(.primary, size: .small))
+                            Button("Zkusit znovu") { focus.enableGuard() }.buttonStyle(.study(.ghost, size: .small))
+                        }
                     case .off, .unavailable:
                         Button("Zapnout") { focus.enableGuard() }.buttonStyle(.study(.primary, size: .small))
                             .accessibilityIdentifier("focus.enableGuard")
                     }
                 }
-                SettingSwitch("Blokovat podle plánů", detail: "Hlavní vypínač. Přísný zámek, který už běží, platí do konce i po vypnutí.",
-                              isOn: Binding(get: { focus.config.enabled }, set: { v in focus.update { $0.enabled = v } }), id: "focus.enabled")
-                SettingRow("Rozšíření Safari", detail: focus.extensionActive(at: now)
-                    ? "Zapnuté – weby se zablokují ještě před načtením."
-                    : "Zapni ho v Safari → Nastavení → Rozšíření a povol mu přístup ke všem webům.") {
-                    Button("Otevřít v Safari") { focus.openSafariExtensionSettings() }.buttonStyle(.study(.ghost, size: .small))
-                }
-                SettingRow("Hlídat adresu v Safari", detail: safariDetail) {
+                StatusRow(safariHealth, "Blokovat weby v Safari", detail: safariDetail) {
                     HStack(spacing: 6) {
-                        if focus.report?.safari == .needsPermission {
-                            Button("Povolit") { focus.openAutomationSettings() }.buttonStyle(.study(.ghost, size: .small))
+                        if focus.status == .running, focus.config.watchSafari, focus.report?.safari == .needsPermission {
+                            Button("Povolit") { focus.openAutomationSettings() }.buttonStyle(.study(.primary, size: .small))
                         }
-                        Toggle("Hlídat adresu v Safari", isOn: Binding(get: { focus.config.watchSafari }, set: { v in focus.update { $0.watchSafari = v } }))
+                        Toggle("Blokovat weby v Safari", isOn: Binding(get: { focus.config.watchSafari }, set: { v in focus.update { $0.watchSafari = v } }))
                             .labelsHidden().toggleStyle(.switch)
                     }
                 }
+                StatusRow(focus.extensionActive(at: now) ? .ok : .optional, "Rozšíření Safari (volitelné)", detail: extensionDetail) {
+                    Button("Otevřít v Safari") { focus.openSafariExtensionSettings() }.buttonStyle(.study(.ghost, size: .small))
+                }
+                SettingSwitch("Blokovat podle plánů", detail: "Hlavní vypínač. Přísný zámek, který už běží, platí do konce i po vypnutí.",
+                              isOn: Binding(get: { focus.config.enabled }, set: { v in focus.update { $0.enabled = v } }), id: "focus.enabled")
                 SettingSwitch("Měřit čas u obrazovky", detail: "Čas v aplikacích a na webech po hodinách, jen na tomto Macu. Bez myši a klávesnice déle než \(focus.config.tracking.idleMinutes) min se nepočítá.",
                               isOn: Binding(get: { focus.config.tracking.enabled }, set: { v in focus.update { $0.tracking.enabled = v } }))
             }
@@ -146,20 +151,104 @@ private struct GuardSection: View {
         }
     }
 
+    private var guardHealth: StatusHealth {
+        switch focus.status {
+        case .running: .ok
+        case .needsApproval: .problem
+        case .starting, .stopping: .pending
+        case .off, .unavailable: .off
+        }
+    }
+
     private var guardDetail: String {
         switch focus.status {
-        case .running: "Běží – blokuje i bez otevřené aplikace. Je vidět v Nastavení systému → Obecné → Položky při přihlášení."
-        case .starting: "Zapíná se…"
-        case .off, .unavailable: "Pomocník, který blokuje aplikace a weby. macOS ohlásí novou položku na pozadí."
+        case .running:
+            var parts: [String] = []
+            if let started = focus.report?.startedAt { parts.append("Běží od \(FocusFormat.moment(started, now: now))") } else { parts.append("Běží") }
+            if let checked = focus.report?.generatedAt { parts.append("naposledy se ozval \(FocusFormat.ago(checked, now: now))") }
+            return parts.joined(separator: ", ") + ". Blokuje i bez otevřené aplikace a spustí se sám po restartu Macu. Najdeš ho v Nastavení systému → Obecné → Položky při přihlášení."
+        case .starting: return "Zapíná se…"
+        case .stopping: return "Vypíná se…"
+        case .needsApproval: return "macOS čeká na tvoje povolení: Nastavení systému → Obecné → Položky při přihlášení → u Study Trackeru zapni přepínač. Pak klikni na Zkusit znovu."
+        case .off, .unavailable: return "Pomocník, který blokuje aplikace a weby a měří čas. macOS po zapnutí ohlásí novou položku na pozadí."
+        }
+    }
+
+    private var safariHealth: StatusHealth {
+        guard focus.config.watchSafari else { return .off }
+        guard focus.status == .running else { return .pending }
+        return switch focus.report?.safari {
+        case .on: .ok
+        case .needsPermission: .problem
+        default: .pending
         }
     }
 
     private var safariDetail: String {
-        guard focus.config.watchSafari else { return "Vypnuto – weby blokuje jen rozšíření a čas na webech se neměří." }
+        guard focus.config.watchSafari else { return "Vypnuto – weby se neblokují a čas na webech se neměří." }
+        guard focus.status == .running else { return "Začne, až poběží Strážce." }
         return switch focus.report?.safari {
-        case .on: "Pojistka k rozšíření a měření času na webech."
-        case .needsPermission: "Chybí souhlas: Nastavení systému → Soukromí a zabezpečení → Automatizace → Strážce → Safari."
-        default: "Strážce se zeptá na souhlas, až poběží Safari."
+        case .on: "Funguje – Strážce hlídá adresu v Safari, zablokovanou stránku zavře a ukáže blokovací obrazovku. Měří i čas na webech."
+        case .needsPermission: "Chybí souhlas: Nastavení systému → Soukromí a zabezpečení → Automatizace → StudyTrackerGuard → zapni Safari."
+        default: "Až otevřeš Safari, macOS se zeptá, jestli smí Strážce ovládat Safari – potvrď Povolit."
+        }
+    }
+
+    private var extensionDetail: String {
+        focus.extensionActive(at: now)
+            ? "Zapnuté – weby se zablokují ještě před načtením."
+            : "Blokuje ještě před načtením stránky, ale bez placeného vývojářského účtu ho Safari ukáže jen se zapnutým Nastavení → Pro vývojáře → Povolit nepodepsaná rozšíření, a to se po ukončení Safari vypne. Weby se blokují i bez něj."
+    }
+}
+
+private enum StatusHealth { case ok, problem, pending, off, optional }
+
+/// Řádek nastavení se stavem vlevo (funguje / chybí krok / vypnuto).
+private struct StatusRow<Control: View>: View {
+    let health: StatusHealth
+    let title: String
+    let detail: String
+    let control: Control
+
+    init(_ health: StatusHealth, _ title: String, detail: String, @ViewBuilder control: () -> Control) {
+        self.health = health
+        self.title = title
+        self.detail = detail
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(color).frame(width: 16)
+                .accessibilityLabel(label)
+            SettingRow(title, detail: detail) { control }
+        }
+    }
+
+    private var symbol: String {
+        switch health {
+        case .ok: "checkmark.circle.fill"
+        case .problem: "exclamationmark.circle.fill"
+        case .pending: "clock"
+        case .off, .optional: "circle"
+        }
+    }
+
+    private var color: Color {
+        switch health {
+        case .ok: Palette.success
+        case .problem: Palette.warn
+        case .pending, .off, .optional: Palette.text3
+        }
+    }
+
+    private var label: String {
+        switch health {
+        case .ok: "Funguje"
+        case .problem: "Chybí krok"
+        case .pending: "Čeká"
+        case .off: "Vypnuto"
+        case .optional: "Volitelné"
         }
     }
 }

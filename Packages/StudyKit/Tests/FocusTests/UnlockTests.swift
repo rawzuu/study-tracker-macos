@@ -93,4 +93,13 @@ struct SeededRNG: RandomNumberGenerator {
         #expect(FocusFormat.until(clock.addDays(at(0, 51), 1), now: at(23), clock: clock) == "zítra do 0:51")
         #expect(FocusFormat.until(clock.addDays(at(8), 8), now: at(9), clock: clock) == "do 3. 11. 8:00")
     }
+
+    @Test func momentAndAgo() {
+        #expect(FocusFormat.moment(at(9, 5), now: at(14), clock: clock) == "9:05")
+        #expect(FocusFormat.moment(clock.addDays(at(23, 10), -1), now: at(9), clock: clock) == "včera 23:10")
+        #expect(FocusFormat.ago(at(9), now: at(9) + 2000) == "právě teď")
+        #expect(FocusFormat.ago(at(9), now: at(9) + 40_000) == "před 40 s")
+        #expect(FocusFormat.ago(at(9), now: at(9, 3)) == "před 3 min")
+        #expect(FocusFormat.ago(at(9), now: at(11)) == "před 2 h")
+    }
 }

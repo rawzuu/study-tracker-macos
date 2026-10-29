@@ -23,14 +23,17 @@ public struct GuardReport: Codable, Sendable, Equatable {
     public var safari: SafariWatch
     /// Kdy se naposledy ozvalo rozšíření Safari (`nil` = zatím nikdy).
     public var extensionSeenAt: Int?
+    /// Kdy se tenhle proces Strážce spustil (`nil` ve starších verzích).
+    public var startedAt: Int?
 
-    public init(generatedAt: Int, guardVersion: String, state: ActiveFocus, attemptsToday: [String: Int], safari: SafariWatch, extensionSeenAt: Int?) {
+    public init(generatedAt: Int, guardVersion: String, state: ActiveFocus, attemptsToday: [String: Int], safari: SafariWatch, extensionSeenAt: Int?, startedAt: Int? = nil) {
         self.generatedAt = generatedAt
         self.guardVersion = guardVersion
         self.state = state
         self.attemptsToday = attemptsToday
         self.safari = safari
         self.extensionSeenAt = extensionSeenAt
+        self.startedAt = startedAt
     }
 
     /// Stav s pravidly, která v okamžiku `t` ještě platí (soubor může být pár sekund starý).
@@ -41,6 +44,29 @@ public struct GuardReport: Codable, Sendable, Equatable {
         if !s.isLocked { s.protectionApps = [] }
         s.now = t
         return s
+    }
+}
+
+/// Výsledek registrace Strážce u launchd (`SMAppService`), jak ho zapsal Strážce.
+public struct GuardRegistration: Codable, Sendable, Equatable {
+    public enum Status: String, Codable, Sendable {
+        case enabled
+        /// macOS čeká na povolení v Nastavení systému → Obecné → Položky při přihlášení.
+        case requiresApproval
+        case notRegistered
+        /// Vypnutí odmítnuto – běží přísný zámek.
+        case locked
+        case failed
+    }
+
+    public var status: Status
+    public var at: Int
+    public var error: String?
+
+    public init(status: Status, at: Int, error: String? = nil) {
+        self.status = status
+        self.at = at
+        self.error = error
     }
 }
 

@@ -20,12 +20,11 @@ public enum GuardRunner {
 
     public static func main() {
         let args = CommandLine.arguments.dropFirst()
-        let agent = SMAppService.agent(plistName: "\(Bundle.main.bundleIdentifier ?? "").plist")
+        let label = Bundle.main.bundleIdentifier ?? ""
+        let agent = SMAppService.agent(plistName: "\(label).plist")
         switch args.first {
         case "--register":
-            do { try agent.register() } catch { log.error("Strážce: registrace selhala: \(error.localizedDescription, privacy: .public)") }
-            print(describe(agent.status))
-            exit(agent.status == .enabled ? 0 : 1)
+            exit(register(agent) == .enabled ? 0 : 1)
         case "--unregister":
             if hasCommitment() {
                 print("locked")
@@ -40,10 +39,10 @@ public enum GuardRunner {
         default:
             break
         }
-        // Jen jeden Strážce (ručně spuštěný vedle toho od launchd skončí).
-        let me = ProcessInfo.processInfo.processIdentifier
-        if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").contains(where: { $0.processIdentifier != me }) {
-            exit(0)
+        // Spuštěný z aplikace („Zapnout“): jen se zaregistrovat u launchd a skončit – běžící kopii spustí
+        // a hlídá launchd. Sandboxovaná aplikace argumenty nepředá, proto se to pozná podle prostředí.
+        guard ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == label else {
+            exit(register(agent) == .enabled ? 0 : 1)
         }
         guard let files = FocusFiles.shared(), let store = try? FocusStore(at: files.databaseURL) else {
             log.error("Strážce: sdílený kontejner nedostupný")
@@ -51,9 +50,36 @@ public enum GuardRunner {
         }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
-        running = Running(files: files, store: store)
+        running = Running(files: files, store: store, agent: agent)
         running?.start()
         app.run()
+    }
+
+    /// Zaregistruje Strážce u launchd (RunAtLoad ho hned spustí) a výsledek zapíše pro aplikaci.
+    private static func register(_ agent: SMAppService) -> GuardRegistration.Status {
+        let me = ProcessInfo.processInfo.processIdentifier
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+            .filter { $0.processIdentifier != me }
+        var failure: String?
+        if agent.status == .enabled, !others.isEmpty {
+            // Už běží.
+        } else {
+            // Zaregistrovaný, ale neběží (třeba skončil sám): znovu, ať ho launchd spustí.
+            if agent.status == .enabled { try? agent.unregister() }
+            do { try agent.register() } catch {
+                failure = error.localizedDescription
+                log.error("Strážce: registrace selhala: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        let status: GuardRegistration.Status = switch agent.status {
+        case .enabled: .enabled
+        case .requiresApproval: .requiresApproval
+        case .notRegistered: failure == nil ? .notRegistered : .failed
+        default: .failed
+        }
+        FocusFiles.shared()?.write(GuardRegistration(status: status, at: Int(Date().timeIntervalSince1970 * 1000), error: failure))
+        print(describe(agent.status))
+        return status
     }
 
     private static func describe(_ status: SMAppService.Status) -> String {
@@ -78,12 +104,14 @@ public enum GuardRunner {
     final class Running {
         let files: FocusFiles
         let guardian: Guardian
+        let agent: SMAppService
         private var observers: [(NotificationCenter, NSObjectProtocol)] = []
         private var loop: Task<Void, Never>?
         private var signalSource: DispatchSourceSignal?
 
-        init(files: FocusFiles, store: FocusStore) {
+        init(files: FocusFiles, store: FocusStore, agent: SMAppService) {
             self.files = files
+            self.agent = agent
             let widgets = WidgetFiles.shared()
             let appId = Bundle.main.object(forInfoDictionaryKey: "STAppBundleId") as? String ?? "cz.rawzuu.studytracker"
             let shield = ShieldWindow(backToStudy: { Running.openApp(appId) })
@@ -136,6 +164,11 @@ public enum GuardRunner {
                 }
             }
 
+            // „Vypnout“ v aplikaci: odregistrovat a skončit – jen když neběží přísný zámek.
+            FocusFiles.observe(FocusFiles.disable(group)) { [weak self] in
+                Task { await self?.disable() }
+            }
+
             // Ukončení (odhlášení, kill): uložit naměřené.
             signal(SIGTERM, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
@@ -159,6 +192,20 @@ public enum GuardRunner {
                     try? await Task.sleep(for: guardian.tickInterval)
                 }
             }
+        }
+
+        private func disable() async {
+            let t = Int(Date().timeIntervalSince1970 * 1000)
+            guard !guardian.state.isLocked else {
+                files.write(GuardRegistration(status: .locked, at: t))
+                return
+            }
+            await guardian.flush()
+            files.write(GuardRegistration(status: .notRegistered, at: t))
+            do { try await agent.unregister() } catch {
+                GuardRunner.log.error("Strážce: odregistrace selhala: \(error.localizedDescription, privacy: .public)")
+            }
+            exit(0)
         }
 
         private func observe(_ center: NotificationCenter, _ name: Notification.Name, _ handler: @escaping @MainActor () -> Void) {
