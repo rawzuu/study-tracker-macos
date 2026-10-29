@@ -3,6 +3,7 @@ import AppModel
 import Core
 import DesignSystem
 import Engine
+import Focus
 import SwiftUI
 import Sync
 
@@ -454,6 +455,11 @@ public struct TimerControls: View {
 private struct FocusTimerNote: View {
     @Environment(FocusController.self) private var focus: FocusController?
 
+    static func text(_ state: ActiveFocus) -> String {
+        let until = FocusText.until(state.rules.compactMap(\.until).max()) ?? "do konce bloku"
+        return "Blokuje: " + FocusText.names(state) + " · " + until
+    }
+
     var body: some View {
         if let focus {
             TimelineView(.periodic(from: .now, by: 15)) { context in
@@ -461,7 +467,7 @@ private struct FocusTimerNote: View {
                 let state = focus.state(at: now)
                 if !state.rules.isEmpty {
                     Label {
-                        Text("Blokuje: \(FocusText.names(state)) · \(FocusText.until(state.rules.compactMap(\.until).max()) ?? "do konce bloku")")
+                        Text(Self.text(state))
                     } icon: {
                         Image(systemName: state.isLocked ? "lock.fill" : "moon.circle")
                     }

@@ -452,25 +452,7 @@ struct ScheduleGridEditor: View {
                         Text("\(h)").font(.system(size: 10)).monospacedDigit().foregroundStyle(Palette.text3)
                             .position(x: Self.labelWidth + CGFloat(h * 2) * cell, y: 6)
                     }
-                    Canvas { context, _ in
-                        for d in 0..<7 {
-                            let y = 14 + CGFloat(d) * Self.rowHeight + 1
-                            for s in 0..<ScheduleGrid.slots {
-                                let rect = CGRect(x: Self.labelWidth + CGFloat(s) * cell + 0.5, y: y, width: cell - 1, height: Self.rowHeight - 2)
-                                context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(s / 2 % 2 == 0 ? Palette.panel2 : Palette.panel3.opacity(0.7)))
-                            }
-                            // Označené úseky jako souvislé pruhy.
-                            var s = 0
-                            while s < ScheduleGrid.slots {
-                                guard grid[d, s] else { s += 1; continue }
-                                var e = s
-                                while e < ScheduleGrid.slots, grid[d, e] { e += 1 }
-                                let rect = CGRect(x: Self.labelWidth + CGFloat(s) * cell + 0.5, y: y, width: CGFloat(e - s) * cell - 1, height: Self.rowHeight - 2)
-                                context.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(Palette.accent))
-                                s = e
-                            }
-                        }
-                    }
+                    Canvas { context, _ in Self.draw(grid, cell: cell, in: &context) }
                     ForEach(0..<7, id: \.self) { d in
                         Text(Self.days[d]).font(.system(size: 11)).foregroundStyle(Palette.text2)
                             .frame(width: Self.labelWidth, height: Self.rowHeight, alignment: .leading)
@@ -485,12 +467,42 @@ struct ScheduleGridEditor: View {
             .frame(height: 14 + 7 * Self.rowHeight)
             .accessibilityElement()
             .accessibilityLabel("Týdenní rozvrh")
-            .accessibilityValue(windows.isEmpty ? "prázdný" : windows.map { "\(ScheduleGridEditor.dayText($0.weekdays)) \(MinuteText.text($0.start))–\(MinuteText.text($0.end))" }.joined(separator: ", "))
+            .accessibilityValue(accessibilityText)
             if !readOnly {
                 Text("Tahem myši označíš, kdy se blokuje; tahem přes označené smažeš. Po půlhodinách – přesné časy uprav níž.")
                     .font(Typo.small).foregroundStyle(Palette.text3)
             }
         }
+    }
+
+    /// Políčka po půlhodinách, označené úseky jako souvislé pruhy.
+    private static func draw(_ grid: ScheduleGrid, cell: CGFloat, in context: inout GraphicsContext) {
+        let height = rowHeight - 2
+        for d in 0..<7 {
+            let y = 14 + CGFloat(d) * rowHeight + 1
+            for s in 0..<ScheduleGrid.slots {
+                let rect = CGRect(x: labelWidth + CGFloat(s) * cell + 0.5, y: y, width: cell - 1, height: height)
+                let color = s / 2 % 2 == 0 ? Palette.panel2 : Palette.panel3.opacity(0.7)
+                context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(color))
+            }
+            var s = 0
+            while s < ScheduleGrid.slots {
+                guard grid[d, s] else {
+                    s += 1
+                    continue
+                }
+                var e = s
+                while e < ScheduleGrid.slots, grid[d, e] { e += 1 }
+                let rect = CGRect(x: labelWidth + CGFloat(s) * cell + 0.5, y: y, width: CGFloat(e - s) * cell - 1, height: height)
+                context.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(Palette.accent))
+                s = e
+            }
+        }
+    }
+
+    private var accessibilityText: String {
+        guard !windows.isEmpty else { return "prázdný" }
+        return windows.map { w in Self.dayText(w.weekdays) + " " + MinuteText.text(w.start) + "–" + MinuteText.text(w.end) }.joined(separator: ", ")
     }
 
     private func position(_ p: CGPoint, cell: CGFloat) -> (day: Int, slot: Int)? {

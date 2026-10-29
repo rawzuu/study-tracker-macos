@@ -249,8 +249,7 @@ public struct MenuBarPanel: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(state.rules.isEmpty ? "Nic se neblokuje" : "Blokuje: \(FocusText.names(state))")
                     .font(.system(size: 12.5, weight: .medium)).lineLimit(1)
-                Text(running ? FocusText.until(state.rules.compactMap(\.until).max()) ?? (state.rules.isEmpty ? "Soustředění" : "do konce bloku")
-                             : "Strážce je vypnutý")
+                Text(focusDetail(state, running: running))
                     .font(Typo.small).foregroundStyle(Palette.text3)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -280,6 +279,12 @@ public struct MenuBarPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("menubar.focus")
+    }
+
+    private func focusDetail(_ state: ActiveFocus, running: Bool) -> String {
+        guard running else { return "Strážce je vypnutý" }
+        if let until = FocusText.until(state.rules.compactMap(\.until).max()) { return until }
+        return state.rules.isEmpty ? "Soustředění" : "do konce bloku"
     }
 
     // MARK: - Patička

@@ -48,7 +48,12 @@ public struct ScheduleGrid: Equatable, Sendable {
 
     /// Souvislé úseky po dnech; stejné časy v různých dnech jsou jedno okno.
     public var windows: [TimeWindow] {
-        var byTime: [(start: Int, end: Int, days: [Int])] = []
+        struct Run {
+            var start: Int
+            var end: Int
+            var days: [Int]
+        }
+        var byTime: [Run] = []
         for d in 0..<7 {
             var s = 0
             while s < Self.slots {
@@ -56,11 +61,15 @@ public struct ScheduleGrid: Equatable, Sendable {
                 var e = s
                 while e < Self.slots, cells[d][e] { e += 1 }
                 let start = s * Self.slotMinutes, end = e * Self.slotMinutes
-                if let i = byTime.firstIndex(where: { $0.start == start && $0.end == end }) { byTime[i].days.append(d) } else { byTime.append((start, end, [d])) }
+                if let i = byTime.firstIndex(where: { $0.start == start && $0.end == end }) {
+                    byTime[i].days.append(d)
+                } else {
+                    byTime.append(Run(start: start, end: end, days: [d]))
+                }
                 s = e
             }
         }
-        return byTime.sorted { ($0.days[0], $0.start) < ($1.days[0], $1.start) }
-            .map { TimeWindow(weekdays: $0.days, start: $0.start, end: $0.end) }
+        func earlier(_ a: Run, _ b: Run) -> Bool { a.days[0] != b.days[0] ? a.days[0] < b.days[0] : a.start < b.start }
+        return byTime.sorted(by: earlier).map { TimeWindow(weekdays: $0.days, start: $0.start, end: $0.end) }
     }
 }
