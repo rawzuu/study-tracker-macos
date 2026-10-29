@@ -166,7 +166,7 @@ targets:
         LSUIElement: true
         STAppGroup: $(ST_APP_GROUP)
         STAppBundleId: $(ST_APP_BUNDLE_ID)
-        NSAppleEventsUsageDescription: Strážce Soustředění čte adresu aktivní záložky Safari, aby zablokoval weby ze tvých seznamů a změřil čas na webech. Nic neodesílá.
+        NSAppleEventsUsageDescription: Strážce Soustředění čte adresy záložek Safari, aby zablokoval weby ze tvých seznamů (zablokovanou stránku zavře) a změřil čas na webech. Nic neodesílá.
     entitlements:
       path: Guard/StudyTrackerGuard.entitlements
       properties:

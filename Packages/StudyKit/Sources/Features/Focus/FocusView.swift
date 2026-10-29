@@ -198,7 +198,7 @@ private struct GuardSection: View {
         guard focus.status == .running else { return "Začne, až poběží Strážce." }
         return switch focus.report?.safari {
         case .on: "Funguje – Strážce hlídá adresu v Safari, zablokovanou stránku zavře a ukáže blokovací obrazovku. Měří i čas na webech."
-        case .needsPermission: "Chybí souhlas: Nastavení systému → Soukromí a zabezpečení → Automatizace → StudyTrackerGuard → zapni Safari."
+        case .needsPermission: "Chybí souhlas: Nastavení systému → Soukromí a zabezpečení → Automatizace → Study Tracker – Strážce → zapni Safari."
         default: "Až otevřeš Safari, macOS se zeptá, jestli smí Strážce ovládat Safari – potvrď Povolit."
         }
     }

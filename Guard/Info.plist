@@ -25,7 +25,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Strážce Soustředění čte adresu aktivní záložky Safari, aby zablokoval weby ze tvých seznamů a změřil čas na webech. Nic neodesílá.</string>
+	<string>Strážce Soustředění čte adresy záložek Safari, aby zablokoval weby ze tvých seznamů (zablokovanou stránku zavře) a změřil čas na webech. Nic neodesílá.</string>
 	<key>STAppBundleId</key>
 	<string>$(ST_APP_BUNDLE_ID)</string>
 	<key>STAppGroup</key>
