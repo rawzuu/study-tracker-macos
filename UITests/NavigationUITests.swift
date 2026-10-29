@@ -419,7 +419,7 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(saveList.waitForExistence(timeout: 3))
         attachScreenshot(app, "Soustředění – seznam")
         saveList.click()
-        XCTAssertTrue(app.staticTexts["Sociální sítě"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["focus.list.Sociální sítě"].waitForExistence(timeout: 3))
         let addPlan = app.descendants(matching: .any)["focus.addPlan"].firstMatch
         reveal(addPlan, app)
         addPlan.click()
@@ -427,7 +427,7 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(savePlan.waitForExistence(timeout: 3))
         attachScreenshot(app, "Soustředění – plán")
         savePlan.click()
-        XCTAssertTrue(app.staticTexts["Během učení"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["focus.plan.Během učení"].waitForExistence(timeout: 3))
         attachScreenshot(app, "Soustředění")
     }
 

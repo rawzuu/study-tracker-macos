@@ -271,6 +271,7 @@ private struct FocusListsSection: View {
                     }
                     .buttonStyle(.plain)
                     .help(locked ? "Během přísného zámku nejde seznam měnit." : "Upravit seznam")
+                    .accessibilityIdentifier("focus.list.\(list.name)")
                 }
             }
         }
@@ -339,6 +340,7 @@ private struct FocusPlansSection: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("focus.plan.\(plan.name)")
                         if locked {
                             Image(systemName: "lock.fill").foregroundStyle(Palette.text3).help("Běží přísný zámek – plán do konce nejde měnit.")
                         } else {

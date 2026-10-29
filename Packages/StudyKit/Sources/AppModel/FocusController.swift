@@ -33,7 +33,7 @@ public final class FocusController {
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var started = false
     @ObservationIgnored public private(set) lazy var store: FocusStore? = files.flatMap { try? FocusStore(at: $0.databaseURL) }
-    private static let log = Logger(subsystem: "cz.rawzuu.studytracker", category: "focus")
+    private nonisolated static let log = Logger(subsystem: "cz.rawzuu.studytracker", category: "focus")
 
     public init(bundle: Bundle = .main, files: FocusFiles? = FocusFiles.shared()) {
         self.files = files
