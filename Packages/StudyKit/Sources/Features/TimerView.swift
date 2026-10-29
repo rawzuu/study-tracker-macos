@@ -153,6 +153,7 @@ public struct TimerView: View {
                 .help("Zaznamenej, když tě něco vyruší")
                 .accessibilityIdentifier("timer.interruption")
             }
+            if state.status != .idle { FocusTimerNote() }
             if state.phase != .work {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "cup.and.saucer").foregroundStyle(Palette.breakColor)
@@ -443,6 +444,30 @@ public struct TimerControls: View {
                     Button { timer.skip() } label: { Label("Přeskočit", systemImage: "forward.end") }
                         .buttonStyle(.study(.ghost, size: size))
                         .accessibilityIdentifier("timer.skip")
+                }
+            }
+        }
+    }
+}
+
+/// Pod časovačem: co Soustředění během bloku blokuje (jen když něco).
+private struct FocusTimerNote: View {
+    @Environment(FocusController.self) private var focus: FocusController?
+
+    var body: some View {
+        if let focus {
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                let now = Int(context.date.timeIntervalSince1970 * 1000)
+                let state = focus.state(at: now)
+                if !state.rules.isEmpty {
+                    Label {
+                        Text("Blokuje: \(FocusText.names(state)) · \(FocusText.until(state.rules.compactMap(\.until).max()) ?? "do konce bloku")")
+                    } icon: {
+                        Image(systemName: state.isLocked ? "lock.fill" : "moon.circle")
+                    }
+                    .font(Typo.small)
+                    .foregroundStyle(Palette.text3)
+                    .accessibilityIdentifier("timer.focus")
                 }
             }
         }

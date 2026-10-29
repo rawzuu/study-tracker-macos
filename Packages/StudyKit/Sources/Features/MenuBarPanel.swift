@@ -3,6 +3,7 @@ import AppModel
 import Core
 import DesignSystem
 import Engine
+import Focus
 import SwiftUI
 
 /// Ikona v horní liště: symbol stavu a odpočet běžícího bloku (`MenuBarStatus`).
@@ -31,6 +32,7 @@ public struct MenuBarPanel: View {
     @Environment(AppStore.self) private var store
     @Environment(TimerStore.self) private var timer
     @Environment(Advisor.self) private var advisor
+    @Environment(FocusController.self) private var focus: FocusController?
     @Environment(\.openWindow) private var openWindow
     let openPage: (String) -> Void
 
@@ -56,6 +58,10 @@ public struct MenuBarPanel: View {
             if let next = nextBlock(state) {
                 Divider().overlay(Palette.line)
                 planRow(next).padding(.vertical, 10)
+            }
+            if let focus, focus.isAvailable, !focus.config.lists.isEmpty {
+                Divider().overlay(Palette.line)
+                focusRow(focus, now: now).padding(.vertical, 10)
             }
             Divider().overlay(Palette.line)
             footer.padding(.top, 10)
@@ -227,6 +233,53 @@ public struct MenuBarPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("menubar.plan")
+    }
+
+    // MARK: - Soustředění
+
+    /// Co se právě blokuje a rychlý zámek (jako „Start block“ v liště blokovačů).
+    private func focusRow(_ focus: FocusController, now: Int) -> some View {
+        let state = focus.state(at: now)
+        let running = focus.status == .running
+        return HStack(alignment: .center, spacing: 10) {
+            Image(systemName: state.isLocked ? "lock.fill" : "moon.circle")
+                .font(.system(size: 13))
+                .foregroundStyle(state.rules.isEmpty ? Palette.text3 : state.isLocked ? Palette.danger : Palette.accent)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(state.rules.isEmpty ? "Nic se neblokuje" : "Blokuje: \(FocusText.names(state))")
+                    .font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                Text(running ? FocusText.until(state.rules.compactMap(\.until).max()) ?? (state.rules.isEmpty ? "Soustředění" : "do konce bloku")
+                             : "Strážce je vypnutý")
+                    .font(Typo.small).foregroundStyle(Palette.text3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if running {
+                Menu {
+                    Section("Zablokovat všechny seznamy") {
+                        ForEach([25, 60, 120, 240], id: \.self) { m in
+                            Button("Na \(FocusText.minutes(m))") { focus.lock(minutes: m, strictness: nil, now: store.nowMs) }
+                        }
+                    }
+                    Section("Přísně – do konce nejde zrušit") {
+                        ForEach([60, 120], id: \.self) { m in
+                            Button("Na \(FocusText.minutes(m))") { focus.lock(minutes: m, strictness: .strict, now: store.nowMs) }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "lock")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Zablokovat teď")
+                .accessibilityLabel("Zablokovat teď")
+            } else {
+                Button("Zapnout") { open("soustredeni") }.buttonStyle(.study(.ghost, size: .small))
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("menubar.focus")
     }
 
     // MARK: - Patička

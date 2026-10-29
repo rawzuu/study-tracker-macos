@@ -77,3 +77,18 @@ public struct FocusStats: Sendable, Equatable {
             heatmap: heatmap, unlocks: unlocks, tamper: tamper.sorted { $0.at > $1.at })
     }
 }
+
+extension FocusStats {
+    /// Věta do pondělního souhrnu: „Soustředění: u obrazovky 31 h 20 min, 23 pokusů o rozptýlení (nejčastěji youtube.com).“
+    /// `nil`, když za týden nic není.
+    public var weeklyLine: String? {
+        guard screenMs > 0 || attempts > 0 else { return nil }
+        var parts: [String] = []
+        if screenMs > 0 { parts.append("u obrazovky \(Format.duration(screenMs / 1000))") }
+        if attempts > 0 {
+            let noun = attempts == 1 ? "pokus" : attempts < 5 ? "pokusy" : "pokusů"
+            parts.append("\(attempts) \(noun) o rozptýlení" + (topAttempts.first.map { " (nejčastěji \($0.name))" } ?? ""))
+        }
+        return "Soustředění: " + parts.joined(separator: ", ") + "."
+    }
+}

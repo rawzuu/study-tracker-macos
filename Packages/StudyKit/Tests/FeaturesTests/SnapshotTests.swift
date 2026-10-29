@@ -3,6 +3,7 @@ import AppModel
 import Core
 import DesignSystem
 import Engine
+import Focus
 import Foundation
 import SwiftUI
 import Testing
@@ -213,6 +214,13 @@ struct SnapshotTests {
         let sync = AppleCalendarSync(app: app, service: DemoCalendars.service(now: now, clock: app.clock, access: access))
         await sync.start()
         return sync
+    }
+
+    @Test("Soustředění: týdenní rozvrh")
+    func scheduleGrid() throws {
+        let windows = [TimeWindow(weekdays: [0, 1, 2, 3, 4], start: 8 * 60, end: 16 * 60), TimeWindow(weekdays: [5, 6], start: 9 * 60, end: 12 * 60),
+                       TimeWindow(weekdays: [6], start: 22 * 60, end: 6 * 60)]
+        try render(ScheduleGridEditor(windows: .constant(windows)).padding(20).background(Palette.bg), name: "focus-schedule", size: CGSize(width: 620, height: 230))
     }
 
     private func render(_ view: some View, name: String, size: CGSize = Screen.laptop.size) throws {

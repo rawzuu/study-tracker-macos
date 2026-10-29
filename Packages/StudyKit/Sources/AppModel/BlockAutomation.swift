@@ -59,14 +59,18 @@ public final class WeeklySummaryNotifier {
     private let app: AppStore
     private let prefs: MacPreferences
     private let post: @MainActor (WeeklySummary.Text) -> Void
+    /// Věta navíc za týden `[from, to)` (Soustředění), když je o čem psát.
+    private let extra: @MainActor (Int, Int) async -> String?
     private var hourly: Task<Void, Never>?
 
     static let sentKey = "st.weekly.sent"
     static let notificationId = "study-weekly"
 
-    public init(app: AppStore, prefs: MacPreferences, post: @escaping @MainActor (WeeklySummary.Text) -> Void) {
+    public init(app: AppStore, prefs: MacPreferences, extra: @escaping @MainActor (Int, Int) async -> String? = { _, _ in nil },
+                post: @escaping @MainActor (WeeklySummary.Text) -> Void) {
         self.app = app
         self.prefs = prefs
+        self.extra = extra
         self.post = post
     }
 
@@ -88,6 +92,16 @@ public final class WeeklySummaryNotifier {
         // Až od pondělí 8:00 – ráno, ne o půlnoci.
         guard now >= clock.startOfWeek(now) + 8 * 3_600_000, app.defaults.string(forKey: Self.sentKey) != week else { return }
         app.defaults.set(week, forKey: Self.sentKey)
-        if let text = WeeklySummary.make(app.document, now: now, clock: clock) { post(text) }
+        let text = WeeklySummary.make(app.document, now: now, clock: clock)
+        let from = WeeklySummary.week(now: now, clock: clock)
+        Task { [extra, post] in
+            let line = await extra(from, clock.startOfWeek(now))
+            switch (text, line) {
+            case let (text?, line?): post(WeeklySummary.Text(title: text.title, body: text.body.isEmpty ? line : text.body + " " + line))
+            case let (text?, nil): post(text)
+            case let (nil, line?): post(WeeklySummary.Text(title: "Minulý týden", body: line))
+            case (nil, nil): break
+            }
+        }
     }
 }

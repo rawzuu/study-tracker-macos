@@ -6,6 +6,11 @@ public enum WeeklySummary {
     public struct Text: Sendable, Equatable {
         public let title: String
         public let body: String
+
+        public init(title: String, body: String) {
+            self.title = title
+            self.body = body
+        }
     }
 
     /// Týden (jeho začátek), za který se souhrn posílá: ten před aktuálním.

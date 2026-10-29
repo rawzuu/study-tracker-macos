@@ -154,14 +154,27 @@ public struct ActiveFocus: Codable, Sendable, Equatable {
     public var rules: [ActiveRule]
     /// Aplikace pojistky proti obcházení (jen během přísného zámku).
     public var protectionApps: [FocusApp]
+    /// Jiné prohlížeče než Safari – blokované, dokud se blokují weby.
+    public var browserApps: [FocusApp]
     public var exceptions: [FocusException]
     public var now: Int
 
-    public init(rules: [ActiveRule] = [], protectionApps: [FocusApp] = [], exceptions: [FocusException] = [], now: Int = 0) {
+    public init(rules: [ActiveRule] = [], protectionApps: [FocusApp] = [], browserApps: [FocusApp] = [], exceptions: [FocusException] = [],
+                now: Int = 0) {
         self.rules = rules
         self.protectionApps = protectionApps
+        self.browserApps = browserApps
         self.exceptions = exceptions
         self.now = now
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rules = try c.decode([ActiveRule].self, forKey: .rules)
+        protectionApps = try c.decode([FocusApp].self, forKey: .protectionApps)
+        browserApps = try c.decodeIfPresent([FocusApp].self, forKey: .browserApps) ?? []
+        exceptions = try c.decode([FocusException].self, forKey: .exceptions)
+        now = try c.decode(Int.self, forKey: .now)
     }
 
     public var isActive: Bool { !rules.isEmpty }
@@ -190,6 +203,15 @@ public struct ActiveFocus: Codable, Sendable, Equatable {
                 case .allowOnly: !rule.list.apps.isEmpty && !listed
                 }
                 if blocked { hits.append((rule, rule.list.appAction)) }
+            }
+        }
+        if browserApps.contains(where: { $0.bundleId == bundleId }) {
+            let web = rules.filter(\.blocksWeb)
+            if let first = web.first {
+                let strictness = web.dropFirst().reduce(first.strictness) { $0.merged(with: $1.strictness) }
+                let until = web.contains { $0.until == nil } ? nil : web.compactMap(\.until).max()
+                let browsers = FocusList(id: "browsers", name: "Jiné prohlížeče", strictness: strictness)
+                hits.append((ActiveRule(list: browsers, strictness: strictness, until: until, sources: ["Weby se hlídají jen v Safari"]), .shield))
             }
         }
         if protectionApps.contains(where: { $0.bundleId == bundleId }) {
@@ -261,6 +283,11 @@ extension FocusTarget {
     }
 }
 
+extension ActiveRule {
+    /// Blokuje weby (domény, slova, nebo „jen tyhle weby“).
+    public var blocksWeb: Bool { !list.siteRules.isEmpty || !list.keywordRules.isEmpty }
+}
+
 extension [ActiveRule] {
     /// Konec nejdelšího přísného pravidla.
     var lockedUntil: Int? {
@@ -307,7 +334,8 @@ public enum FocusEngine {
                                     sources: [commitment.source]))
         }
         let protection = rules.contains(where: \.strictness.locked) ? config.protection.apps : []
-        return ActiveFocus(rules: rules, protectionApps: protection, exceptions: exceptions, now: c.now)
+        let browsers = config.protection.otherBrowsers && rules.contains(where: \.blocksWeb) ? Protection.browserApps : []
+        return ActiveFocus(rules: rules, protectionApps: protection, browserApps: browsers, exceptions: exceptions, now: c.now)
     }
 
     /// Nové přísné závazky: přísná pravidla se známým koncem, která ještě nejsou zapamatovaná.

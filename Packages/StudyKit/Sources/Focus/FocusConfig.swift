@@ -283,10 +283,20 @@ public struct Protection: Codable, Sendable, Equatable {
     public var systemTools: Bool
     /// Nastavení systému (Login Items, kde jde Strážce vypnout).
     public var systemSettings: Bool
+    /// Když se blokují weby, blokovat i prohlížeče kromě Safari (weby se v nich hlídat nedají).
+    public var otherBrowsers: Bool
 
-    public init(systemTools: Bool, systemSettings: Bool) {
+    public init(systemTools: Bool, systemSettings: Bool, otherBrowsers: Bool = true) {
         self.systemTools = systemTools
         self.systemSettings = systemSettings
+        self.otherBrowsers = otherBrowsers
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        systemTools = try c.decode(Bool.self, forKey: .systemTools)
+        systemSettings = try c.decode(Bool.self, forKey: .systemSettings)
+        otherBrowsers = try c.decodeIfPresent(Bool.self, forKey: .otherBrowsers) ?? true
     }
 
     public static let off = Protection(systemTools: false, systemSettings: false)
@@ -300,6 +310,19 @@ public struct Protection: Codable, Sendable, Equatable {
         FocusApp(bundleId: "com.apple.ScriptEditor2", name: "Editor skriptů"),
     ]
     public static let settingsApps = [FocusApp(bundleId: "com.apple.systempreferences", name: "Nastavení systému")]
+    /// Prohlížeče, ve kterých Strážce weby hlídat neumí.
+    public static let browserApps = [
+        FocusApp(bundleId: "com.google.Chrome", name: "Google Chrome"), FocusApp(bundleId: "com.google.Chrome.beta", name: "Google Chrome Beta"),
+        FocusApp(bundleId: "com.google.Chrome.canary", name: "Google Chrome Canary"), FocusApp(bundleId: "org.chromium.Chromium", name: "Chromium"),
+        FocusApp(bundleId: "org.mozilla.firefox", name: "Firefox"), FocusApp(bundleId: "org.mozilla.firefoxdeveloperedition", name: "Firefox Developer Edition"),
+        FocusApp(bundleId: "org.mozilla.nightly", name: "Firefox Nightly"), FocusApp(bundleId: "com.microsoft.edgemac", name: "Microsoft Edge"),
+        FocusApp(bundleId: "company.thebrowser.Browser", name: "Arc"), FocusApp(bundleId: "company.thebrowser.dia", name: "Dia"),
+        FocusApp(bundleId: "com.brave.Browser", name: "Brave"), FocusApp(bundleId: "com.operasoftware.Opera", name: "Opera"),
+        FocusApp(bundleId: "com.operasoftware.OperaGX", name: "Opera GX"), FocusApp(bundleId: "com.vivaldi.Vivaldi", name: "Vivaldi"),
+        FocusApp(bundleId: "com.kagi.kagimacOS", name: "Orion"), FocusApp(bundleId: "app.zen-browser.zen", name: "Zen"),
+        FocusApp(bundleId: "org.torproject.torbrowser", name: "Tor Browser"), FocusApp(bundleId: "com.duckduckgo.macos.browser", name: "DuckDuckGo"),
+        FocusApp(bundleId: "com.apple.SafariTechnologyPreview", name: "Safari Technology Preview"),
+    ]
 
     var apps: [FocusApp] { (systemTools ? Self.toolApps : []) + (systemSettings ? Self.settingsApps : []) }
 }

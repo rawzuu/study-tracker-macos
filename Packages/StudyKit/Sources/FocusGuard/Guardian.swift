@@ -24,11 +24,14 @@ public final class Guardian {
         public var version: String
         /// Kdy Mac naposledy nastartoval (ms) – zámek „odemknout po restartu“.
         public var bootTime: () -> Int
+        /// Monotónní čas v ms (běží i ve spánku, nejde posunout) – pozná posunutí hodin Macu.
+        public var monotonic: () -> Int
 
         public init(apps: any AppControl, safari: any SafariControl, shield: any ShieldControl, store: FocusStore, files: FocusFiles?,
                     readConfig: @escaping () -> FocusConfig?, readSnapshot: @escaping () -> WidgetSnapshot?,
                     now: @escaping () -> Int, idleSeconds: @escaping () -> Double, clock: StudyClock, version: String,
-                    bootTime: @escaping () -> Int = { 0 }) {
+                    bootTime: @escaping () -> Int = { 0 },
+                    monotonic: @escaping () -> Int = { Int(clock_gettime_nsec_np(CLOCK_MONOTONIC) / 1_000_000) }) {
             self.apps = apps
             self.safari = safari
             self.shield = shield
@@ -41,6 +44,7 @@ public final class Guardian {
             self.clock = clock
             self.version = version
             self.bootTime = bootTime
+            self.monotonic = monotonic
         }
     }
 
@@ -64,6 +68,10 @@ public final class Guardian {
     private var lastReportAt = 0
     private var lastPrunedDay = ""
     private var lastSweep = 0
+    /// Nástěnný a monotónní čas při poslední kontrole.
+    private var lastClock: (wall: Int, mono: Int)?
+    /// Posun hodin dopředu větší než tohle je změna času, ne oprava podle sítě.
+    static let clockJumpMs = 120_000
     static let sweepEveryMs = 20_000
     /// Poslední zaznamenaný pokus podle cíle – opakované kliknutí v Docku je jeden pokus.
     private var lastAttemptAt: [String: Int] = [:]
@@ -120,7 +128,7 @@ public final class Guardian {
                 next = FocusEngine.evaluate(config, context: FocusContext(snapshot: d.readSnapshot(), now: t, usageToday: usage),
                                             commitments: commitments, exceptions: exceptions, clock: d.clock)
             }
-            let changed = next.rules != state.rules || next.protectionApps != state.protectionApps || next.exceptions != state.exceptions
+            let changed = next.rules != state.rules || next.protectionApps != state.protectionApps || next.browserApps != state.browserApps || next.exceptions != state.exceptions
             state = next
             if changed { await enforceRunning() }
         } catch {
@@ -332,6 +340,7 @@ public final class Guardian {
     /// Jedna kontrola: měření, Safari, občas znovu vyhodnotit (časová okna, denní limity).
     public func tick() async {
         let t = now
+        await checkClock(at: t)
         if lastRefresh.map({ t - $0 >= Self.refreshEveryMs }) ?? true || state.rules.contains(where: { $0.until.map { $0 <= t } ?? false }) {
             await refresh()
         }
@@ -345,6 +354,18 @@ public final class Guardian {
         if t - lastSweep >= Self.sweepEveryMs, state.isActive { sweepSafari() }
         await measure(front: front, host: host, at: t)
         if t - lastReportAt >= 30_000 { writeReport() }
+    }
+
+    /// Hodiny Macu se posunuly dopředu (víc, než uběhlo): přísné závazky prodloužit o stejný kus a zapsat porušení.
+    func checkClock(at t: Int) async {
+        let mono = d.monotonic()
+        defer { lastClock = (t, mono) }
+        guard let last = lastClock else { return }
+        let jump = (t - last.wall) - (mono - last.mono)
+        guard jump > Self.clockJumpMs else { return }
+        try? await d.store.shiftCommitments(by: jump, activeAfter: last.wall)
+        await reportTamper("Čas Macu se posunul dopředu o \(jump / StudyClock.minute) min – přísné zámky se o tolik prodloužily.", app: "Datum a čas", at: t)
+        await refresh()
     }
 
     /// Jak dlouho čekat na další kontrolu: v Safari s blokovanými weby často, jinak zřídka.

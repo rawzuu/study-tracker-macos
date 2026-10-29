@@ -147,6 +147,8 @@ struct MacAutomationTests {
         // Aktuální týden: Po 8:00 už je za námi (nebo ne) – souhrn se pošle nejvýš jednou.
         notifier.check()
         notifier.check()
+        // Odesílá se z úlohy (Soustředění se čte z databáze).
+        try await Task.sleep(for: .milliseconds(100))
         #expect(posted.count <= 1)
         let mondayMorning = app.nowMs >= app.clock.startOfWeek(app.nowMs) + 8 * 3_600_000
         #expect(posted.count == (mondayMorning ? 1 : 0))
@@ -154,6 +156,7 @@ struct MacAutomationTests {
         prefs.weeklySummary = false
         app.defaults.removeObject(forKey: WeeklySummaryNotifier.sentKey)
         notifier.check()
+        try await Task.sleep(for: .milliseconds(100))
         #expect(posted.count == (mondayMorning ? 1 : 0), "vypnuto")
     }
 

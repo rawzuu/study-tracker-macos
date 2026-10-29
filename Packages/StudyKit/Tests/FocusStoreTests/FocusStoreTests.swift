@@ -107,6 +107,8 @@ private func at(_ day: Int, _ h: Int, _ m: Int = 0) -> Int { clock.atMinutes(clo
         #expect(s.heatmap[1][22] == 1)
         #expect(s.heatmap[0][9] == 1)
         #expect(s.unlocks == 1)
+        #expect(s.weeklyLine == "Soustředění: u obrazovky 1 h, 3 pokusy o rozptýlení (nejčastěji youtube.com).")
+        #expect(FocusStats.make(usage: [], events: [], days: 7, now: at(1, 23), clock: clock).weeklyLine == nil)
         #expect(s.tamper.map(\.detail) == ["Rozšíření vypnuté"])
     }
 }

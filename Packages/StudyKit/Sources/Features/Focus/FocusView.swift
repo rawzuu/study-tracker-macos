@@ -63,8 +63,17 @@ enum FocusText {
         case .running: break
         }
         guard !state.rules.isEmpty else { return enabled ? "Teď se nic neblokuje" : "Blokování je vypnuté" }
-        let names = state.rules.map(\.list.name).uniqued().joined(separator: ", ")
-        return "Teď blokuje: \(names)" + (until(state.rules.compactMap(\.until).max()).map { " · \($0)" } ?? "")
+        return "Teď blokuje: \(names(state))" + (until(state.rules.compactMap(\.until).max()).map { " · \($0)" } ?? "")
+    }
+
+    /// Názvy blokovaných seznamů („Sociální sítě, Video“).
+    static func names(_ state: ActiveFocus) -> String {
+        state.rules.map(\.list.name).uniqued().joined(separator: ", ")
+    }
+
+    /// „25 min“, „2 h“, „1 h 30 min“.
+    static func minutes(_ m: Int) -> String {
+        m < 60 ? "\(m) min" : m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min"
     }
 
     static func until(_ t: Int?) -> String? {
@@ -411,6 +420,11 @@ private struct FocusPlansSection: View {
             if focus.config.plans.isEmpty {
                 Text("Kdy blokovat – nejčastěji během bloku učení.").font(Typo.body).foregroundStyle(Palette.text3).padding(.vertical, 8)
             }
+            if !scheduled.isEmpty {
+                // Rozvrh všech zapnutých časových oken v týdnu – přehled jako v kalendáři blokovačů.
+                ScheduleGridEditor(windows: .constant(scheduled), readOnly: true)
+                    .padding(.bottom, 12)
+            }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(focus.config.plans) { plan in
                     let locked = plan.listIds.contains { isLocked($0, state) } && state.rules.contains { $0.sources.contains(plan.name) }
@@ -454,7 +468,7 @@ private struct FocusPlansSection: View {
             HStack(spacing: 8) {
                 Text("Zamknout teď na").foregroundStyle(Palette.text2)
                 Picker("Délka", selection: $lockMinutes) {
-                    ForEach([15, 30, 60, 90, 120, 180, 240, 480], id: \.self) { m in Text(m < 60 ? "\(m) min" : m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min").tag(m) }
+                    ForEach([15, 30, 60, 90, 120, 180, 240, 480], id: \.self) { m in Text(FocusText.minutes(m)).tag(m) }
                 }
                 .labelsHidden()
                 .fixedSize()
@@ -470,6 +484,13 @@ private struct FocusPlansSection: View {
         }
     }
 
+    /// Časová okna všech zapnutých plánů dohromady.
+    private var scheduled: [TimeWindow] {
+        focus.config.plans.filter(\.enabled).flatMap { plan -> [TimeWindow] in
+            if case let .schedule(windows) = plan.trigger { windows } else { [] }
+        }
+    }
+
     private func detail(_ plan: FocusPlan) -> String {
         var parts = [FocusText.trigger(plan.trigger)]
         let names = plan.listIds.compactMap { focus.config.list($0)?.name }
@@ -479,11 +500,7 @@ private struct FocusPlansSection: View {
     }
 
     private func lock(_ strictness: Strictness?) {
-        let end = now + lockMinutes * 60_000
-        focus.update {
-            $0.locks.removeAll { $0.end <= now }
-            $0.locks.append(FocusLock(listIds: $0.lists.map(\.id), start: now, end: end, strictness: strictness))
-        }
+        focus.lock(minutes: lockMinutes, strictness: strictness, now: now)
     }
 
     private func setPlan(_ id: String, _ change: (inout FocusPlan) -> Void) {
@@ -514,6 +531,8 @@ private struct FocusMoreSection: View {
                             .labelsHidden().toggleStyle(.switch)
                     }
                 }
+                SettingSwitch("Blokovat jiné prohlížeče", detail: "Když se blokují weby, zablokuje i Chrome, Firefox, Arc, Edge a další – weby umí Strážce hlídat jen v Safari.",
+                              isOn: Binding(get: { focus.config.protection.otherBrowsers }, set: { v in focus.update { $0.protection.otherBrowsers = v } }))
                 SettingSwitch("Pojistka: nástroje", detail: "Během přísného zámku blokovat Monitor aktivity a terminály, kterými by šel Strážce vypnout.",
                               isOn: Binding(get: { focus.config.protection.systemTools }, set: { v in focus.update { $0.protection.systemTools = v } }))
                 SettingSwitch("Pojistka: Nastavení systému", detail: "Během přísného zámku blokovat i Nastavení systému (Položky při přihlášení).",

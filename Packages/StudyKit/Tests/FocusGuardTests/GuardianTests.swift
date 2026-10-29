@@ -64,6 +64,7 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
     var t = at(10)
     var idle: Double = 0
     var boot = 1
+    var mono = 0
     var config: FocusConfig
     let apps = FakeApps()
     let safari = FakeSafari()
@@ -82,7 +83,7 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
             apps: apps, safari: safari, shield: shield, store: store, files: files,
             readConfig: { [unowned self] in self.config }, readSnapshot: { nil },
             now: { [unowned self] in self.t }, idleSeconds: { [unowned self] in self.idle }, clock: clock, version: "test",
-            bootTime: { [unowned self] in self.boot }))
+            bootTime: { [unowned self] in self.boot }, monotonic: { [unowned self] in self.mono }))
     }
 
     deinit { try? FileManager.default.removeItem(at: dir) }
@@ -106,6 +107,50 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
 }
 
 @MainActor @Suite struct GuardianTests {
+    @Test func movingTheClockForwardDoesNotEndStrictLock() async throws {
+        let h = try Harness(locked(strictness: .strict))
+        h.t = at(10)
+        await h.guardian.tick()
+        #expect(h.guardian.state.isLocked)
+        // Normální běh: 5 s nástěnného i monotónního času.
+        h.t += 5000
+        h.mono += 5000
+        await h.guardian.tick()
+        // Hodiny posunuté na 12:30, ve skutečnosti uběhlo 5 s: zámek (do 12:00) běží dál, o skok déle.
+        let jump = at(12, 30) - (h.t + 5000)
+        h.t = at(12, 30)
+        h.mono += 5000
+        await h.guardian.tick()
+        #expect(h.guardian.state.isLocked)
+        #expect(h.guardian.state.rules.compactMap(\.until).max() == at(12) + jump)
+        let tamper = try await h.store.events(from: at(0), to: at(23)).filter { $0.kind == .tamper }
+        #expect(tamper.count == 1 && tamper[0].detail.contains("Čas Macu se posunul dopředu o 149 min"))
+    }
+
+    @Test func otherBrowsersAreBlockedWhileWebsitesAre() async throws {
+        let chrome = RunningApp(pid: 21, bundleId: "com.google.Chrome", name: "Google Chrome")
+        let h = try Harness(locked())
+        await h.guardian.refresh()
+        await h.guardian.appActivated(chrome)
+        #expect(h.apps.hidden == ["com.google.Chrome"])
+        #expect(h.shield.shown.last?.lists == ["Jiné prohlížeče"])
+        #expect(h.shield.shown.last?.until == at(12))
+        // Seznam bez webů prohlížeče neblokuje.
+        var appsOnly = social
+        appsOnly.sites = []
+        appsOnly.keywords = []
+        h.config = locked(appsOnly)
+        await h.guardian.refresh()
+        await h.guardian.appActivated(chrome)
+        #expect(h.apps.hidden.count == 1)
+        // Vypnutá pojistka taky ne.
+        h.config = locked()
+        h.config.protection.otherBrowsers = false
+        await h.guardian.refresh()
+        await h.guardian.appActivated(chrome)
+        #expect(h.apps.hidden.count == 1)
+    }
+
     @Test func blockStartClosesBlockedSafariTabs() async throws {
         let h = try Harness(locked())
         func tab(_ index: Int, _ url: String, current: Bool = false) -> SafariTab {

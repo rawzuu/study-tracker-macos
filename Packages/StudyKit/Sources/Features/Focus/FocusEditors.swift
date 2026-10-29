@@ -45,8 +45,11 @@ struct FocusListEditor: View {
                             "Zablokuje všechno ostatní – i celý Mac kromě Study Trackeru a systému. Prázdná část (třeba žádné weby) nic neomezuje.")
                         .font(Typo.small).foregroundStyle(Palette.text3).fixedSize(horizontal: false, vertical: true)
                     apps
-                    FormField("Weby", hint: "Jeden na řádek: doména platí i se subdoménami (youtube.com), nebo jen část webu (youtube.com/shorts).") {
-                        TextArea("youtube.com\nreddit.com", text: $sites, minHeight: 90)
+                    FormField("Weby", hint: "Jeden na řádek (nebo oddělené čárkou): doména platí i se subdoménami (youtube.com), nebo jen část webu (youtube.com/shorts).") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            TextArea("youtube.com\nreddit.com", text: $sites, minHeight: 90)
+                            Button("Načíst ze souboru…") { importSites() }.buttonStyle(.study(.ghost, size: .small))
+                        }
                     }
                     invalidSites
                     if list.mode == .block {
@@ -121,8 +124,21 @@ struct FocusListEditor: View {
         }
     }
 
+    /// Řádky, čárky, středníky i mezery – seznam webů jde vložit odkudkoli.
     private func lines(_ text: String) -> [String] {
-        text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        text.split(whereSeparator: { $0.isNewline || $0.isWhitespace || $0 == "," || $0 == ";" }).map(String.init).filter { !$0.isEmpty }
+    }
+
+    /// Seznam webů z textového souboru (jeden na řádek, nebo oddělené čárkou) – připojí se k těm v poli.
+    private func importSites() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText, .commaSeparatedText, .text]
+        panel.message = "Vyber textový soubor se seznamem webů"
+        guard panel.runModal() == .OK, let url = panel.url, let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let existing = Set(lines(sites))
+        let added = lines(text).filter { SiteRule($0) != nil && !existing.contains($0) }
+        guard !added.isEmpty else { return }
+        sites = (lines(sites) + added).joined(separator: "\n")
     }
 
     private func add(_ app: FocusApp) {
@@ -356,6 +372,8 @@ struct FocusPlanEditor: View {
             SettingSwitch("I v pozastaveném bloku", detail: "Jinak by stačilo blok pozastavit.", isOn: $study.whilePaused)
         case .schedule:
             VStack(alignment: .leading, spacing: 10) {
+                ScheduleGridEditor(windows: $windows)
+                    .padding(.bottom, 6)
                 ForEach(windows.indices, id: \.self) { i in
                     HStack(spacing: 8) {
                         WeekdayToggles(days: $windows[i].weekdays)
@@ -363,7 +381,7 @@ struct FocusPlanEditor: View {
                         Text("–")
                         MinutePicker(minutes: Binding(get: { windows[i].end % 1440 }, set: { windows[i].end = $0 == 0 ? 1440 : $0 }))
                         Button { windows.remove(at: i) } label: { Image(systemName: "xmark") }
-                            .buttonStyle(.study(.ghost, size: .small)).disabled(windows.count == 1)
+                            .buttonStyle(.study(.ghost, size: .small))
                     }
                 }
                 Button("Přidat okno") { windows.append(TimeWindow(weekdays: [5, 6], start: 9 * 60, end: 12 * 60)) }
@@ -384,7 +402,7 @@ struct FocusPlanEditor: View {
         plan.name = plan.name.trimmingCharacters(in: .whitespaces)
         plan.trigger = switch kind {
         case .study: .studyBlock(study)
-        case .schedule: .schedule(windows.filter { !$0.weekdays.isEmpty })
+        case .schedule: .schedule(windows.filter { !$0.weekdays.isEmpty && $0.start != $0.end % 1440 })
         case .plan: .studyPlan
         case .limit: .dailyLimit(minutes: limit)
         }
@@ -413,4 +431,91 @@ struct WeekdayToggles: View {
             }
         }
     }
+}
+
+/// Týdenní rozvrh jako mřížka dny × půlhodiny: tahem myši se označí (nebo z označeného smaže) obdélník.
+struct ScheduleGridEditor: View {
+    @Binding var windows: [TimeWindow]
+    var readOnly = false
+    @State private var drag: (base: ScheduleGrid, day: Int, slot: Int, value: Bool)?
+    private static let days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+    private static let rowHeight: CGFloat = 20
+    private static let labelWidth: CGFloat = 26
+
+    var body: some View {
+        let grid = ScheduleGrid(windows: windows)
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { proxy in
+                let cell = (proxy.size.width - Self.labelWidth) / CGFloat(ScheduleGrid.slots)
+                ZStack(alignment: .topLeading) {
+                    ForEach([0, 6, 12, 18, 24], id: \.self) { h in
+                        Text("\(h)").font(.system(size: 10)).monospacedDigit().foregroundStyle(Palette.text3)
+                            .position(x: Self.labelWidth + CGFloat(h * 2) * cell, y: 6)
+                    }
+                    Canvas { context, _ in
+                        for d in 0..<7 {
+                            let y = 14 + CGFloat(d) * Self.rowHeight + 1
+                            for s in 0..<ScheduleGrid.slots {
+                                let rect = CGRect(x: Self.labelWidth + CGFloat(s) * cell + 0.5, y: y, width: cell - 1, height: Self.rowHeight - 2)
+                                context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(s / 2 % 2 == 0 ? Palette.panel2 : Palette.panel3.opacity(0.7)))
+                            }
+                            // Označené úseky jako souvislé pruhy.
+                            var s = 0
+                            while s < ScheduleGrid.slots {
+                                guard grid[d, s] else { s += 1; continue }
+                                var e = s
+                                while e < ScheduleGrid.slots, grid[d, e] { e += 1 }
+                                let rect = CGRect(x: Self.labelWidth + CGFloat(s) * cell + 0.5, y: y, width: CGFloat(e - s) * cell - 1, height: Self.rowHeight - 2)
+                                context.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(Palette.accent))
+                                s = e
+                            }
+                        }
+                    }
+                    ForEach(0..<7, id: \.self) { d in
+                        Text(Self.days[d]).font(.system(size: 11)).foregroundStyle(Palette.text2)
+                            .frame(width: Self.labelWidth, height: Self.rowHeight, alignment: .leading)
+                            .offset(y: 14 + CGFloat(d) * Self.rowHeight)
+                    }
+                }
+                .contentShape(Rectangle())
+                .gesture(readOnly ? nil : DragGesture(minimumDistance: 0).onChanged { value in
+                    paint(grid: grid, start: value.startLocation, current: value.location, cell: cell)
+                }.onEnded { _ in drag = nil })
+            }
+            .frame(height: 14 + 7 * Self.rowHeight)
+            .accessibilityElement()
+            .accessibilityLabel("Týdenní rozvrh")
+            .accessibilityValue(windows.isEmpty ? "prázdný" : windows.map { "\(ScheduleGridEditor.dayText($0.weekdays)) \(MinuteText.text($0.start))–\(MinuteText.text($0.end))" }.joined(separator: ", "))
+            if !readOnly {
+                Text("Tahem myši označíš, kdy se blokuje; tahem přes označené smažeš. Po půlhodinách – přesné časy uprav níž.")
+                    .font(Typo.small).foregroundStyle(Palette.text3)
+            }
+        }
+    }
+
+    private func position(_ p: CGPoint, cell: CGFloat) -> (day: Int, slot: Int)? {
+        guard p.x >= Self.labelWidth, p.y >= 14 else { return nil }
+        let day = min(6, Int((p.y - 14) / Self.rowHeight))
+        let slot = min(ScheduleGrid.slots - 1, Int((p.x - Self.labelWidth) / cell))
+        return (day, slot)
+    }
+
+    private func paint(grid: ScheduleGrid, start: CGPoint, current: CGPoint, cell: CGFloat) {
+        if drag == nil {
+            guard let s = position(start, cell: cell) else { return }
+            drag = (grid, s.day, s.slot, !grid[s.day, s.slot])
+        }
+        guard let drag, let c = position(CGPoint(x: max(Self.labelWidth, current.x), y: max(14, current.y)), cell: cell) else { return }
+        var next = drag.base
+        next.set(days: min(drag.day, c.day)...max(drag.day, c.day), slots: min(drag.slot, c.slot)...max(drag.slot, c.slot), to: drag.value)
+        let result = next.windows
+        if result != windows { windows = result }
+    }
+
+    static func dayText(_ days: [Int]) -> String { days.map { ScheduleGridEditor.days[$0] }.joined(separator: " ") }
+}
+
+/// „8:00“, „24:00“.
+enum MinuteText {
+    static func text(_ m: Int) -> String { "\(m / 60):\(m % 60 < 10 ? "0" : "")\(m % 60)" }
 }

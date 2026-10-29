@@ -1,4 +1,5 @@
 import AppKit
+import Engine
 import Focus
 import FocusStore
 import Foundation
@@ -108,6 +109,14 @@ public final class FocusController {
         do { try files?.write(next) } catch { Self.log.error("Soustředění: nastavení se nepovedlo uložit: \(error.localizedDescription, privacy: .public)") }
     }
 
+    /// Ruční zámek od teď na `minutes` (všechny seznamy, nebo vybrané); přísnost `nil` = podle seznamů.
+    public func lock(listIds: [String]? = nil, minutes: Int, strictness: Strictness?, now: Int) {
+        update {
+            $0.locks.removeAll { $0.end <= now }
+            $0.locks.append(FocusLock(listIds: listIds ?? $0.lists.map(\.id), start: now, end: now + minutes * 60_000, strictness: strictness))
+        }
+    }
+
     /// Nový seznam ze šablony (vrací jeho id).
     @discardableResult
     public func addList(from template: FocusTemplates.Template) -> String {
@@ -190,6 +199,17 @@ public final class FocusController {
             reload()
             if status == .running, message == nil { message = "Strážce se nevypnul. Jde vypnout v Nastavení systému → Obecné → Položky při přihlášení." }
         }
+    }
+
+    // MARK: - Souhrn
+
+    /// Věta Soustředění do pondělního souhrnu za týden `[from, to)`.
+    public func weeklyLine(from: Int, to: Int, clock: StudyClock) async -> String? {
+        guard let store else { return nil }
+        let last = clock.addDays(to, -1)
+        guard let usage = try? await store.usage(fromDay: clock.dayKey(from), toDay: clock.dayKey(last)),
+              let events = try? await store.events(from: from, to: to) else { return nil }
+        return FocusStats.make(usage: usage, events: events, days: 7, now: last, clock: clock).weeklyLine
     }
 
     // MARK: - Systémová nastavení

@@ -58,6 +58,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.store)
                 .environment(delegate.timer)
                 .environment(delegate.advisor)
+                .environment(delegate.focus)
                 .preferredColorScheme(delegate.colorScheme)
         } label: {
             MenuBarLabel(showsTime: menuBarTime).environment(delegate.menuBar)
@@ -110,7 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         : FocusController()
     lazy var away = AwayMonitor(timer: timer, prefs: macPrefs)
     lazy var automation = BlockAutomation(timer: timer, prefs: macPrefs)
-    lazy var weekly = WeeklySummaryNotifier(app: store, prefs: macPrefs) { [timer] text in
+    lazy var weekly = WeeklySummaryNotifier(app: store, prefs: macPrefs, extra: { [focus, store] from, to in
+        await focus.weeklyLine(from: from, to: to, clock: store.clock)
+    }) { [timer] text in
         timer.effects?.notify(id: "study-weekly", title: text.title, body: text.body, url: URL(string: "studytracker://statistiky"))
     }
     lazy var hotKeys = HotKeyCenter { [weak self] action in self?.hotKey(action) }

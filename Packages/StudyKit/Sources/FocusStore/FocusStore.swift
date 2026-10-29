@@ -191,6 +191,21 @@ public final class FocusStore: Sendable {
         }
     }
 
+    /// Čas Macu skočil o `ms` dopředu: závazky, které platily před skokem (konec po `before`), posunout o
+    /// stejný kus – přísný zámek nejde ukončit posunutím hodin.
+    public func shiftCommitments(by ms: Int, activeAfter before: Int) async throws {
+        try await db.write { db in
+            let active = try String.fetchAll(db, sql: "SELECT json FROM commitment WHERE until > ?", arguments: [before])
+                .compactMap { try? JSONDecoder().decode(Commitment.self, from: Data($0.utf8)) }
+            for var c in active {
+                try db.execute(sql: "DELETE FROM commitment WHERE id = ?", arguments: [c.id])
+                c.until += ms
+                let json = String(decoding: try JSONEncoder().encode(c), as: UTF8.self)
+                try db.execute(sql: "INSERT OR IGNORE INTO commitment (id, until, json) VALUES (?, ?, ?)", arguments: [c.id, c.until, json])
+            }
+        }
+    }
+
     // MARK: - Úklid
 
     /// Smaže měření a události starší než `keepDays` dní a doběhlé závazky.

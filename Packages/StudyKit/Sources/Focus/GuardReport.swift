@@ -42,6 +42,7 @@ public struct GuardReport: Codable, Sendable, Equatable {
         s.rules.removeAll { $0.until.map { $0 <= t } ?? false }
         s.exceptions.removeAll { $0.until <= t }
         if !s.isLocked { s.protectionApps = [] }
+        if !s.rules.contains(where: \.blocksWeb) { s.browserApps = [] }
         s.now = t
         return s
     }
