@@ -113,6 +113,29 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
 }
 
 @MainActor @Suite struct GuardianTests {
+    @Test func concurrentRefreshesRunOneAfterAnother() async throws {
+        let h = try Harness(locked())
+        h.t = at(8, 59)
+        await h.guardian.refresh()
+        h.t = at(9)
+        async let a: Void = h.guardian.refresh()
+        async let b: Void = h.guardian.refresh()
+        _ = await (a, b)
+        #expect(h.notifier.posted.map(\.title) == ["Blokování začalo do 12:00"])
+    }
+
+    @Test func breaksInsideWindowAreNotAnnounced() async throws {
+        var config = FocusConfig(enabled: true, lists: [social], plans: [FocusPlan(name: "Dopoledne", listIds: ["social"],
+            trigger: .schedule([TimeWindow(weekdays: [0], start: 9 * 60, end: 12 * 60)]), breaks: Breaks(work: 50, rest: 10))])
+        config.tracking.enabled = false
+        let h = try Harness(config)
+        for (hour, minute) in [(8, 50), (8, 56), (9, 0), (9, 50), (10, 0)] {
+            h.t = at(hour, minute)
+            await h.guardian.refresh()
+        }
+        #expect(h.notifier.posted.map(\.title) == ["Za 4 min začne blokování"])
+    }
+
     @Test func notifiesBeforeAtStartAndAtEnd() async throws {
         let h = try Harness(locked())
         h.t = at(8, 50)
@@ -136,7 +159,7 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         #expect(h.notifier.posted.count == 3)
     }
 
-    @Test func freezeHidesFinderAndOffersAllowedApps() async throws {
+    @Test func freezeCoversFinderAndOffersAllowedApps() async throws {
         let finder = RunningApp(pid: 1, bundleId: "com.apple.finder", name: "Finder")
         var config = FocusConfig(enabled: true, freeze: FreezeSettings(allowedApps: [FocusApp(bundleId: "com.apple.Notes", name: "Poznámky")]))
         config.locks = [FocusLock(listIds: [], start: at(9), end: at(12), freeze: true)]
@@ -145,7 +168,8 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         h.apps.all = [finder, notes, discord]
         h.apps.front = finder
         await h.guardian.refresh()
-        #expect(Set(h.apps.hidden) == ["com.apple.finder", "com.hnc.Discord"])
+        // Finder se neschová (macOS by ho hned znovu aktivoval) – zakryje ho obrazovka.
+        #expect(h.apps.hidden == ["com.hnc.Discord"])
         #expect(h.shield.shown.last?.frozenApps == [FocusApp(bundleId: "com.apple.Notes", name: "Poznámky")])
         #expect(h.shield.shown.last?.name == "Finder")
         h.guardian.shieldOpen(bundleId: "com.apple.Notes")
@@ -216,6 +240,10 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         // Safari na pozadí: i aktivní záložka.
         h.safari.blanked = []
         h.safari.isFrontmost = false
+        // Hned po kontrole se při přepnutí znovu nekontroluje, až po pár sekundách.
+        await h.guardian.appActivated(safariApp)
+        #expect(h.safari.blanked.isEmpty)
+        h.t += 6000
         await h.guardian.appActivated(safariApp)
         #expect(h.safari.blanked.map(\.index) == [1, 3, 4])
     }

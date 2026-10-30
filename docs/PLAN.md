@@ -64,7 +64,7 @@ Každý milník končí releasem. Před každou změnou, která poprvé zapisuje
 | M5 ✓ | Statistiky, report a kalibrace, reflexe, úspěchy (úspěchy jako seznam místo kovových medailí – bez žluté, vzhled „Seznam“) | v0.9.0 |
 | M6 (část) ✓ | Nastavení jako na webu (cíle, časovač, funkce, vlastní režimy), koš, export JSON/CSV a import se sloučením (Anki už v v0.9.0); zbývá onboarding | v0.10.0 |
 | M6+ ✓ | Jen Mac (schváleno 21. 10. 2026): automatická pauza po nečinnosti, zkratky při bloku, klávesové zkratky odkudkoli, pondělní souhrn | v0.11.0 |
-| M8 | Soustředění (schváleno 28. 10. 2026): blokování aplikací a webů v Safari, čas u obrazovky, přísnost a pojistky proti obcházení, statistiky – viz níže | F1–F6 v v0.12.0, opravy v0.12.1, F7–F8 v0.13.0 |
+| M8 | Soustředění (schváleno 28. 10. 2026): blokování aplikací a webů v Safari, čas u obrazovky, přísnost a pojistky proti obcházení, statistiky – viz níže | F1–F6 v v0.12.0, F7–F8 v0.13.0, F9 v0.14.0 |
 | M7 | profilování v Instruments, optimalizace, výkonnostní testy | v1.0.0 |
 
 Cíle výkonu: studený start < 0,4 s, paměť v klidu < 60 MB, CPU v klidu ≈ 0 %.
@@ -90,3 +90,4 @@ Ověřeno 28. 10. 2026 (pokus mimo repo, macOS 27, bezplatný Personal Team):
 | F6 ✓ | stránka Soustředění: editory seznamů (aplikace z Aplikací i spuštěné, weby, výjimky, slova), plánů (blok učení, časová okna, Studijní plán, denní limit) a přísnosti, ruční zámek, zamčené úpravy během přísného zámku, statistiky (čas po dnech, nejvíc času, pokusy po dnech a hodinách, porušení) |
 | F7 ✓ | napojení na časovač (co se blokuje pod časovačem), pondělní souhrn (čas u obrazovky, pokusy), horní lištu (stav a rychlý zámek 25 min – 4 h, i přísně) |
 | F8 ✓ | blíž Cold Turkey: týdenní rozvrh jako mřížka (malování tahem, přehled v Plánech), jiné prohlížeče blokované s weby, posunutí hodin Macu neukončí přísný zámek (závazky se prodlouží, zapíše se porušení), zavírání zablokovaných záložek Safari i na pozadí, hromadné vložení a načtení webů ze souboru |
+| F9 ✓ | Zmrazení celého Macu (ručně i v plánu, povolené aplikace, přísnost, obrazovka bez Esc, další monitory zakryté), bloky Soustředění v Kalendáři, přestávky v časových oknech, oznámení (za 5 min, začalo, skončilo), export a import seznamů; revize kódu: ruční zámky platí i s vypnutými plány, vyhodnocení po sobě (bez souběhu), Finder se při zmrazení neschovává, okna přes změnu času |

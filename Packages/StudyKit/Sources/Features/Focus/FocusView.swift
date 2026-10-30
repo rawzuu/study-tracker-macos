@@ -154,7 +154,7 @@ private struct GuardSection: View {
                 StatusRow(focus.extensionActive(at: now) ? .ok : .optional, "Rozšíření Safari (volitelné)", detail: extensionDetail) {
                     Button("Otevřít v Safari") { focus.openSafariExtensionSettings() }.buttonStyle(.study(.ghost, size: .small))
                 }
-                SettingSwitch("Blokovat podle plánů", detail: "Hlavní vypínač. Přísný zámek, který už běží, platí do konce i po vypnutí.",
+                SettingSwitch("Blokovat podle plánů", detail: "Hlavní vypínač plánů. Ruční zámky a zmrazení platí i tak; přísný zámek, který už běží, platí do konce.",
                               isOn: Binding(get: { focus.config.enabled }, set: { v in focus.update { $0.enabled = v } }), id: "focus.enabled")
                 SettingSwitch("Měřit čas u obrazovky", detail: "Čas v aplikacích a na webech po hodinách, jen na tomto Macu. Bez myši a klávesnice déle než \(focus.config.tracking.idleMinutes) min se nepočítá.",
                               isOn: Binding(get: { focus.config.tracking.enabled }, set: { v in focus.update { $0.tracking.enabled = v } }))
@@ -596,7 +596,7 @@ private struct FreezeSection: View {
                         .accessibilityIdentifier("focus.freeze")
                 }
             }
-            .disabled(active != nil && state.isLocked)
+            .disabled(active?.locked == true)
             .frame(maxWidth: 720, alignment: .leading)
         }
         .confirmationDialog("Zmrazit Mac na \(FocusText.minutes(minutes))?", isPresented: $confirming) {

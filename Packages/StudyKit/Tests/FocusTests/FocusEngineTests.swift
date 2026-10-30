@@ -326,6 +326,21 @@ private let duringBlock = FocusPlan(id: "p1", name: "Během učení", listIds: [
         #expect(FocusEngine.evaluate(config, context: FocusContext(now: at(0, 11)), clock: clock).freeze == nil)
     }
 
+    @Test func manualLockAndFreezeApplyWithPlansSwitchedOff() {
+        var config = FocusConfig(enabled: false, lists: [social], plans: [duringBlock])
+        config.locks = [FocusLock(listIds: ["social"], start: at(0, 9), end: at(0, 10)), FocusLock(listIds: [], start: at(0, 9), end: at(0, 10), freeze: true)]
+        let state = FocusEngine.evaluate(config, context: FocusContext(now: at(0, 9, 30), study: .init(paused: false, isWork: true, phaseEnd: nil)), clock: clock)
+        #expect(state.rules.map(\.sources) == [["Ruční zámek"], ["Ruční zmrazení"]])
+    }
+
+    @Test func breakPhaseFollowsLocalTimeAcrossDSTChange() {
+        // V noci na neděli 25. 10. 2026 končí letní čas: sobotní okno 22:00–6:00 má 9 hodin, začátek je pořád 22:00 místního času.
+        let saturday = clock.parseDayKey("2026-10-24")!
+        let window = TimeWindow(weekdays: [5], start: 22 * 60, end: 6 * 60)
+        let t = clock.atMinutes(clock.addDays(saturday, 1), 5 * 60)
+        #expect(window.start(containing: t, clock: clock) == clock.atMinutes(saturday, 22 * 60))
+    }
+
     @Test func planCanFreezeOnSchedule() {
         let plan = FocusPlan(name: "Večer offline", listIds: [], trigger: .schedule([TimeWindow(weekdays: [0], start: 21 * 60, end: 23 * 60)]), freeze: true)
         let config = FocusConfig(enabled: true, plans: [plan])
@@ -357,8 +372,9 @@ private let duringBlock = FocusPlan(id: "p1", name: "Během učení", listIds: [
         #expect(week[0].start == at(0, 0) && week[0].end == at(0, 2))
         #expect(week[1].freeze && week[1].end == at(1, 10))
         #expect(week[2].start == at(6, 22) && week[2].end == at(7, 0))
+        // S vypnutými plány zůstanou jen ruční zámky a zmrazení.
         config.enabled = false
-        #expect(FocusEngine.intervals(config, from: at(0, 0), to: at(7, 0), clock: clock).isEmpty)
+        #expect(FocusEngine.intervals(config, from: at(0, 0), to: at(7, 0), clock: clock).map(\.name) == ["Zmrazení"])
     }
 
     @Test func olderConfigWithoutNewKeysDecodes() throws {

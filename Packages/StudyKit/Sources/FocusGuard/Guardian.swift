@@ -71,16 +71,19 @@ public final class Guardian {
     private var lastReportAt = 0
     private var lastPrunedDay = ""
     private var lastSweep = 0
+    private var refreshing: Task<Void, Never>?
     /// První vyhodnocení po spuštění Strážce neoznamuje (blok, který už běží, nezačal teď).
     private var lastRefreshDone = false
     /// Oznámení „začne za 5 minut“, která už odešla.
-    private var announced: Set<String> = []
+    private var announced: [String: Int] = [:]
     static let announceAheadMs = 5 * 60_000
     /// Nástěnný a monotónní čas při poslední kontrole.
     private var lastClock: (wall: Int, mono: Int)?
     /// Posun hodin dopředu větší než tohle je změna času, ne oprava podle sítě.
     static let clockJumpMs = 120_000
     static let sweepEveryMs = 20_000
+    /// Po přepnutí do Safari nejčastěji jednou za tolik ms (výčet záložek blokuje vlákno Strážce).
+    static let sweepOnActivationMs = 5_000
     /// Poslední zaznamenaný pokus podle cíle – opakované kliknutí v Docku je jeden pokus.
     private var lastAttemptAt: [String: Int] = [:]
     /// Zablokovaná adresa v Safari a od kdy (rozšíření dostane chvilku, než zasáhne Strážce).
@@ -112,8 +115,19 @@ public final class Guardian {
 
     // MARK: - Vyhodnocení
 
-    /// Načte nastavení a stav, vyhodnotí pravidla a při změně je vynutí.
+    /// Načte nastavení a stav, vyhodnotí pravidla a při změně je vynutí. Volání jdou po sobě (oznámení,
+    /// události aplikací i pravidelná kontrola se jinak prolnou na `await` a porovnávaly by se stejným stavem).
     public func refresh() async {
+        let previous = refreshing
+        let task = Task { [weak self] in
+            await previous?.value
+            await self?.refreshNow()
+        }
+        refreshing = task
+        await task.value
+    }
+
+    private func refreshNow() async {
         let t = now
         lastRefresh = t
         let previous = config
@@ -155,9 +169,14 @@ public final class Guardian {
     /// Oznámení: blokování začalo / skončilo (podle názvů seznamů) a co začne do 5 minut.
     private func notifyChanges(from old: ActiveFocus, to new: ActiveFocus, at t: Int) {
         guard config.notify, let notifier = d.notifier else { return }
+        // Přestávky uvnitř okna se neoznamují (jinak by šlo oznámení každou hodinu); začátek okna ohlásí „za 5 minut“.
+        let breakPlans = Set(config.plans.filter { $0.breaks != nil }.map(\.name))
+        func notable(_ rules: [ActiveRule]) -> [String] {
+            rules.filter { !Set($0.sources).isSubset(of: breakPlans) }.map(\.list.name)
+        }
         let before = Set(old.rules.map(\.list.name)), after = Set(new.rules.map(\.list.name))
-        let started = new.rules.map(\.list.name).filter { !before.contains($0) }
-        let ended = old.rules.map(\.list.name).filter { !after.contains($0) }
+        let started = notable(new.rules).filter { !before.contains($0) }
+        let ended = notable(old.rules).filter { !after.contains($0) }
         if !started.isEmpty {
             let until = new.rules.filter { started.contains($0.list.name) }.compactMap(\.until).max().map { " " + FocusFormat.until($0, now: t, clock: d.clock) } ?? ""
             let title = started.contains("Zmrazení") ? "Mac je zmrazený\(until)" : "Blokování začalo\(until)"
@@ -166,8 +185,9 @@ public final class Guardian {
         if !ended.isEmpty, new.rules.isEmpty {
             notifier.post(id: "focus-end", title: "Blokování skončilo", body: Array(Set(ended)).sorted().joined(separator: ", "))
         }
-        for next in FocusEngine.upcoming(config, now: t, within: Self.announceAheadMs, clock: d.clock) where !announced.contains(next.key) {
-            announced.insert(next.key)
+        announced = announced.filter { $0.value > t }
+        for next in FocusEngine.upcoming(config, now: t, within: Self.announceAheadMs, clock: d.clock) where announced[next.key] == nil {
+            announced[next.key] = next.start
             let minutes = max(1, (next.start - t + StudyClock.minute - 1) / StudyClock.minute)
             notifier.post(id: "focus-soon-\(next.key)", title: "Za \(minutes) min začne blokování", body: next.name)
         }
@@ -180,7 +200,7 @@ public final class Guardian {
         let front = d.apps.frontmost()
         for app in d.apps.running() {
             guard let hit = state.check(app: app.bundleId, name: app.name) else { continue }
-            if hit.appAction == .quit { d.apps.quit(app) } else { d.apps.hide(app) }
+            block(app, hit)
             if app.pid == front?.pid { await showShield(hit, attempt: attemptsToday[hit.target.key] ?? 0) }
         }
     }
@@ -190,7 +210,7 @@ public final class Guardian {
     /// Aplikace přešla do popředí (nebo se spustila).
     public func appActivated(_ app: RunningApp) async {
         // Safari po spuštění obnoví záložky z minula – ty zablokované hned zavřít.
-        if app.bundleId == SystemSafari.bundleId { sweepSafari() }
+        if app.bundleId == SystemSafari.bundleId, now - lastSweep >= Self.sweepOnActivationMs { sweepSafari() }
         guard let hit = state.check(app: app.bundleId, name: app.name) else {
             if d.shield.isShown, !Self.isGuard(app.bundleId) {
                 d.shield.close()
@@ -198,9 +218,16 @@ public final class Guardian {
             }
             return
         }
-        if hit.appAction == .quit { d.apps.quit(app) } else { d.apps.hide(app) }
+        block(app, hit)
         let attempt = await recordAttempt(hit, at: now)
         await showShield(hit, attempt: attempt)
+    }
+
+    /// Schovat nebo ukončit. Systémové aplikace (Finder při zmrazení) se neschovávají – macOS by Finder hned
+    /// znovu aktivoval a schovávání by se točilo dokola; zakryje je blokovací obrazovka.
+    private func block(_ app: RunningApp, _ hit: FocusHit) {
+        if ActiveFocus.isAlwaysAllowed(app.bundleId) { return }
+        if hit.appAction == .quit { d.apps.quit(app) } else { d.apps.hide(app) }
     }
 
     private func showShield(_ hit: FocusHit, attempt: Int, url: String? = nil) async {

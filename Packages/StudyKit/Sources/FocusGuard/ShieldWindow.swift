@@ -32,7 +32,8 @@ public final class ShieldWindow: ShieldControl {
         self.window = window
         let main = NSScreen.main ?? NSScreen.screens.first
         if let main { window.setFrame(main.frame, display: true) }
-        coverOtherScreens(except: main)
+        // Zmrazení zakryje i další monitory; běžné blokování jen hlavní (na ostatních jde dál pracovat).
+        if info.frozenApps != nil { coverOtherScreens(except: main) } else { for cover in covers { cover.orderOut(nil) } }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
@@ -70,7 +71,8 @@ public final class ShieldWindow: ShieldControl {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         // Vždy tmavá (barvy Palette se řídí vzhledem okna, ne jen prostředím SwiftUI).
         window.appearance = NSAppearance(named: .darkAqua)
-        window.onEscape = { [weak self] in self?.close() }
+        // Zmrazení Esc nezavře – ven vede jen povolená aplikace, Study Tracker nebo odemknutí.
+        window.onEscape = { [weak self] in if self?.model.info.frozenApps == nil { self?.close() } }
         let view = ShieldView(model: model, actions: ShieldView.Actions(
             close: { [weak self] in self?.close() },
             back: { [weak self] in
@@ -161,9 +163,11 @@ struct ShieldView: View {
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 460)
                     HStack(spacing: 10) {
-                        Button("Zavřít", action: actions.close)
-                            .buttonStyle(.study(.ghost))
-                            .keyboardShortcut(.cancelAction)
+                        if info.frozenApps == nil {
+                            Button("Zavřít", action: actions.close)
+                                .buttonStyle(.study(.ghost))
+                                .keyboardShortcut(.cancelAction)
+                        }
                         Button("Zpět k učení", action: actions.back)
                             .buttonStyle(.study(.primary))
                             .keyboardShortcut(.defaultAction)
