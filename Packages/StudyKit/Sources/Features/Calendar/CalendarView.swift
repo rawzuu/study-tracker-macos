@@ -2,6 +2,7 @@ import AppModel
 import Core
 import DesignSystem
 import Engine
+import Focus
 import SwiftUI
 
 /// Požadavek ukázat v kalendáři týden s daným dnem; každý odkaz je nový (i na stejný týden).
@@ -21,6 +22,7 @@ public struct CalendarView: View {
     @Environment(TimerStore.self) private var timer
     @Environment(Toasts.self) private var toasts
     @Environment(AppleCalendarSync.self) private var appleCalendar
+    @Environment(FocusController.self) private var focusing: FocusController?
     let openPage: (String) -> Void
 
     @State private var mode: Mode = .week
@@ -102,8 +104,9 @@ public struct CalendarView: View {
                     calendarHeader(title: state.title, isCurrent: state.isCurrentWeek, summary: "odučeno \(state.studied) · plán \(state.planned)") {
                         weekStart = clock.addDays(week, $0 * 7)
                     }
-                    WeekGrid(state: state, now: now, clock: clock, actions: gridActions(now: now), scrolls: snapshotNow == nil)
-                    WeekLegend(state: state)
+                    let blocking = focusing.map { FocusEngine.intervals($0.config, from: week, to: clock.addDays(week, 7), clock: clock) } ?? []
+                    WeekGrid(state: state, now: now, clock: clock, actions: gridActions(now: now), scrolls: snapshotNow == nil, focus: blocking)
+                    WeekLegend(state: state, showsFocus: !blocking.isEmpty)
                 case .month:
                     let month = monthStart ?? clock.startOfMonth(now)
                     let state = CalendarMonthState(document: store.document, monthStart: month, layer: layer, now: now, clock: clock)
@@ -346,6 +349,7 @@ private struct NewEntrySheet: View {
 
 private struct WeekLegend: View {
     let state: CalendarWeekState
+    var showsFocus = false
 
     var body: some View {
         WrapLayout(spacing: 16, lineSpacing: 8) {
@@ -367,6 +371,10 @@ private struct WeekLegend: View {
                     .clipShape(RoundedRectangle(cornerRadius: 2))
                 }
                 .help("Události z ostatních kalendářů v Apple Kalendáři – ranní plán se jim vyhne.")
+            }
+            if showsFocus {
+                key("Soustředění blokuje") { HStack(spacing: 0) { Spacer(); Palette.focus.frame(width: 3) } }
+                    .help("Časová okna plánů a ruční zámky ze Soustředění.")
             }
             Rectangle().fill(Palette.line).frame(width: 1, height: 14)
             if state.legend.isEmpty {

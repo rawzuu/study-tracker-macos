@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import CoreServices
 import Darwin
 import Focus
@@ -91,9 +92,11 @@ public struct ShieldInfo: Sendable, Equatable {
     public var unlock: UnlockStep
     /// Špatně opsaný text, špatné heslo.
     public var error: String?
+    /// Mac je zmrazený: aplikace, které zůstaly povolené (obrazovka je nabídne). `nil` = běžné blokování.
+    public var frozenApps: [FocusApp]?
 
     public init(name: String, isSite: Bool, lists: [String], attempt: Int, until: Int?, locked: Bool,
-                unlock: UnlockStep = .unavailable(""), error: String? = nil) {
+                unlock: UnlockStep = .unavailable(""), error: String? = nil, frozenApps: [FocusApp]? = nil) {
         self.name = name
         self.isSite = isSite
         self.lists = lists
@@ -102,7 +105,14 @@ public struct ShieldInfo: Sendable, Equatable {
         self.locked = locked
         self.unlock = unlock
         self.error = error
+        self.frozenApps = frozenApps
     }
+}
+
+/// Oznámení v Centru oznámení (začátek a konec blokování).
+@MainActor
+public protocol FocusNotifier: AnyObject {
+    func post(id: String, title: String, body: String)
 }
 
 /// Tlačítka blokovací obrazovky → Strážce.
@@ -111,6 +121,8 @@ public protocol ShieldActions: AnyObject {
     func shieldRequestUnlock()
     func shieldSubmit(typed: String)
     func shieldSubmit(password: String)
+    /// Při zmrazení: otevřít povolenou aplikaci.
+    func shieldOpen(bundleId: String)
 }
 
 // MARK: - Systém
@@ -234,5 +246,24 @@ public final class SystemSafari: SafariControl {
     private func run(_ source: String) -> NSAppleEventDescriptor? {
         var error: NSDictionary?
         return NSAppleScript(source: source)?.executeAndReturnError(&error)
+    }
+}
+
+/// Oznámení přes UserNotifications; o povolení se Strážce zeptá až s prvním oznámením.
+public final class SystemNotifier: FocusNotifier {
+    private var authorization: Task<Bool, Never>?
+
+    public init() {}
+
+    public func post(id: String, title: String, body: String) {
+        let ask = authorization ?? Task { (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert])) ?? false }
+        authorization = ask
+        Task {
+            guard await ask.value else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+        }
     }
 }

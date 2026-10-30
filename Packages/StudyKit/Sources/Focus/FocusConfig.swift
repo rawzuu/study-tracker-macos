@@ -19,9 +19,14 @@ public struct FocusConfig: Codable, Sendable, Equatable {
     public var tracking: Tracking
     /// Strážce čte adresu aktivní záložky Safari (pojistka k rozšíření a měření webů; chce souhlas Automatizace).
     public var watchSafari: Bool
+    /// Zmrazení celého Macu: co zůstane povolené a jak přísné je.
+    public var freeze: FreezeSettings
+    /// Oznámení: blokování začne za 5 minut, začalo, skončilo.
+    public var notify: Bool
 
     public init(enabled: Bool = false, lists: [FocusList] = [], plans: [FocusPlan] = [], locks: [FocusLock] = [],
-                examBoost: ExamBoost? = nil, protection: Protection = .off, tracking: Tracking = .default, watchSafari: Bool = true) {
+                examBoost: ExamBoost? = nil, protection: Protection = .off, tracking: Tracking = .default, watchSafari: Bool = true,
+                freeze: FreezeSettings = FreezeSettings(), notify: Bool = true) {
         self.enabled = enabled
         self.lists = lists
         self.plans = plans
@@ -30,6 +35,20 @@ public struct FocusConfig: Codable, Sendable, Equatable {
         self.protection = protection
         self.tracking = tracking
         self.watchSafari = watchSafari
+        self.freeze = freeze
+        self.notify = notify
+    }
+
+    /// Chybějící klíče (nastavení ze starší verze) = výchozí hodnoty.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(enabled: try c.decode(Bool.self, forKey: .enabled), lists: try c.decode([FocusList].self, forKey: .lists),
+                  plans: try c.decode([FocusPlan].self, forKey: .plans), locks: try c.decode([FocusLock].self, forKey: .locks),
+                  examBoost: try c.decodeIfPresent(ExamBoost.self, forKey: .examBoost), protection: try c.decode(Protection.self, forKey: .protection),
+                  tracking: try c.decode(Tracking.self, forKey: .tracking), watchSafari: try c.decode(Bool.self, forKey: .watchSafari),
+                  freeze: try c.decodeIfPresent(FreezeSettings.self, forKey: .freeze) ?? FreezeSettings(),
+                  notify: try c.decodeIfPresent(Bool.self, forKey: .notify) ?? true)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? Self.currentVersion
     }
 
     public static let empty = FocusConfig()
@@ -67,9 +86,12 @@ public struct FocusList: Codable, Sendable, Equatable, Identifiable {
     public var keywords: [String]
     public var appAction: AppAction
     public var strictness: Strictness
+    /// Zmrazení celého Macu: povolené jsou jen `apps` a Study Tracker – i Finder a Nastavení systému se schovají.
+    public var freeze: Bool
 
     public init(id: String = UUID().uuidString, name: String, mode: Mode = .block, apps: [FocusApp] = [], sites: [String] = [],
-                allowedSites: [String] = [], keywords: [String] = [], appAction: AppAction = .shield, strictness: Strictness = .soft) {
+                allowedSites: [String] = [], keywords: [String] = [], appAction: AppAction = .shield, strictness: Strictness = .soft,
+                freeze: Bool = false) {
         self.id = id
         self.name = name
         self.mode = mode
@@ -79,6 +101,25 @@ public struct FocusList: Codable, Sendable, Equatable, Identifiable {
         self.keywords = keywords
         self.appAction = appAction
         self.strictness = strictness
+        self.freeze = freeze
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(String.self, forKey: .id), name: try c.decode(String.self, forKey: .name),
+                  mode: try c.decode(Mode.self, forKey: .mode), apps: try c.decode([FocusApp].self, forKey: .apps),
+                  sites: try c.decode([String].self, forKey: .sites), allowedSites: try c.decodeIfPresent([String].self, forKey: .allowedSites) ?? [],
+                  keywords: try c.decodeIfPresent([String].self, forKey: .keywords) ?? [],
+                  appAction: try c.decodeIfPresent(AppAction.self, forKey: .appAction) ?? .shield,
+                  strictness: try c.decodeIfPresent(Strictness.self, forKey: .strictness) ?? .soft,
+                  freeze: try c.decodeIfPresent(Bool.self, forKey: .freeze) ?? false)
+    }
+
+    /// Seznam, kterým se Mac zmrazí (povolené aplikace z nastavení Zmrazení).
+    public static let freezeId = "freeze"
+
+    public static func freezeList(_ settings: FreezeSettings) -> FocusList {
+        FocusList(id: freezeId, name: "Zmrazení", mode: .allowOnly, apps: settings.allowedApps, strictness: settings.strictness, freeze: true)
     }
 
     public var siteRules: [SiteRule] { sites.compactMap(SiteRule.init) }
@@ -206,13 +247,50 @@ public struct FocusPlan: Codable, Sendable, Equatable, Identifiable {
     public var trigger: Trigger
     /// Přísnost pro celý plán místo přísnosti jednotlivých seznamů (`nil` = podle seznamů).
     public var strictness: Strictness?
+    /// Místo seznamů (nebo k nim) zmrazit celý Mac.
+    public var freeze: Bool
+    /// Přestávky v časových oknech: po `work` minutách `rest` minut volna (jako Pomodoro). `nil` = bez přestávek.
+    public var breaks: Breaks?
 
-    public init(id: String = UUID().uuidString, name: String, enabled: Bool = true, listIds: [String], trigger: Trigger, strictness: Strictness? = nil) {
+    public init(id: String = UUID().uuidString, name: String, enabled: Bool = true, listIds: [String], trigger: Trigger, strictness: Strictness? = nil,
+                freeze: Bool = false, breaks: Breaks? = nil) {
         self.id = id
         self.name = name
         self.enabled = enabled
         self.listIds = listIds
         self.trigger = trigger
+        self.strictness = strictness
+        self.freeze = freeze
+        self.breaks = breaks
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(String.self, forKey: .id), name: try c.decode(String.self, forKey: .name),
+                  enabled: try c.decode(Bool.self, forKey: .enabled), listIds: try c.decode([String].self, forKey: .listIds),
+                  trigger: try c.decode(Trigger.self, forKey: .trigger), strictness: try c.decodeIfPresent(Strictness.self, forKey: .strictness),
+                  freeze: try c.decodeIfPresent(Bool.self, forKey: .freeze) ?? false, breaks: try c.decodeIfPresent(Breaks.self, forKey: .breaks))
+    }
+}
+
+/// Přestávky během časového okna: blokuje se `work` minut, pak je `rest` minut volno, a znovu od začátku okna.
+public struct Breaks: Codable, Sendable, Equatable {
+    public var work: Int
+    public var rest: Int
+
+    public init(work: Int = 50, rest: Int = 10) {
+        self.work = work
+        self.rest = rest
+    }
+}
+
+/// Zmrazení celého Macu (jako Frozen Turkey): povolené aplikace a přísnost. Study Tracker je povolený vždy.
+public struct FreezeSettings: Codable, Sendable, Equatable {
+    public var allowedApps: [FocusApp]
+    public var strictness: Strictness
+
+    public init(allowedApps: [FocusApp] = [], strictness: Strictness = .delay) {
+        self.allowedApps = allowedApps
         self.strictness = strictness
     }
 }
@@ -255,13 +333,23 @@ public struct FocusLock: Codable, Sendable, Equatable, Identifiable {
     public var end: Int
     /// `nil` = podle seznamů.
     public var strictness: Strictness?
+    /// Zmrazit celý Mac (seznamy se pak neuvádějí).
+    public var freeze: Bool
 
-    public init(id: String = UUID().uuidString, listIds: [String], start: Int, end: Int, strictness: Strictness? = nil) {
+    public init(id: String = UUID().uuidString, listIds: [String], start: Int, end: Int, strictness: Strictness? = nil, freeze: Bool = false) {
         self.id = id
         self.listIds = listIds
         self.start = start
         self.end = end
         self.strictness = strictness
+        self.freeze = freeze
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(String.self, forKey: .id), listIds: try c.decode([String].self, forKey: .listIds),
+                  start: try c.decode(Int.self, forKey: .start), end: try c.decode(Int.self, forKey: .end),
+                  strictness: try c.decodeIfPresent(Strictness.self, forKey: .strictness), freeze: try c.decodeIfPresent(Bool.self, forKey: .freeze) ?? false)
     }
 }
 

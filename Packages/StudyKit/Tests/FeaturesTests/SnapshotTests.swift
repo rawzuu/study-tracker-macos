@@ -91,8 +91,15 @@ struct SnapshotTests {
         timer.configure(TimerSetup(subjectId: "demo-lat", topic: "Deklinace"))
         timer.start()
         t = now
+        // Soustředění: večerní okno každý den a ruční zmrazení dnes odpoledne.
+        let dir = URL.temporaryDirectory.appending(path: "focus-snap-\(UUID().uuidString)")
+        let files = FocusFiles(directory: dir, group: "snap")
+        let today = app.clock.startOfDay(now)
+        var config = FocusConfig(enabled: true, plans: [FocusPlan(name: "Večer", listIds: [], trigger: .schedule([TimeWindow(weekdays: Array(0...6), start: 20 * 60, end: 22 * 60)]))])
+        config.locks = [FocusLock(listIds: [], start: app.clock.atMinutes(today, 14 * 60), end: app.clock.atMinutes(today, 16 * 60), freeze: true)]
+        try files.write(config)
         try render(CalendarView(snapshotNow: now, mode: variant == "week" ? .week : .month).environment(app).environment(timer).environment(Toasts())
-                    .environment(await calendars(app, now: now)),
+                    .environment(await calendars(app, now: now)).environment(FocusController(files: files)),
                    name: "calendar-\(variant)", size: CGSize(width: 1440, height: variant == "week" ? 1900 : 1500))
     }
 

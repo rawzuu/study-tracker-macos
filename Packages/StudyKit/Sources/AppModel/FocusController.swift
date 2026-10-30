@@ -117,6 +117,59 @@ public final class FocusController {
         }
     }
 
+    /// Zmrazí celý Mac od teď na `minutes` (povolené aplikace a přísnost podle nastavení Zmrazení).
+    public func freeze(minutes: Int, now: Int) {
+        update {
+            $0.locks.removeAll { $0.end <= now }
+            $0.locks.append(FocusLock(listIds: [], start: now, end: now + minutes * 60_000, freeze: true))
+        }
+    }
+
+    // MARK: - Export a import seznamů
+
+    /// Seznamy jako JSON (sdílení mezi Macy nebo se spolužáky). Hesla odemykání se neexportují.
+    public nonisolated static func exportLists(_ lists: [FocusList]) throws -> Data {
+        let clean = lists.map { list -> FocusList in
+            var l = list
+            l.strictness.password = nil
+            return l
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(ListsFile(lists: clean))
+    }
+
+    /// Načte seznamy z JSON exportu, nebo z prostého textu (weby po řádcích → jeden nový seznam).
+    /// Vždy jako nové seznamy (nové id), stávající se nemění.
+    public nonisolated static func importLists(_ data: Data, name: String) -> [FocusList] {
+        if let file = try? JSONDecoder().decode(ListsFile.self, from: data) {
+            return file.lists.map { list in
+                var l = list
+                l.id = UUID().uuidString
+                l.freeze = false
+                return l
+            }
+        }
+        let text = String(decoding: data, as: UTF8.self)
+        let sites = text.split(whereSeparator: { $0.isNewline || $0.isWhitespace || $0 == "," || $0 == ";" })
+            .compactMap { SiteRule(String($0))?.text }
+        var seen = Set<String>()
+        let unique = sites.filter { seen.insert($0).inserted }
+        return unique.isEmpty ? [] : [FocusList(name: name, sites: unique)]
+    }
+
+    public func importLists(_ data: Data, name: String) -> Int {
+        let lists = Self.importLists(data, name: name)
+        if !lists.isEmpty { update { $0.lists += lists } }
+        return lists.count
+    }
+
+    struct ListsFile: Codable {
+        var format = "study-tracker-focus-lists"
+        var version = 1
+        var lists: [FocusList]
+    }
+
     /// Nový seznam ze šablony (vrací jeho id).
     @discardableResult
     public func addList(from template: FocusTemplates.Template) -> String {

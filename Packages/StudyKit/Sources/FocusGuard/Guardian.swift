@@ -26,12 +26,14 @@ public final class Guardian {
         public var bootTime: () -> Int
         /// Monotónní čas v ms (běží i ve spánku, nejde posunout) – pozná posunutí hodin Macu.
         public var monotonic: () -> Int
+        public var notifier: (any FocusNotifier)?
 
         public init(apps: any AppControl, safari: any SafariControl, shield: any ShieldControl, store: FocusStore, files: FocusFiles?,
                     readConfig: @escaping () -> FocusConfig?, readSnapshot: @escaping () -> WidgetSnapshot?,
                     now: @escaping () -> Int, idleSeconds: @escaping () -> Double, clock: StudyClock, version: String,
                     bootTime: @escaping () -> Int = { 0 },
-                    monotonic: @escaping () -> Int = { Int(clock_gettime_nsec_np(CLOCK_MONOTONIC) / 1_000_000) }) {
+                    monotonic: @escaping () -> Int = { Int(clock_gettime_nsec_np(CLOCK_MONOTONIC) / 1_000_000) },
+                    notifier: (any FocusNotifier)? = nil) {
             self.apps = apps
             self.safari = safari
             self.shield = shield
@@ -45,6 +47,7 @@ public final class Guardian {
             self.version = version
             self.bootTime = bootTime
             self.monotonic = monotonic
+            self.notifier = notifier
         }
     }
 
@@ -68,6 +71,11 @@ public final class Guardian {
     private var lastReportAt = 0
     private var lastPrunedDay = ""
     private var lastSweep = 0
+    /// První vyhodnocení po spuštění Strážce neoznamuje (blok, který už běží, nezačal teď).
+    private var lastRefreshDone = false
+    /// Oznámení „začne za 5 minut“, která už odešla.
+    private var announced: Set<String> = []
+    static let announceAheadMs = 5 * 60_000
     /// Nástěnný a monotónní čas při poslední kontrole.
     private var lastClock: (wall: Int, mono: Int)?
     /// Posun hodin dopředu větší než tohle je změna času, ne oprava podle sítě.
@@ -128,6 +136,8 @@ public final class Guardian {
                 next = FocusEngine.evaluate(config, context: FocusContext(snapshot: d.readSnapshot(), now: t, usageToday: usage),
                                             commitments: commitments, exceptions: exceptions, clock: d.clock)
             }
+            if lastRefreshDone { notifyChanges(from: state, to: next, at: t) }
+            lastRefreshDone = true
             let changed = next.rules != state.rules || next.protectionApps != state.protectionApps || next.browserApps != state.browserApps || next.exceptions != state.exceptions
             state = next
             if changed { await enforceRunning() }
@@ -140,6 +150,27 @@ public final class Guardian {
             try? await d.store.prune(keepDays: config.tracking.retentionDays, now: t, clock: d.clock)
         }
         writeReport()
+    }
+
+    /// Oznámení: blokování začalo / skončilo (podle názvů seznamů) a co začne do 5 minut.
+    private func notifyChanges(from old: ActiveFocus, to new: ActiveFocus, at t: Int) {
+        guard config.notify, let notifier = d.notifier else { return }
+        let before = Set(old.rules.map(\.list.name)), after = Set(new.rules.map(\.list.name))
+        let started = new.rules.map(\.list.name).filter { !before.contains($0) }
+        let ended = old.rules.map(\.list.name).filter { !after.contains($0) }
+        if !started.isEmpty {
+            let until = new.rules.filter { started.contains($0.list.name) }.compactMap(\.until).max().map { " " + FocusFormat.until($0, now: t, clock: d.clock) } ?? ""
+            let title = started.contains("Zmrazení") ? "Mac je zmrazený\(until)" : "Blokování začalo\(until)"
+            notifier.post(id: "focus-start", title: title, body: Array(Set(started)).sorted().joined(separator: ", "))
+        }
+        if !ended.isEmpty, new.rules.isEmpty {
+            notifier.post(id: "focus-end", title: "Blokování skončilo", body: Array(Set(ended)).sorted().joined(separator: ", "))
+        }
+        for next in FocusEngine.upcoming(config, now: t, within: Self.announceAheadMs, clock: d.clock) where !announced.contains(next.key) {
+            announced.insert(next.key)
+            let minutes = max(1, (next.start - t + StudyClock.minute - 1) / StudyClock.minute)
+            notifier.post(id: "focus-soon-\(next.key)", title: "Za \(minutes) min začne blokování", body: next.name)
+        }
     }
 
     /// Pravidla začala (nebo se změnila): běžící zakázané aplikace hned schovat nebo ukončit, zablokované
@@ -182,8 +213,10 @@ public final class Guardian {
         guard let (hit, attempt, _) = shown else { return }
         let step = Unlock.step(hit, request: requests[hit.target.key], allowanceLeft: await allowanceLeft(hit), now: now,
                                bootTime: d.bootTime(), clock: d.clock)
-        d.shield.show(ShieldInfo(name: hit.name, isSite: { if case .site = hit.target { true } else { false } }(), lists: hit.listNames,
-                                 attempt: max(1, attempt), until: hit.until, locked: hit.strictness.locked, unlock: step, error: error))
+        let isSite = if case .site = hit.target { true } else { false }
+        let frozen = hit.listIds.contains(FocusList.freezeId) ? state.freeze?.apps ?? [] : nil
+        d.shield.show(ShieldInfo(name: hit.name, isSite: isSite, lists: hit.listNames, attempt: max(1, attempt), until: hit.until,
+                                 locked: hit.strictness.locked, unlock: step, error: error, frozenApps: frozen))
     }
 
     private func allowanceLeft(_ hit: FocusHit) async -> Int? {
@@ -420,4 +453,9 @@ extension Guardian: ShieldActions {
     public func shieldRequestUnlock() { Task { await requestUnlock() } }
     public func shieldSubmit(typed: String) { Task { await submit(typed: typed) } }
     public func shieldSubmit(password: String) { Task { await submit(password: password) } }
+    public func shieldOpen(bundleId: String) {
+        shown = nil
+        d.shield.close()
+        d.apps.open(bundleId: bundleId)
+    }
 }

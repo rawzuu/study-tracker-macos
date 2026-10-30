@@ -50,6 +50,11 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
     func blank(_ tabs: [SafariTab]) { blanked += tabs }
 }
 
+@MainActor private final class FakeNotifier: FocusNotifier {
+    var posted: [(id: String, title: String, body: String)] = []
+    func post(id: String, title: String, body: String) { posted.append((id, title, body)) }
+}
+
 @MainActor private final class FakeShield: ShieldControl {
     var shown: [ShieldInfo] = []
     var isShown = false
@@ -69,6 +74,7 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
     let apps = FakeApps()
     let safari = FakeSafari()
     let shield = FakeShield()
+    let notifier = FakeNotifier()
     let store: FocusStore
     let files: FocusFiles
     let dir: URL
@@ -83,7 +89,7 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
             apps: apps, safari: safari, shield: shield, store: store, files: files,
             readConfig: { [unowned self] in self.config }, readSnapshot: { nil },
             now: { [unowned self] in self.t }, idleSeconds: { [unowned self] in self.idle }, clock: clock, version: "test",
-            bootTime: { [unowned self] in self.boot }, monotonic: { [unowned self] in self.mono }))
+            bootTime: { [unowned self] in self.boot }, monotonic: { [unowned self] in self.mono }, notifier: notifier))
     }
 
     deinit { try? FileManager.default.removeItem(at: dir) }
@@ -107,6 +113,47 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
 }
 
 @MainActor @Suite struct GuardianTests {
+    @Test func notifiesBeforeAtStartAndAtEnd() async throws {
+        let h = try Harness(locked())
+        h.t = at(8, 50)
+        await h.guardian.refresh()
+        h.t = at(8, 56)
+        await h.guardian.refresh()
+        h.t = at(8, 57)
+        await h.guardian.refresh()
+        #expect(h.notifier.posted.map(\.title) == ["Za 4 min začne blokování"])
+        h.t = at(9)
+        await h.guardian.refresh()
+        #expect(h.notifier.posted.last?.title == "Blokování začalo do 12:00" && h.notifier.posted.last?.body == "Sociální sítě")
+        h.t = at(12)
+        await h.guardian.refresh()
+        #expect(h.notifier.posted.last?.title == "Blokování skončilo")
+        // Vypnutá oznámení.
+        h.config.notify = false
+        h.config.locks.append(FocusLock(listIds: ["social"], start: at(12, 1), end: at(13)))
+        h.t = at(12, 1)
+        await h.guardian.refresh()
+        #expect(h.notifier.posted.count == 3)
+    }
+
+    @Test func freezeHidesFinderAndOffersAllowedApps() async throws {
+        let finder = RunningApp(pid: 1, bundleId: "com.apple.finder", name: "Finder")
+        var config = FocusConfig(enabled: true, freeze: FreezeSettings(allowedApps: [FocusApp(bundleId: "com.apple.Notes", name: "Poznámky")]))
+        config.locks = [FocusLock(listIds: [], start: at(9), end: at(12), freeze: true)]
+        config.tracking.enabled = false
+        let h = try Harness(config)
+        h.apps.all = [finder, notes, discord]
+        h.apps.front = finder
+        await h.guardian.refresh()
+        #expect(Set(h.apps.hidden) == ["com.apple.finder", "com.hnc.Discord"])
+        #expect(h.shield.shown.last?.frozenApps == [FocusApp(bundleId: "com.apple.Notes", name: "Poznámky")])
+        #expect(h.shield.shown.last?.name == "Finder")
+        h.guardian.shieldOpen(bundleId: "com.apple.Notes")
+        #expect(!h.shield.isShown && h.apps.opened == ["com.apple.Notes"])
+        await h.guardian.appActivated(notes)
+        #expect(!h.shield.isShown)
+    }
+
     @Test func movingTheClockForwardDoesNotEndStrictLock() async throws {
         let h = try Harness(locked(strictness: .strict))
         h.t = at(10)

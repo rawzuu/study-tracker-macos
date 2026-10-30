@@ -303,6 +303,72 @@ private let duringBlock = FocusPlan(id: "p1", name: "Během učení", listIds: [
     }
 }
 
+@Suite struct FreezeAndBreaksTests {
+    private let notes = FocusApp(bundleId: "com.apple.Notes", name: "Poznámky")
+
+    @Test func manualFreezeHidesEverythingButAllowedAppsAndStudyTracker() throws {
+        var config = FocusConfig(enabled: true, lists: [social], freeze: FreezeSettings(allowedApps: [notes], strictness: .strict))
+        config.locks = [FocusLock(listIds: [], start: at(0, 9), end: at(0, 11), freeze: true)]
+        let state = FocusEngine.evaluate(config, context: FocusContext(now: at(0, 10)), clock: clock)
+        #expect(state.isLocked)
+        #expect(state.freeze?.until == at(0, 11) && state.freeze?.apps == [notes])
+        let finder = try #require(state.check(app: "com.apple.finder", name: "Finder"))
+        #expect(finder.listNames == ["Zmrazení"] && finder.appAction == .shield && finder.strictness.locked)
+        #expect(state.check(app: "com.apple.systempreferences", name: "Nastavení systému") != nil)
+        #expect(state.check(app: "com.apple.Notes", name: "Poznámky") == nil)
+        #expect(state.check(app: "cz.rawzuu.studytracker", name: "Study Tracker") == nil)
+        // Weby se zmrazením neblokují (Safari je zakázané jako aplikace, pokud není povolené).
+        #expect(state.check(host: "wikipedia.org") == nil)
+        #expect(state.check(app: "com.apple.Safari", name: "Safari") != nil)
+        // Strict freeze se známým koncem je závazek.
+        #expect(FocusEngine.newCommitments(state, existing: []).map(\.list.id) == ["freeze"])
+        // Po konci nic.
+        #expect(FocusEngine.evaluate(config, context: FocusContext(now: at(0, 11)), clock: clock).freeze == nil)
+    }
+
+    @Test func planCanFreezeOnSchedule() {
+        let plan = FocusPlan(name: "Večer offline", listIds: [], trigger: .schedule([TimeWindow(weekdays: [0], start: 21 * 60, end: 23 * 60)]), freeze: true)
+        let config = FocusConfig(enabled: true, plans: [plan])
+        #expect(FocusEngine.evaluate(config, context: FocusContext(now: at(0, 22)), clock: clock).freeze?.until == at(0, 23))
+        #expect(FocusEngine.evaluate(config, context: FocusContext(now: at(0, 20)), clock: clock).freeze == nil)
+    }
+
+    @Test func breaksInsideScheduleWindow() {
+        let plan = FocusPlan(name: "Dopoledne", listIds: ["social"], trigger: .schedule([TimeWindow(weekdays: [0], start: 8 * 60, end: 12 * 60)]),
+                             breaks: Breaks(work: 50, rest: 10))
+        let config = FocusConfig(enabled: true, lists: [social], plans: [plan])
+        func state(_ h: Int, _ m: Int) -> ActiveFocus { FocusEngine.evaluate(config, context: FocusContext(now: at(0, h, m)), clock: clock) }
+        // 8:00–8:50 blokuje (konec = začátek přestávky), 8:50–9:00 volno, 9:00–9:50 znovu.
+        #expect(state(8, 10).rules.first?.until == at(0, 8, 50))
+        #expect(state(8, 55).rules.isEmpty)
+        #expect(state(9, 0).rules.first?.until == at(0, 9, 50))
+        // Poslední cyklus končí s oknem.
+        #expect(state(11, 30).rules.first?.until == at(0, 11, 50))
+        #expect(state(11, 55).rules.isEmpty)
+    }
+
+    @Test func calendarIntervals() {
+        let evening = FocusPlan(name: "Večer", listIds: ["social"], trigger: .schedule([TimeWindow(weekdays: [6], start: 22 * 60, end: 2 * 60)]))
+        var config = FocusConfig(enabled: true, lists: [social], plans: [evening])
+        config.locks = [FocusLock(listIds: [], start: at(1, 9), end: at(1, 10), freeze: true)]
+        // Týden Po–Ne: pondělí 0–2 z neděle předtím, zmrazení v úterý, neděle 22–24.
+        let week = FocusEngine.intervals(config, from: at(0, 0), to: at(7, 0), clock: clock)
+        #expect(week.map(\.name) == ["Večer", "Zmrazení", "Večer"])
+        #expect(week[0].start == at(0, 0) && week[0].end == at(0, 2))
+        #expect(week[1].freeze && week[1].end == at(1, 10))
+        #expect(week[2].start == at(6, 22) && week[2].end == at(7, 0))
+        config.enabled = false
+        #expect(FocusEngine.intervals(config, from: at(0, 0), to: at(7, 0), clock: clock).isEmpty)
+    }
+
+    @Test func olderConfigWithoutNewKeysDecodes() throws {
+        let json = #"{"version":1,"enabled":true,"lists":[{"id":"a","name":"A","mode":"block","apps":[],"sites":["x.com"]}],"plans":[{"id":"p","name":"P","enabled":true,"listIds":["a"],"trigger":{"studyPlan":{}}}],"locks":[{"id":"l","listIds":["a"],"start":1,"end":2}],"protection":{"systemTools":false,"systemSettings":false},"tracking":{"enabled":true,"idleMinutes":5,"retentionDays":180},"watchSafari":true}"#
+        let config = try JSONDecoder().decode(FocusConfig.self, from: Data(json.utf8))
+        #expect(config.freeze == FreezeSettings() && config.notify && config.protection.otherBrowsers)
+        #expect(!config.lists[0].freeze && !config.plans[0].freeze && config.plans[0].breaks == nil && !config.locks[0].freeze)
+    }
+}
+
 @Suite struct UsageMeterTests {
     private let safari = UsageActivity(bundleId: "com.apple.Safari", appName: "Safari", host: "youtube.com")
     private let notes = UsageActivity(bundleId: "com.apple.Notes", appName: "Poznámky")

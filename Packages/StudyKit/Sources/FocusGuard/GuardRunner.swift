@@ -122,7 +122,7 @@ public enum GuardRunner {
                 readConfig: { files.readConfig() }, readSnapshot: { widgets?.readSnapshot() },
                 now: { Int(Date().timeIntervalSince1970 * 1000) }, idleSeconds: { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) },
                 clock: .current, version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?",
-                bootTime: systemBootTime
+                bootTime: systemBootTime, notifier: SystemNotifier()
             ))
             shield.actions = guardian
         }

@@ -1,6 +1,7 @@
 import Core
 import DesignSystem
 import Engine
+import Focus
 import SwiftUI
 
 /// Rozměry a kroky týdenní mřížky (`PlannerPage` na webu).
@@ -63,6 +64,8 @@ struct WeekGrid: View {
     let actions: WeekGridActions
     /// `false` = celá výška bez posouvání (náhledy – ImageRenderer nevykreslí ScrollView).
     var scrolls = true
+    /// Kdy blokuje Soustředění (pruh u pravého okraje dne).
+    var focus: [FocusEngine.Interval] = []
     @State private var drag: BlockDrag?
     @State private var columnWidth: CGFloat = 100
 
@@ -102,7 +105,8 @@ extension WeekGrid {
         HStack(alignment: .top, spacing: 0) {
             HourLabels(first: state.firstHour).frame(width: WeekMetrics.gutter, height: gridHeight)
             ForEach(state.days) { day in
-                DayColumn(day: day, firstHour: state.firstHour, now: now, clock: clock, columnWidth: columnWidth, drag: $drag, actions: actions)
+                DayColumn(day: day, firstHour: state.firstHour, now: now, clock: clock, columnWidth: columnWidth, drag: $drag, actions: actions,
+                          focus: focus.filter { $0.end > day.start && $0.start < clock.addDays(day.start, 1) })
                     .frame(maxWidth: .infinity)
                     .frame(height: gridHeight)
                     // Tažený blok se kreslí nad sousedními dny.
@@ -221,6 +225,7 @@ private struct DayColumn: View {
     let columnWidth: CGFloat
     @Binding var drag: BlockDrag?
     let actions: WeekGridActions
+    var focus: [FocusEngine.Interval] = []
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -230,6 +235,10 @@ private struct DayColumn: View {
                     ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(Palette.line.opacity(0.8)))
                 }
                 ctx.fill(Path(CGRect(x: 0, y: 0, width: 1, height: size.height)), with: .color(Palette.line))
+                for band in focusBands(height: size.height) {
+                    ctx.fill(Path(roundedRect: CGRect(x: size.width - 4, y: band.lowerBound, width: 3, height: band.upperBound - band.lowerBound),
+                                  cornerRadius: 1.5), with: .color(Palette.focus))
+                }
             }
             .background(day.isToday ? Palette.panel : .clear)
             .contentShape(Rectangle())
@@ -248,6 +257,16 @@ private struct DayColumn: View {
                 let y = CGFloat(clock.minutesOfDay(now) / 60 - Double(firstHour)) * WeekMetrics.hourHeight
                 NowLine().offset(y: y).allowsHitTesting(false)
             }
+        }
+    }
+
+    /// Svislé úseky (y) blokování Soustředění v tomto dni.
+    private func focusBands(height: CGFloat) -> [ClosedRange<CGFloat>] {
+        let dayEnd = clock.addDays(day.start, 1)
+        return focus.map { band in
+            let top = band.start <= day.start ? 0 : CGFloat(clock.minutesOfDay(band.start) - Double(firstHour * 60)) / 60 * WeekMetrics.hourHeight
+            let bottom = band.end >= dayEnd ? height : CGFloat(clock.minutesOfDay(band.end) - Double(firstHour * 60)) / 60 * WeekMetrics.hourHeight
+            return max(0, top)...max(max(0, top), min(height, bottom))
         }
     }
 

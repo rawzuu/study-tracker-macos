@@ -189,21 +189,40 @@ public struct ActiveFocus: Codable, Sendable, Equatable {
     ]
 
     public static func isAlwaysAllowed(_ bundleId: String) -> Bool {
-        alwaysAllowed.contains(bundleId) || bundleId == "cz.rawzuu.studytracker" || bundleId.hasPrefix("cz.rawzuu.studytracker.")
+        alwaysAllowed.contains(bundleId) || isOwnApp(bundleId)
+    }
+
+    /// Study Tracker a jeho Strážce.
+    public static func isOwnApp(_ bundleId: String) -> Bool {
+        bundleId == "cz.rawzuu.studytracker" || bundleId.hasPrefix("cz.rawzuu.studytracker.")
+    }
+
+    /// Zmrazení teď platí (do kdy, a které aplikace zůstaly povolené).
+    public var freeze: (until: Int?, apps: [FocusApp])? {
+        let frozen = rules.filter(\.list.freeze)
+        guard let first = frozen.first else { return nil }
+        let until = frozen.contains { $0.until == nil } ? nil : frozen.compactMap(\.until).max()
+        return (until, first.list.apps)
     }
 
     /// Smí se aplikace použít? `nil` = ano.
     public func check(app bundleId: String, name: String) -> FocusHit? {
         var hits: [(ActiveRule, FocusList.AppAction)] = []
-        if !Self.isAlwaysAllowed(bundleId) {
-            for rule in rules {
-                let listed = rule.list.apps.contains { $0.bundleId == bundleId }
-                let blocked = switch rule.list.mode {
+        let allowed = Self.isAlwaysAllowed(bundleId)
+        for rule in rules {
+            let listed = rule.list.apps.contains { $0.bundleId == bundleId }
+            let blocked = if rule.list.freeze {
+                // Zmrazení schová i Finder a Nastavení systému – povolený je jen Study Tracker a vybrané aplikace.
+                !listed && !Self.isOwnApp(bundleId)
+            } else if allowed {
+                false
+            } else {
+                switch rule.list.mode {
                 case .block: listed
                 case .allowOnly: !rule.list.apps.isEmpty && !listed
                 }
-                if blocked { hits.append((rule, rule.list.appAction)) }
             }
+            if blocked { hits.append((rule, rule.list.freeze ? .shield : rule.list.appAction)) }
         }
         if browserApps.contains(where: { $0.bundleId == bundleId }) {
             let web = rules.filter(\.blocksWeb)
@@ -313,13 +332,16 @@ public enum FocusEngine {
             }
         }
 
+        let freezeList = FocusList.freezeList(config.freeze)
         if config.enabled {
             for plan in config.plans where plan.enabled {
-                guard let until = plan.trigger.activeUntil(c, lists: plan.listIds.compactMap(config.list), clock: clock) else { continue }
+                guard let until = plan.activeUntil(c, lists: plan.listIds.compactMap(config.list), clock: clock) else { continue }
                 for id in plan.listIds { if let list = config.list(id) { add(list, plan.strictness, until: until.value, source: plan.name) } }
+                if plan.freeze { add(freezeList, plan.strictness, until: until.value, source: plan.name) }
             }
             for lock in config.locks where lock.start <= c.now && c.now < lock.end {
                 for id in lock.listIds { if let list = config.list(id) { add(list, lock.strictness, until: lock.end, source: "Ruční zámek") } }
+                if lock.freeze { add(freezeList, lock.strictness, until: lock.end, source: "Ruční zmrazení") }
             }
             if let boost = config.examBoost, examSoon(c, within: boost.daysBefore, clock: clock) {
                 for i in rules.indices {
@@ -336,6 +358,73 @@ public enum FocusEngine {
         let protection = rules.contains(where: \.strictness.locked) ? config.protection.apps : []
         let browsers = config.protection.otherBrowsers && rules.contains(where: \.blocksWeb) ? Protection.browserApps : []
         return ActiveFocus(rules: rules, protectionApps: protection, browserApps: browsers, exceptions: exceptions, now: c.now)
+    }
+
+    /// Co začne do `within` ms: ruční zámky a zmrazení a časová okna plánů (pro oznámení předem).
+    public static func upcoming(_ config: FocusConfig, now: Int, within: Int, clock: StudyClock) -> [Upcoming] {
+        guard config.enabled else { return [] }
+        var out: [Upcoming] = []
+        for lock in config.locks where lock.start > now && lock.start <= now + within {
+            out.append(Upcoming(key: "lock:\(lock.id)", name: lock.freeze ? "Zmrazení Macu" : "Ruční zámek", start: lock.start))
+        }
+        let today = clock.startOfDay(now)
+        for plan in config.plans where plan.enabled {
+            guard case let .schedule(windows) = plan.trigger else { continue }
+            for day in [today, clock.addDays(today, 1)] {
+                let weekday = clock.weekdayIndex(day)
+                for w in windows where w.weekdays.contains(weekday) {
+                    let start = clock.atMinutes(day, w.start)
+                    if start > now, start <= now + within { out.append(Upcoming(key: "plan:\(plan.id)@\(start)", name: plan.name, start: start)) }
+                }
+            }
+        }
+        return out.sorted { $0.start < $1.start }
+    }
+
+    /// Kdy se mezi `from` a `to` podle plánu blokuje: časová okna plánů a ruční zámky (pro Kalendář).
+    /// Blok učení a denní limit se dopředu neví; bloky Studijního plánu Kalendář ukazuje sám.
+    public static func intervals(_ config: FocusConfig, from: Int, to: Int, clock: StudyClock) -> [Interval] {
+        guard config.enabled else { return [] }
+        var out: [Interval] = []
+        for lock in config.locks where lock.end > from && lock.start < to {
+            out.append(Interval(start: max(from, lock.start), end: min(to, lock.end), name: lock.freeze ? "Zmrazení" : "Ruční zámek", freeze: lock.freeze))
+        }
+        var day = clock.addDays(clock.startOfDay(from), -1)
+        while day < to {
+            let weekday = clock.weekdayIndex(day)
+            for plan in config.plans where plan.enabled {
+                guard case let .schedule(windows) = plan.trigger else { continue }
+                for w in windows where w.weekdays.contains(weekday) {
+                    let start = clock.atMinutes(day, w.start)
+                    let end = w.overnight ? clock.atMinutes(clock.addDays(day, 1), w.end) : clock.atMinutes(day, w.end)
+                    if end > from, start < to {
+                        out.append(Interval(start: max(from, start), end: min(to, end), name: plan.name, freeze: plan.freeze))
+                    }
+                }
+            }
+            day = clock.addDays(day, 1)
+        }
+        return out.sorted { $0.start < $1.start }
+    }
+
+    public struct Interval: Sendable, Equatable {
+        public var start: Int
+        public var end: Int
+        public var name: String
+        public var freeze: Bool
+
+        public init(start: Int, end: Int, name: String, freeze: Bool) {
+            self.start = start
+            self.end = end
+            self.name = name
+            self.freeze = freeze
+        }
+    }
+
+    public struct Upcoming: Sendable, Equatable {
+        public var key: String
+        public var name: String
+        public var start: Int
     }
 
     /// Nové přísné závazky: přísná pravidla se známým koncem, která ještě nejsou zapamatovaná.
@@ -376,6 +465,21 @@ struct Until {
     var value: Int?
 }
 
+extension FocusPlan {
+    /// Platí plán teď? Jako spouštěč, jen v časových oknech s přestávkami je přestávka volná.
+    func activeUntil(_ c: FocusContext, lists: [FocusList], clock: StudyClock) -> Until? {
+        guard let until = trigger.activeUntil(c, lists: lists, clock: clock) else { return nil }
+        guard let breaks, breaks.work > 0, breaks.rest > 0, case let .schedule(windows) = trigger else { return until }
+        // Začátek okna, ve kterém jsme (u více oken to, které začalo nejdřív a ještě trvá).
+        guard let start = windows.compactMap({ $0.start(containing: c.now, clock: clock) }).min() else { return until }
+        let cycle = (breaks.work + breaks.rest) * StudyClock.minute
+        let position = (c.now - start) % cycle
+        guard position < breaks.work * StudyClock.minute else { return nil }
+        let breakStarts = c.now - position + breaks.work * StudyClock.minute
+        return Until(value: until.value.map { min($0, breakStarts) } ?? breakStarts)
+    }
+}
+
 extension FocusPlan.Trigger {
     /// Platí spouštěč teď? Vrací konec (`Until(nil)` = neznámý), nebo `nil`, když neplatí.
     func activeUntil(_ c: FocusContext, lists: [FocusList], clock: StudyClock) -> Until? {
@@ -399,6 +503,14 @@ extension FocusPlan.Trigger {
 }
 
 extension TimeWindow {
+    /// Délka okna v minutách (přes půlnoc až do konce druhého dne).
+    var minutes: Int { overnight ? end + 1440 - start : end - start }
+
+    /// Začátek výskytu okna, který obsahuje `t`, nebo `nil`.
+    public func start(containing t: Int, clock: StudyClock) -> Int? {
+        end(containing: t, clock: clock).map { $0 - minutes * StudyClock.minute }
+    }
+
     /// Konec výskytu okna, který obsahuje `t`, nebo `nil`.
     public func end(containing t: Int, clock: StudyClock) -> Int? {
         let day = clock.startOfDay(t)

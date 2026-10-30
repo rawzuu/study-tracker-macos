@@ -1,7 +1,9 @@
+import AppKit
 import AppModel
 import DesignSystem
 import Focus
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Soustředění: blokování aplikací a webů a čas u obrazovky – samostatná část aplikace, jen na tomto Macu.
 /// Vynucuje Strážce (pomocník na pozadí); stránka nastavuje seznamy a plány a ukazuje, co právě platí.
@@ -39,6 +41,7 @@ public struct FocusView: View {
                     NowSection(state: state, now: now)
                     FocusListsSection(state: state)
                     FocusPlansSection(state: state, now: now)
+                    FreezeSection(state: state, now: now)
                     FocusStatsSection()
                     GuardSection(now: now)
                     FocusMoreSection(state: state)
@@ -343,6 +346,17 @@ private struct FocusListsSection: View {
                 .fixedSize()
                 .accessibilityIdentifier("focus.addList")
                 Button("Nový") { open(FocusList(name: ""), isNew: true) }.buttonStyle(.study(.ghost, size: .small))
+                Menu {
+                    Button("Exportovat seznamy…") { exportLists() }.disabled(focus.config.lists.isEmpty)
+                    Button("Importovat seznamy nebo weby…") { importLists() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Export a import")
+                .accessibilityLabel("Export a import seznamů")
             }
         }) {
             if focus.config.lists.isEmpty {
@@ -495,6 +509,8 @@ private struct FocusPlansSection: View {
         var parts = [FocusText.trigger(plan.trigger)]
         let names = plan.listIds.compactMap { focus.config.list($0)?.name }
         if !names.isEmpty { parts.append(names.joined(separator: ", ")) }
+        if plan.freeze { parts.append("zmrazí Mac") }
+        if let b = plan.breaks, case .schedule = plan.trigger { parts.append("přestávky \(b.rest) min po \(b.work) min") }
         if let s = plan.strictness { parts.append(FocusText.strictness(s)) }
         return parts.joined(separator: " · ")
     }
@@ -507,6 +523,95 @@ private struct FocusPlansSection: View {
         focus.update { c in
             if let i = c.plans.firstIndex(where: { $0.id == id }) { change(&c.plans[i]) }
         }
+    }
+}
+
+extension FocusListsSection {
+    /// Uloží všechny seznamy do JSON souboru (bez hesel odemykání).
+    func exportLists() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "Soustředění – seznamy.json"
+        guard panel.runModal() == .OK, let url = panel.url, let data = try? FocusController.exportLists(focus.config.lists) else { return }
+        do { try data.write(to: url, options: .atomic) } catch { focus.message = "Seznamy se nepovedlo uložit: \(error.localizedDescription)" }
+    }
+
+    /// Seznamy z exportu, nebo prostý text s weby (každý soubor = nový seznam).
+    func importLists() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json, .plainText, .commaSeparatedText, .text]
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        var added = 0
+        for url in panel.urls {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            added += focus.importLists(data, name: url.deletingPathExtension().lastPathComponent)
+        }
+        if added == 0 { focus.message = "V souboru nebyl žádný seznam ani web." }
+    }
+}
+
+// MARK: - Zmrazení
+
+/// Zmrazení celého Macu (jako Frozen Turkey): na zvolenou dobu jen Study Tracker a povolené aplikace.
+private struct FreezeSection: View {
+    @Environment(FocusController.self) private var focus
+    let state: ActiveFocus
+    let now: Int
+    @State private var minutes = 60
+    @State private var confirming = false
+
+    var body: some View {
+        let active = state.freeze
+        PageSection("Zmrazení") {
+            VStack(alignment: .leading, spacing: 16) {
+                if let active {
+                    Label("Mac je zmrazený \(FocusText.until(active.until) ?? "do konce bloku")", systemImage: "snowflake")
+                        .foregroundStyle(Palette.accent)
+                }
+                Text("Schová všechno kromě Study Trackeru a aplikací níž – i Finder a Nastavení systému – a přes obrazovku ukáže, do kdy. Jde naplánovat i v Plánech (Zmrazit celý Mac).")
+                    .font(Typo.small).foregroundStyle(Palette.text3).fixedSize(horizontal: false, vertical: true)
+                FormField("Povolené aplikace") {
+                    AppListField(apps: Binding(get: { focus.config.freeze.allowedApps }, set: { v in focus.update { $0.freeze.allowedApps = v } }))
+                }
+                SettingRow("Přísnost", detail: FocusText.strictness(focus.config.freeze.strictness)) {
+                    Menu("Změnit") {
+                        ForEach(FocusText.strictnessPresets, id: \.0) { preset in
+                            Button(preset.0) { focus.update { $0.freeze.strictness = preset.1 } }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                HStack(spacing: 8) {
+                    Text("Zmrazit teď na").foregroundStyle(Palette.text2)
+                    Picker("Délka zmrazení", selection: $minutes) {
+                        ForEach([15, 30, 60, 90, 120, 180, 240], id: \.self) { m in Text(FocusText.minutes(m)).tag(m) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    Button("Zmrazit…") { confirming = true }
+                        .buttonStyle(.study(.normal, size: .small))
+                        .disabled(focus.status != .running || active != nil)
+                        .accessibilityIdentifier("focus.freeze")
+                }
+            }
+            .disabled(active != nil && state.isLocked)
+            .frame(maxWidth: 720, alignment: .leading)
+        }
+        .confirmationDialog("Zmrazit Mac na \(FocusText.minutes(minutes))?", isPresented: $confirming) {
+            Button("Zmrazit") { focus.freeze(minutes: minutes, now: Int(Date().timeIntervalSince1970 * 1000)) }
+            Button("Zrušit", role: .cancel) {}
+        } message: {
+            Text(freezeWarning)
+        }
+    }
+
+    private var freezeWarning: String {
+        let apps = focus.config.freeze.allowedApps.map(\.name)
+        let allowed = apps.isEmpty ? "jen Study Tracker" : "Study Tracker a " + apps.joined(separator: ", ")
+        let strict = focus.config.freeze.strictness.locked ? " Přísné zmrazení do konce nejde zrušit." : ""
+        return "Ostatní aplikace se schovají, povolené zůstane \(allowed). Rozdělaná práce se neztratí.\(strict)"
     }
 }
 
@@ -531,6 +636,8 @@ private struct FocusMoreSection: View {
                             .labelsHidden().toggleStyle(.switch)
                     }
                 }
+                SettingSwitch("Oznámení", detail: "Blokování začne za 5 minut, začalo, skončilo – posílá Strážce (macOS se jednou zeptá na povolení).",
+                              isOn: Binding(get: { focus.config.notify }, set: { v in focus.update { $0.notify = v } }))
                 SettingSwitch("Blokovat jiné prohlížeče", detail: "Když se blokují weby, zablokuje i Chrome, Firefox, Arc, Edge a další – weby umí Strážce hlídat jen v Safari.",
                               isOn: Binding(get: { focus.config.protection.otherBrowsers }, set: { v in focus.update { $0.protection.otherBrowsers = v } }))
                 SettingSwitch("Pojistka: nástroje", detail: "Během přísného zámku blokovat Monitor aktivity a terminály, kterými by šel Strážce vypnout.",

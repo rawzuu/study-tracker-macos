@@ -91,30 +91,7 @@ struct FocusListEditor: View {
     }
 
     private var apps: some View {
-        FormField("Aplikace") {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(list.apps, id: \.bundleId) { app in
-                    ListRow {
-                        AppIconView(bundleId: app.bundleId)
-                        Text(app.name)
-                        Spacer()
-                        Button { list.apps.removeAll { $0.bundleId == app.bundleId } } label: { Image(systemName: "xmark") }
-                            .buttonStyle(.study(.ghost, size: .small)).help("Odebrat")
-                    }
-                }
-                HStack(spacing: 8) {
-                    Button("Vybrat z Aplikací…") { pickApps() }.buttonStyle(.study(.normal, size: .small))
-                    Menu("Spuštěné") {
-                        ForEach(Self.runningApps(), id: \.bundleId) { app in
-                            Button(app.name) { add(app) }
-                        }
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                }
-                .padding(.top, 8)
-            }
-        }
+        FormField("Aplikace") { AppListField(apps: $list.apps) }
     }
 
     @ViewBuilder private var invalidSites: some View {
@@ -141,33 +118,6 @@ struct FocusListEditor: View {
         sites = (lines(sites) + added).joined(separator: "\n")
     }
 
-    private func add(_ app: FocusApp) {
-        guard !list.apps.contains(where: { $0.bundleId == app.bundleId }) else { return }
-        list.apps.append(app)
-    }
-
-    private func pickApps() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.application]
-        panel.allowsMultipleSelection = true
-        panel.directoryURL = URL(filePath: "/Applications")
-        panel.prompt = "Přidat"
-        guard panel.runModal() == .OK else { return }
-        for url in panel.urls {
-            guard let bundle = Bundle(url: url), let id = bundle.bundleIdentifier else { continue }
-            let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
-            add(FocusApp(bundleId: id, name: name))
-        }
-    }
-
-    static func runningApps() -> [FocusApp] {
-        NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .compactMap { app in app.bundleIdentifier.map { FocusApp(bundleId: $0, name: app.localizedName ?? $0) } }
-            .filter { !ActiveFocus.isAlwaysAllowed($0.bundleId) }
-            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
-    }
-
     private func save() {
         list.name = list.name.trimmingCharacters(in: .whitespaces)
         list.sites = lines(sites).compactMap { SiteRule($0)?.text }
@@ -188,6 +138,63 @@ struct FocusListEditor: View {
 }
 
 /// Ikona aplikace podle bundle id (z LaunchServices).
+/// Seznam aplikací s ikonami: přidat z Aplikací nebo ze spuštěných, odebrat křížkem.
+struct AppListField: View {
+    @Binding var apps: [FocusApp]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(apps, id: \.bundleId) { app in
+                ListRow {
+                    AppIconView(bundleId: app.bundleId)
+                    Text(app.name)
+                    Spacer()
+                    Button { apps.removeAll { $0.bundleId == app.bundleId } } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.study(.ghost, size: .small)).help("Odebrat").accessibilityLabel("Odebrat \(app.name)")
+                }
+            }
+            HStack(spacing: 8) {
+                Button("Vybrat z Aplikací…") { pick() }.buttonStyle(.study(.normal, size: .small))
+                Menu("Spuštěné") {
+                    ForEach(Self.runningApps(), id: \.bundleId) { app in
+                        Button(app.name) { add(app) }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    private func add(_ app: FocusApp) {
+        guard !apps.contains(where: { $0.bundleId == app.bundleId }) else { return }
+        apps.append(app)
+    }
+
+    private func pick() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = true
+        panel.directoryURL = URL(filePath: "/Applications")
+        panel.prompt = "Přidat"
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            guard let bundle = Bundle(url: url), let id = bundle.bundleIdentifier else { continue }
+            let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+            add(FocusApp(bundleId: id, name: name))
+        }
+    }
+
+    static func runningApps() -> [FocusApp] {
+        NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy == .regular }
+            .compactMap { app in app.bundleIdentifier.map { FocusApp(bundleId: $0, name: app.localizedName ?? $0) } }
+            .filter { !ActiveFocus.isOwnApp($0.bundleId) }
+            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+    }
+}
+
 struct AppIconView: View {
     let bundleId: String
 
@@ -347,6 +354,8 @@ struct FocusPlanEditor: View {
                             }
                         }
                     }
+                    SettingSwitch("Zmrazit celý Mac", detail: "Povolený zůstane jen Study Tracker a aplikace ze Zmrazení (nastavení na stránce).",
+                                  isOn: $plan.freeze)
                     SettingSwitch("Vlastní přísnost", detail: "Místo přísnosti jednotlivých seznamů (přísnější z obou platí vždy).",
                                   isOn: Binding(get: { plan.strictness != nil }, set: { plan.strictness = $0 ? .strict : nil }))
                     if plan.strictness != nil {
@@ -360,7 +369,7 @@ struct FocusPlanEditor: View {
             Spacer()
             Button("Zrušit") { dismiss() }.buttonStyle(.study(.normal)).keyboardShortcut(.cancelAction)
             Button("Uložit") { save() }.buttonStyle(.study(.primary)).keyboardShortcut(.defaultAction)
-                .disabled(plan.name.trimmingCharacters(in: .whitespaces).isEmpty || plan.listIds.isEmpty)
+                .disabled(plan.name.trimmingCharacters(in: .whitespaces).isEmpty || (plan.listIds.isEmpty && !plan.freeze))
                 .accessibilityIdentifier("focusPlan.save")
         }
     }
@@ -387,6 +396,17 @@ struct FocusPlanEditor: View {
                 Button("Přidat okno") { windows.append(TimeWindow(weekdays: [5, 6], start: 9 * 60, end: 12 * 60)) }
                     .buttonStyle(.study(.ghost, size: .small))
                 Text("Konec před začátkem = přes půlnoc (22:00–2:00).").font(Typo.small).foregroundStyle(Palette.text3)
+                SettingSwitch("Přestávky", detail: "Uvnitř okna po čase blokování chvíle volna, pak znovu (jako Pomodoro).",
+                              isOn: Binding(get: { plan.breaks != nil }, set: { plan.breaks = $0 ? Breaks() : nil }))
+                if let breaks = plan.breaks {
+                    HStack(spacing: 6) {
+                        Text("Blokovat").foregroundStyle(Palette.text2)
+                        NumberField(value: Binding(get: { breaks.work }, set: { plan.breaks?.work = $0 }), in: 5...240, step: 5)
+                        Text("min, pak volno").foregroundStyle(Palette.text2)
+                        NumberField(value: Binding(get: { breaks.rest }, set: { plan.breaks?.rest = $0 }), in: 1...60)
+                        Text("min").foregroundStyle(Palette.text2)
+                    }
+                }
             }
         case .plan:
             Text("Blokuje během bloků Studijního plánu na dnešek (jako v Kalendáři); splněný blok už ne.")

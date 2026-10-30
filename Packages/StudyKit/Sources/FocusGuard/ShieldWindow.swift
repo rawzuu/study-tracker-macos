@@ -8,6 +8,8 @@ import SwiftUI
 @MainActor
 public final class ShieldWindow: ShieldControl {
     private var window: NSWindow?
+    /// Tmavé pozadí na dalších monitorech (blokovací obrazovka je na hlavním).
+    private var covers: [NSWindow] = []
     private let model = ShieldModel()
     public weak var actions: (any ShieldActions)?
     /// „Zpět k učení“ – otevře Study Tracker.
@@ -28,13 +30,34 @@ public final class ShieldWindow: ShieldControl {
         }
         let window = self.window ?? makeWindow()
         self.window = window
-        if let screen = NSScreen.main ?? NSScreen.screens.first { window.setFrame(screen.frame, display: true) }
+        let main = NSScreen.main ?? NSScreen.screens.first
+        if let main { window.setFrame(main.frame, display: true) }
+        coverOtherScreens(except: main)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
 
     public func close() {
         window?.orderOut(nil)
+        for cover in covers { cover.orderOut(nil) }
+    }
+
+    private func coverOtherScreens(except main: NSScreen?) {
+        let others = NSScreen.screens.filter { $0 != main }
+        while covers.count < others.count {
+            let cover = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
+            cover.level = .floating
+            cover.isReleasedWhenClosed = false
+            cover.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            cover.appearance = NSAppearance(named: .darkAqua)
+            cover.backgroundColor = NSColor(Palette.bg)
+            covers.append(cover)
+        }
+        for (cover, screen) in zip(covers, others) {
+            cover.setFrame(screen.frame, display: true)
+            cover.orderFront(nil)
+        }
+        for cover in covers.dropFirst(others.count) { cover.orderOut(nil) }
     }
 
     private func makeWindow() -> NSWindow {
@@ -56,7 +79,8 @@ public final class ShieldWindow: ShieldControl {
             },
             unlock: { [weak self] in self?.actions?.shieldRequestUnlock() },
             typed: { [weak self] in self?.actions?.shieldSubmit(typed: $0) },
-            password: { [weak self] in self?.actions?.shieldSubmit(password: $0) }))
+            password: { [weak self] in self?.actions?.shieldSubmit(password: $0) },
+            open: { [weak self] in self?.actions?.shieldOpen(bundleId: $0) }))
         window.contentView = NSHostingView(rootView: view)
         return window
     }
@@ -77,6 +101,20 @@ final class ShieldModel {
     var showsUnlock = false
 }
 
+extension ShieldView {
+    /// Při zmrazení: co zůstalo povolené – jedním kliknutím otevřít.
+    func allowedApps(_ apps: [FocusApp]) -> some View {
+        VStack(spacing: 8) {
+            Text(apps.isEmpty ? "Povolený je jen Study Tracker." : "Povolené zůstaly:").font(Typo.small).foregroundStyle(Palette.text3)
+            HStack(spacing: 8) {
+                ForEach(apps.prefix(6), id: \.bundleId) { app in
+                    Button(app.name) { actions.open(app.bundleId) }.buttonStyle(.study(.normal, size: .small))
+                }
+            }
+        }
+    }
+}
+
 struct ShieldView: View {
     struct Actions {
         var close: () -> Void
@@ -84,6 +122,7 @@ struct ShieldView: View {
         var unlock: () -> Void
         var typed: (String) -> Void
         var password: (String) -> Void
+        var open: (String) -> Void = { _ in }
     }
 
     @Bindable var model: ShieldModel
@@ -101,7 +140,7 @@ struct ShieldView: View {
                 VStack(spacing: 22) {
                     countdown(info)
                     VStack(spacing: 8) {
-                        Text("Zablokováno").font(Typo.body).foregroundStyle(Palette.text3)
+                        Text(info.frozenApps == nil ? "Zablokováno" : "Mac je zmrazený").font(Typo.body).foregroundStyle(Palette.text3)
                         Text(info.name)
                             .font(.system(size: 30, weight: .bold))
                             .foregroundStyle(Palette.text)
@@ -109,6 +148,7 @@ struct ShieldView: View {
                             .font(Typo.body).foregroundStyle(Palette.text2)
                     }
                     .multilineTextAlignment(.center)
+                    if let apps = info.frozenApps { allowedApps(apps) }
                     Text("Dnes už \(info.attempt). pokus")
                         .font(Typo.number(14))
                         .foregroundStyle(info.attempt >= 5 ? Palette.danger : Palette.text2)
