@@ -31,7 +31,7 @@ trap cleanup EXIT
 
 fail() {
     echo "CHYBA: $1"
-    echo "--- stav: $("$PROBE" "$TEXTEDIT" StudyTrackerGuard)"
+    echo "--- stav: $("$PROBE" "$TEXTEDIT" "${GPID:-0}")"
     echo "--- zpráva Strážce:"; cat "$DIR/state.json" 2>/dev/null || echo "(žádná)"
     echo "--- log Strážce:"; cat "$LOG" 2>/dev/null || true
     /usr/bin/log show --last 3m --style compact --predicate 'subsystem == "cz.rawzuu.studytracker"' 2>/dev/null | tail -30 || true
@@ -43,7 +43,7 @@ expect() {
     local app=$1 what=$2; shift 2
     local out=""
     for _ in $(seq 1 30); do
-        out=$("$PROBE" "$app" StudyTrackerGuard)
+        out=$("$PROBE" "$app" "${GPID:-0}")
         local ok=1
         for pattern in "$@"; do echo "$out" | grep -Eq "$pattern" || ok=0; done
         [ $ok = 1 ] && { echo "✓ $what ($out)"; return 0; }
