@@ -77,6 +77,8 @@ expect "$TEXTEDIT" "běžící zakázaná aplikace je schovaná" "hidden=1"
 # 2) Pokus o otevření: zase schovaná, blokovací obrazovka, zapsaný pokus.
 open -a TextEdit
 expect "$TEXTEDIT" "otevření zablokováno, blokovací obrazovka" "hidden=1" "guardWindows=[1-9]"
+sleep 3
+expect "$TEXTEDIT" "obrazovka zůstala (neproblikla)" "hidden=1" "guardWindows=[1-9]"
 for _ in $(seq 1 20); do [ "$(attempts)" -ge 1 ] && break; sleep 0.5; done
 [ "$(attempts)" -ge 1 ] || fail "pokus se nezapsal do databáze"
 echo "✓ pokus zapsán ($(attempts)×)"
