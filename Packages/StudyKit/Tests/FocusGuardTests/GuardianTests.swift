@@ -248,6 +248,19 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         #expect(h.safari.blanked.map(\.index) == [1, 3, 4])
     }
 
+    /// Po schování zakázané aplikace macOS sám aktivuje jinou (třeba Finder) – to obrazovku nesmí zavřít.
+    @Test func shieldSurvivesActivationCausedByHiding() async throws {
+        let h = try Harness(locked())
+        await h.guardian.refresh()
+        await h.guardian.appActivated(discord)
+        h.t += 200
+        await h.guardian.appActivated(notes)
+        #expect(h.shield.isShown, "aktivaci po schování způsobil Strážce")
+        h.t += Guardian.shieldGraceMs
+        await h.guardian.appActivated(notes)
+        #expect(!h.shield.isShown, "přepnutí uživatelem obrazovku zavře")
+    }
+
     /// Zámek nebo zmrazení skončí, zatímco je obrazovka vidět: musí zmizet (zmrazená nemá Zavřít ani Esc).
     @Test func shieldClosesWhenBlockingEnds() async throws {
         let h = try Harness(locked())
@@ -303,7 +316,8 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         await h.guardian.appActivated(discord)
         #expect(h.shield.shown.last?.attempt == 2)
         #expect(try await h.store.attemptCount(.app("com.hnc.Discord"), since: at(0)) == 2)
-        // Povolená aplikace obrazovku zavře.
+        // Povolená aplikace obrazovku zavře (uživatel přepne až po chvíli).
+        h.t += Guardian.shieldGraceMs
         await h.guardian.appActivated(notes)
         #expect(!h.shield.isShown)
         #expect(h.apps.hidden.count == 3)

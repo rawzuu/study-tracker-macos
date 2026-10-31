@@ -91,6 +91,8 @@ public final class Guardian {
     private var tamperReported: [String: String] = [:]
     /// Co ukazuje blokovací obrazovka (odemykání se týká toho).
     private var shown: (hit: FocusHit, attempt: Int, url: String?)?
+    /// Kdy Strážce naposledy schoval aplikaci kvůli obrazovce.
+    private var shieldRaisedAt = Int.min / 2
     private var requests: [String: UnlockRequest] = [:]
 
     /// Opakovaný pokus o totéž do tolika ms se počítá jako jeden.
@@ -99,6 +101,9 @@ public final class Guardian {
     static let extensionFreshMs = 10 * 60_000
     /// Jak dlouho smí zablokovaná stránka zůstat otevřená, než zasáhne Strážce (když rozšíření běží).
     static let extensionGraceMs = 3000
+    /// Po schování zakázané aplikace macOS sám aktivuje jinou (Finder, předchozí okno). Aktivace do tolika ms
+    /// je důsledek schování, ne přepnutí uživatelem – obrazovka zůstane.
+    static let shieldGraceMs = 1500
     static let flushEveryMs = 60_000
     static let refreshEveryMs = 15_000
 
@@ -215,7 +220,7 @@ public final class Guardian {
         // Safari po spuštění obnoví záložky z minula – ty zablokované hned zavřít.
         if app.bundleId == SystemSafari.bundleId, now - lastSweep >= Self.sweepOnActivationMs { sweepSafari() }
         guard let hit = state.check(app: app.bundleId, name: app.name) else {
-            if d.shield.isShown, !Self.isGuard(app.bundleId) {
+            if d.shield.isShown, !Self.isGuard(app.bundleId), now - shieldRaisedAt >= Self.shieldGraceMs {
                 d.shield.close()
                 shown = nil
             }
@@ -247,12 +252,14 @@ public final class Guardian {
     /// Schovat nebo ukončit. Systémové aplikace (Finder při zmrazení) se neschovávají – macOS by Finder hned
     /// znovu aktivoval a schovávání by se točilo dokola; zakryje je blokovací obrazovka.
     private func block(_ app: RunningApp, _ hit: FocusHit) {
+        shieldRaisedAt = now
         if ActiveFocus.isAlwaysAllowed(app.bundleId) { return }
         if hit.appAction == .quit { d.apps.quit(app) } else { d.apps.hide(app) }
     }
 
     private func showShield(_ hit: FocusHit, attempt: Int, url: String? = nil) async {
         shown = (hit, attempt, url)
+        shieldRaisedAt = now
         await updateShield()
     }
 
