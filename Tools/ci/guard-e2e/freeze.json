@@ -1,0 +1,48 @@
+{
+  "enabled" : false,
+  "freeze" : {
+    "allowedApps" : [
+
+    ],
+    "strictness" : {
+      "delayMinutes" : 0,
+      "locked" : false,
+      "requireRestart" : false,
+      "typingCharacters" : 0,
+      "unlockMinutes" : 5,
+      "unlockWindows" : [
+
+      ]
+    }
+  },
+  "lists" : [
+
+  ],
+  "locks" : [
+    {
+      "end" : 4102444800000,
+      "freeze" : true,
+      "id" : "e2e-freeze",
+      "listIds" : [
+
+      ],
+      "start" : 0
+    }
+  ],
+  "notify" : false,
+  "plans" : [
+
+  ],
+  "protection" : {
+    "otherBrowsers" : true,
+    "systemSettings" : false,
+    "systemTools" : false
+  },
+  "tracking" : {
+    "enabled" : false,
+    "idleMinutes" : 5,
+    "retentionDays" : 1
+  },
+  "version" : 1,
+  "watchSafari" : false
+}

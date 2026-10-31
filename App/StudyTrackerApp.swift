@@ -105,10 +105,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Nastavení jen pro tento Mac: automatická pauza, zkratky při bloku, klávesové zkratky, souhrn týdne.
     lazy var macPrefs = MacPreferences(defaults: store.defaults)
     /// Soustředění: v UI testech dočasná složka místo sdíleného kontejneru (Strážce se nespouští, nic skutečného
-    /// se neblokuje ani nečte).
-    lazy var focus = Self.uiTesting
-        ? FocusController(files: FocusFiles(directory: URL.temporaryDirectory.appending(path: "focus-uitest-\(UUID().uuidString)"), group: "uitest"))
-        : FocusController()
+    /// se neblokuje ani nečte); ovládání se chová, jako by Strážce běžel.
+    lazy var focus: FocusController = {
+        guard Self.uiTesting else { return FocusController() }
+        let focus = FocusController(files: FocusFiles(directory: URL.temporaryDirectory.appending(path: "focus-uitest-\(UUID().uuidString)"), group: "uitest"))
+        focus.simulateGuard()
+        return focus
+    }()
     lazy var away = AwayMonitor(timer: timer, prefs: macPrefs)
     lazy var automation = BlockAutomation(timer: timer, prefs: macPrefs)
     lazy var weekly = WeeklySummaryNotifier(app: store, prefs: macPrefs, extra: { [focus, store] from, to in

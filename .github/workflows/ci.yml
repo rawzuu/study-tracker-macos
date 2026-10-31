@@ -51,6 +51,11 @@ jobs:
             | tee build/xcodebuild.log \
             | grep --line-buffered -E "Test Case .*(started|passed|failed)|error:|\*\* (TEST|BUILD)"
 
+      # Skutečný Strážce na CI (na Macu uživatele se nikdy nespouští): schová TextEdit, ukáže obrazovku,
+      # zapíše pokus, zmrazí Mac a po zrušení vše pustí.
+      - name: Strážce naostro
+        run: Tools/ci/guard-e2e.sh build/dd/Build/Products/Debug/StudyTracker.app
+
       - name: Souhrn UI testů (i zopakované)
         if: always()
         run: |

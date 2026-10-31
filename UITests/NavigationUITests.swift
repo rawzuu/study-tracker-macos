@@ -431,6 +431,28 @@ final class NavigationUITests: XCTestCase {
         attachScreenshot(app, "Soustředění")
     }
 
+    /// Zmrazení z UI: po potvrzení je v nastavení zámek a Kalendář ukazuje, kdy Soustředění blokuje.
+    /// (Strážce v UI testech neběží – skutečné blokování zkouší Tools/ci/guard-e2e.sh.)
+    @MainActor
+    func testFocusFreezeShowsInCalendar() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        app.staticTexts["nav.planovac"].click()
+        XCTAssertEqual(text(of: app.staticTexts["page.title"]), "Kalendář")
+        XCTAssertFalse(app.staticTexts["Soustředění blokuje"].exists, "bez zámků pruh není")
+        app.staticTexts["nav.soustredeni"].click()
+        let freeze = app.buttons["focus.freeze"]
+        reveal(freeze, app)
+        freeze.click()
+        let confirm = app.buttons["Zmrazit"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        attachScreenshot(app, "Soustředění – zmrazit")
+        confirm.click()
+        app.staticTexts["nav.planovac"].click()
+        XCTAssertTrue(app.staticTexts["Soustředění blokuje"].waitForExistence(timeout: 3), "zmrazení je v kalendáři")
+        attachScreenshot(app, "Kalendář – zmrazení")
+    }
+
     @MainActor
     func testLaunchPerformance() {
         measure(metrics: [XCTApplicationLaunchMetric()]) {

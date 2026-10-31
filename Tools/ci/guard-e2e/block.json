@@ -1,0 +1,89 @@
+{
+  "enabled" : false,
+  "freeze" : {
+    "allowedApps" : [
+
+    ],
+    "strictness" : {
+      "delayMinutes" : 5,
+      "locked" : false,
+      "requireRestart" : false,
+      "typingCharacters" : 0,
+      "unlockMinutes" : 5,
+      "unlockWindows" : [
+
+      ]
+    }
+  },
+  "lists" : [
+    {
+      "allowedSites" : [
+
+      ],
+      "appAction" : "shield",
+      "apps" : [
+        {
+          "bundleId" : "com.apple.TextEdit",
+          "name" : "TextEdit"
+        }
+      ],
+      "freeze" : false,
+      "id" : "e2e",
+      "keywords" : [
+
+      ],
+      "mode" : "block",
+      "name" : "Zkouška",
+      "sites" : [
+
+      ],
+      "strictness" : {
+        "delayMinutes" : 0,
+        "locked" : false,
+        "requireRestart" : false,
+        "typingCharacters" : 0,
+        "unlockMinutes" : 5,
+        "unlockWindows" : [
+
+        ]
+      }
+    }
+  ],
+  "locks" : [
+    {
+      "end" : 4102444800000,
+      "freeze" : false,
+      "id" : "e2e-lock",
+      "listIds" : [
+        "e2e"
+      ],
+      "start" : 0,
+      "strictness" : {
+        "delayMinutes" : 0,
+        "locked" : false,
+        "requireRestart" : false,
+        "typingCharacters" : 0,
+        "unlockMinutes" : 5,
+        "unlockWindows" : [
+
+        ]
+      }
+    }
+  ],
+  "notify" : false,
+  "plans" : [
+
+  ],
+  "protection" : {
+    "otherBrowsers" : true,
+    "systemSettings" : false,
+    "systemTools" : false
+  },
+  "tracking" : {
+    "enabled" : false,
+    "idleMinutes" : 5,
+    "retentionDays" : 1
+  },
+  "version" : 1,
+  "watchSafari" : false
+}

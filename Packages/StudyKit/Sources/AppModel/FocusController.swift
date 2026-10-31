@@ -79,7 +79,15 @@ public final class FocusController {
         }
     }
 
-    private var isGuardRunning: Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: guardId).isEmpty }
+    @ObservationIgnored private var simulatesGuard = false
+
+    /// Jen UI testy: chovat se, jako by Strážce běžel (ovládání je povolené; nic se neblokuje, Strážce se nespouští).
+    public func simulateGuard() {
+        simulatesGuard = true
+        status = .running
+    }
+
+    private var isGuardRunning: Bool { simulatesGuard || !NSRunningApplication.runningApplications(withBundleIdentifier: guardId).isEmpty }
 
     func reload() {
         guard let files, isAvailable else { return }
