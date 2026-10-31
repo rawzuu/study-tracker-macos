@@ -444,7 +444,8 @@ final class NavigationUITests: XCTestCase {
         let freeze = app.buttons["focus.freeze"]
         reveal(freeze, app)
         freeze.click()
-        let confirm = app.buttons["Zmrazit"].firstMatch
+        // Jen v okně – stejné tlačítko má i Touch Bar (na CI by se kliklo tam).
+        let confirm = app.windows.buttons["Zmrazit"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 3))
         attachScreenshot(app, "Soustředění – zmrazit")
         confirm.click()
