@@ -248,6 +248,46 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         #expect(h.safari.blanked.map(\.index) == [1, 3, 4])
     }
 
+    /// Zámek nebo zmrazení skončí, zatímco je obrazovka vidět: musí zmizet (zmrazená nemá Zavřít ani Esc).
+    @Test func shieldClosesWhenBlockingEnds() async throws {
+        let h = try Harness(locked())
+        await h.guardian.refresh()
+        await h.guardian.appActivated(discord)
+        #expect(h.shield.isShown)
+        h.t = at(12)
+        await h.guardian.refresh()
+        #expect(!h.shield.isShown, "zámek skončil")
+
+        let finder = RunningApp(pid: 1, bundleId: "com.apple.finder", name: "Finder")
+        var config = FocusConfig(enabled: true)
+        config.locks = [FocusLock(listIds: [], start: at(12), end: at(13), freeze: true)]
+        config.tracking.enabled = false
+        h.config = config
+        h.apps.all = [finder]
+        h.apps.front = finder
+        await h.guardian.refresh()
+        #expect(h.shield.isShown && h.shield.shown.last?.frozenApps != nil)
+        h.config.locks = []
+        await h.guardian.refresh()
+        #expect(!h.shield.isShown, "zmrazení zrušeno")
+    }
+
+    /// Zmrazení skončí, ale aplikace je dál v zámku: obrazovka zůstane, jen už jako běžné blokování.
+    @Test func shieldFollowsRemainingRule() async throws {
+        var config = locked()
+        config.locks.append(FocusLock(id: "f", listIds: [], start: at(9), end: at(11), freeze: true))
+        let h = try Harness(config)
+        h.apps.all = [discord]
+        h.apps.front = discord
+        await h.guardian.refresh()
+        #expect(h.shield.shown.last?.frozenApps != nil)
+        h.t = at(11)
+        await h.guardian.refresh()
+        #expect(h.shield.isShown)
+        #expect(h.shield.shown.last?.frozenApps == nil)
+        #expect(h.shield.shown.last?.until == at(12))
+    }
+
     @Test func blockedAppIsHiddenWithShieldAndCounted() async throws {
         let h = try Harness(locked())
         await h.guardian.refresh()

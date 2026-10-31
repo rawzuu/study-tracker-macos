@@ -154,7 +154,10 @@ public final class Guardian {
             lastRefreshDone = true
             let changed = next.rules != state.rules || next.protectionApps != state.protectionApps || next.browserApps != state.browserApps || next.exceptions != state.exceptions
             state = next
-            if changed { await enforceRunning() }
+            if changed {
+                closeShieldIfUnblocked()
+                await enforceRunning()
+            }
         } catch {
             Self.log.error("Soustředění: databáze nedostupná: \(error.localizedDescription, privacy: .public)")
         }
@@ -221,6 +224,24 @@ public final class Guardian {
         block(app, hit)
         let attempt = await recordAttempt(hit, at: now)
         await showShield(hit, attempt: attempt)
+    }
+
+    /// Zámek nebo zmrazení skončilo (nebo se zrušilo), zatímco je obrazovka vidět: zavřít ji. Zmrazená obrazovka
+    /// nemá Zavřít ani Esc – jinak by zůstala viset. Když blokuje jiné pravidlo, obrazovku znovu ukáže enforceRunning.
+    private func closeShieldIfUnblocked() {
+        guard let (hit, _, url) = shown else { return }
+        let blocked: Bool = switch hit.target {
+        case .app(let bundleId): state.check(app: bundleId, name: hit.name) != nil
+        case .site(let host):
+            if let url = url.flatMap(URL.init(string:)), let visited = url.host() {
+                state.check(host: visited, path: url.path()) != nil
+            } else {
+                state.check(host: host) != nil
+            }
+        }
+        guard !blocked else { return }
+        shown = nil
+        d.shield.close()
     }
 
     /// Schovat nebo ukončit. Systémové aplikace (Finder při zmrazení) se neschovávají – macOS by Finder hned
