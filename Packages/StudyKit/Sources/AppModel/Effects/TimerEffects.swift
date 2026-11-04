@@ -84,7 +84,7 @@ public final class LiveTimerEffects: TimerEffects {
         switch event {
         case .workEnded: audio.chime(.workEnd, volume: settings.volume)
         case .breakEnded: audio.chime(.breakEnd, volume: settings.volume)
-        case .session, .tooShort: break
+        case .session, .tooShort, .pauseExpired: break
         }
     }
 

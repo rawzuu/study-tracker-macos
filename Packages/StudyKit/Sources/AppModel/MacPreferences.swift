@@ -41,6 +41,8 @@ public struct HotKey: Codable, Equatable, Sendable {
 public final class MacPreferences {
     /// Po kolika minutách nečinnosti se blok sám pozastaví (0 = nikdy).
     public var awayMinutes: Int { didSet { save(awayMinutes, "awayMinutes") } }
+    /// Po kolika minutách pozastavení se blok sám uloží a ukončí (0 = nikdy). Čte ho i časovač (`pauseLimit(in:)`).
+    public var pauseLimitMinutes: Int { didSet { save(pauseLimitMinutes, "pauseLimit") } }
     /// Zamčení obrazovky nebo uspání Macu blok pozastaví hned.
     public var awayOnLock: Bool { didSet { save(awayOnLock, "awayOnLock") } }
     /// Zkratky ze Zkratek na začátku a konci bloku (třeba zapnout a vypnout Nerušit).
@@ -58,15 +60,23 @@ public final class MacPreferences {
     public var hotKeyConflicts: Set<HotKeyCenter.Action> = []
 
     public static let awayChoices = [0, 2, 5, 10, 15, 30]
+    public static let pauseLimitChoices = [0, 30, 60, 120, 240]
+    nonisolated static let pauseLimitDefault = 120
+
+    /// Limit pozastavení pro časovač (sdílené UserDefaults, bez instance nastavení).
+    public nonisolated static func pauseLimit(in defaults: UserDefaults) -> Int {
+        defaults.object(forKey: prefix + "pauseLimit") as? Int ?? pauseLimitDefault
+    }
 
     @ObservationIgnored private let defaults: UserDefaults
-    private static let prefix = "st.mac."
+    private nonisolated static let prefix = "st.mac."
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
         let d = { (key: String) in defaults.object(forKey: Self.prefix + key) }
         awayMinutes = d("awayMinutes") as? Int ?? 10
         awayOnLock = d("awayOnLock") as? Bool ?? true
+        pauseLimitMinutes = Self.pauseLimit(in: defaults)
         shortcutsEnabled = d("shortcuts") as? Bool ?? false
         startShortcut = d("shortcut.start") as? String ?? ""
         endShortcut = d("shortcut.end") as? String ?? ""

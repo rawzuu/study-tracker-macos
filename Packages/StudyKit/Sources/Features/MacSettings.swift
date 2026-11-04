@@ -8,6 +8,7 @@ import SwiftUI
 
 struct AwaySettings: View {
     @Environment(MacPreferences.self) private var prefs
+    @Environment(TimerStore.self) private var timer
 
     var body: some View {
         @Bindable var prefs = prefs
@@ -24,9 +25,22 @@ struct AwaySettings: View {
                 }
                 SettingSwitch("Při zamčení nebo uspání Macu hned", detail: "Zamčená obrazovka (⌃⌘Q) nebo uspání blok pozastaví okamžitě.",
                               isOn: $prefs.awayOnLock)
+                SettingRow("Ukončit dlouho pozastavený blok",
+                           detail: "Blok, který stojí pozastavený déle, se sám uloží (do chvíle pozastavení) a ukončí. Dostaneš o tom oznámení.") {
+                    Picker("Ukončit dlouho pozastavený blok", selection: $prefs.pauseLimitMinutes) {
+                        ForEach(MacPreferences.pauseLimitChoices, id: \.self) { m in
+                            Text(m == 0 ? "nikdy" : m < 60 ? "po \(m) min" : "po \(m / 60) h").tag(m)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityIdentifier("settings.pauseLimit")
+                }
             }
             .frame(maxWidth: 720, alignment: .leading)
         }
+        // Nový limit platí hned i pro právě pozastavený blok.
+        .onChange(of: prefs.pauseLimitMinutes) { timer.refresh() }
     }
 }
 

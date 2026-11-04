@@ -109,8 +109,15 @@ public struct CalendarWeekState: Sendable {
         }
         if layer != .plan {
             items += sessions.map { CalendarItem(id: "s-\($0.id)", source: .session(id: $0.id), subjectId: $0.subjectId, start: $0.start, end: $0.end, title: $0.topic) }
-            if let live, live.isStudying, let ws = live.workStartedAt, ws >= weekStart && ws < weekEnd {
-                items.append(CalendarItem(id: "live", source: .live, subjectId: live.subjectId, start: ws, end: max(now, ws + 10 * StudyClock.minute), title: live.topic))
+            // Jen úseky, kdy časovač běžel – pauza je mezera (pozastavený přes noc nezabere celou noc).
+            if let live {
+                let spans = live.workSpans(at: now)
+                for (i, span) in spans.enumerated() where span.start >= weekStart && span.start < weekEnd {
+                    let isLast = i == spans.count - 1
+                    let end = isLast ? max(span.end, span.start + 10 * StudyClock.minute) : span.end
+                    items.append(CalendarItem(id: isLast ? "live" : "live-\(i)", source: .live, subjectId: live.subjectId, start: span.start,
+                                              end: end, title: live.topic))
+                }
             }
         }
         items = items.flatMap { CalendarLayout.splitAtMidnight($0, clock: clock) }
@@ -140,7 +147,7 @@ public struct CalendarWeekState: Sendable {
                 exams: exams.filter { $0.date == clock.dayKey(day) }.map { ExamPill(id: $0.id, name: $0.name, subject: subjects[$0.subjectId]) },
                 items: dayItems.map { it in
                     Self.item(it, lane: lanes[it.id]!, subjects: subjects, block: blockById, session: sessionById, locations: locations,
-                              calendars: calendarOf, clock: clock)
+                              calendars: calendarOf, livePaused: live?.status == .paused, clock: clock)
                 }
             )
         }
@@ -151,7 +158,8 @@ public struct CalendarWeekState: Sendable {
     }
 
     private static func item(_ it: CalendarItem, lane: CalendarLayout.Lane, subjects: SubjectLookup, block: [String: PlanBlock],
-                             session: [String: Session], locations: [String: String], calendars: [String: SubjectInfo], clock: StudyClock) -> Item {
+                             session: [String: Session], locations: [String: String], calendars: [String: SubjectInfo], livePaused: Bool,
+                             clock: StudyClock) -> Item {
         let subject = subjects[it.subjectId]
         let time = "\(Format.time(it.fullStart, clock: clock))–\(Format.time(it.fullEnd, clock: clock))"
         switch it.source {
@@ -163,8 +171,8 @@ public struct CalendarWeekState: Sendable {
             return Item(item: it, lane: lane, subject: subject, done: false, detail: it.title.isEmpty ? duration : it.title, timeLabel: time,
                         tooltip: "Odučeno: \(subject.name)\(it.title.isEmpty ? "" : " – \(it.title)") · \(time) · \(duration)")
         case .live:
-            return Item(item: it, lane: lane, subject: subject, done: false, detail: "právě teď", timeLabel: time,
-                        tooltip: "Právě probíhá: \(subject.name)\(it.title.isEmpty ? "" : " – \(it.title)") · \(time)")
+            return Item(item: it, lane: lane, subject: subject, done: false, detail: livePaused ? "pozastaveno" : "právě teď", timeLabel: time,
+                        tooltip: "\(livePaused ? "Pozastaveno" : "Právě probíhá"): \(subject.name)\(it.title.isEmpty ? "" : " – \(it.title)") · \(time)")
         case .lecture(let timetableId, let key):
             let location = locations["\(timetableId)|\(key)"] ?? ""
             return Item(item: it, lane: lane, subject: subject, done: false, detail: location.isEmpty ? "výuka" : location, timeLabel: time,

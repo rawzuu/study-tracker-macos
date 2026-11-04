@@ -42,6 +42,8 @@ public final class TimerStore {
     @ObservationIgnored private var pendingAction: TimerAction?
     /// Poslední uložené sezení – hodnocení z oznámení, když už okno s hodnocením zmizelo.
     @ObservationIgnored private var lastSessionId: String?
+    @ObservationIgnored private var lastSessionSubject: String?
+    @ObservationIgnored private var lastSessionDuration = 0
 
     static let stateKey = "st.timer"
 
@@ -60,7 +62,11 @@ public final class TimerStore {
 
     public var modes: [TimerMode] { TimerMode.all(presets: app.document.records(TimerPreset.self)) }
     public var mode: TimerMode { TimerMode.find(state.modeId, presets: app.document.records(TimerPreset.self)) }
-    public var rules: TimerRules { TimerRules(settings: app.document.settings) }
+    public var rules: TimerRules {
+        var r = TimerRules(settings: app.document.settings)
+        r.pauseLimitMin = MacPreferences.pauseLimit(in: defaults)
+        return r
+    }
     public func currentTime() -> Int { now() }
 
     // MARK: - Ovládání
@@ -107,6 +113,8 @@ public final class TimerStore {
         guard let a = away, state.status == .paused else { return resume() }
         let gap = (a.until ?? now()) - a.since
         mutate { s, t, _, _ in
+            // Doba nepřítomnosti se počítá jako práce – i v kalendáři bez mezery.
+            s.spans = s.workSpans(at: t) + [WorkSpan(start: a.since, end: a.since + max(0, gap))]
             s.accumulated += max(0, gap)
             s.resume(now: t)
             return []
@@ -255,12 +263,21 @@ public final class TimerStore {
             case .session(let session):
                 app.update { $0.saveTimerSession(session, now: t) }
                 lastSessionId = session.id
+                lastSessionSubject = session.subjectId
+                lastSessionDuration = session.durationSec
                 let s = app.document.settings
                 if s.askFocusRating || s.askRecall { pendingRating = session.id }
             case .tooShort:
                 notice = "Blok kratší než \(Format.duration(app.document.settings.minSessionSec)) se neukládá"
             case .workEnded, .breakEnded:
                 break
+            case .pauseExpired(let minutes, let saved):
+                let subject = app.document.record(Subject.self, id: lastSessionSubject ?? "")?.name ?? "Blok"
+                let pause = minutes >= 120 ? "\(minutes / 60) h" : "\(minutes) min"
+                effects?.notify(id: "study-pause-expired", title: saved ? "Pozastavený blok je uložený" : "Pozastavený blok skončil",
+                                body: saved ? "\(subject) · \(Format.duration(lastSessionDuration)) – pauza trvala \(pause), tak jsem ho ukončil."
+                                    : "Pauza trvala \(pause). Blok byl kratší než minimum, a tak se neuložil.",
+                                url: URL(string: "studytracker://casovac"))
             }
             effects?.handle(event, settings: app.document.settings)
         }

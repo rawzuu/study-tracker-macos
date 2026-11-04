@@ -93,9 +93,22 @@ struct CalendarStateTests {
         timer.subjectId = "b"
         timer.topic = "Krebsův cyklus"
         timer.workStartedAt = now - 3 * min
+        timer.segmentStart = now - 3 * min
         let s = CalendarWeekState(document: doc(), weekStart: week, layer: .all, live: timer, now: now, clock: clock)
         let live = s.days[2].items.first { $0.item.source == .live }
         #expect(live?.item.start == now - 3 * min && live?.item.end == now + 7 * min && live?.detail == "právě teď")
+
+        // Pozastavený: jen odpracovaný úsek, ne až do teď (pozastavený přes noc nezabere celou noc).
+        var paused = timer
+        paused.pause(now: now - 2 * min)
+        let later = CalendarWeekState(document: doc(), weekStart: week, layer: .all, live: paused, now: now + 300 * min, clock: clock)
+        let spans = later.days[2].items.filter { $0.item.source == .live }
+        #expect(spans.map(\.item.start) == [now - 3 * min])
+        #expect(spans.first?.item.fullEnd == now + 7 * min && spans.first?.detail == "pozastaveno")
+        // Po pokračování dva úseky s mezerou.
+        paused.resume(now: now + 60 * min)
+        let resumed = CalendarWeekState(document: doc(), weekStart: week, layer: .all, live: paused, now: now + 80 * min, clock: clock)
+        #expect(resumed.days[2].items.filter { $0.item.source == .live }.map(\.item.start) == [now - 3 * min, now + 60 * min])
         timer.status = .ready
         let idle = CalendarWeekState(document: doc(), weekStart: week, layer: .all, live: timer, now: now, clock: clock)
         #expect(!idle.days[2].items.contains { $0.item.source == .live })

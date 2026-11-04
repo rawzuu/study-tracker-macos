@@ -34,6 +34,18 @@ private func makeApp(defaults: UserDefaults, settings: (inout Settings) -> Void 
     return app
 }
 
+/// Zapisuje jen samostatná oznámení.
+@MainActor
+private final class NotifyEffects: TimerEffects {
+    var notes: [(title: String, body: String)] = []
+    func update(state: TimerState, phaseEnd: Int?, settings: Settings, now: Int) {}
+    func handle(_ event: TimerEvent, settings: Settings) {}
+    func previewNoise(_ type: NoiseType, volume: Double) {}
+    var isPreviewing: Bool { false }
+    func previewChime(volume: Double) {}
+    func notify(id: String, title: String, body: String, url: URL?) { notes.append((title, body)) }
+}
+
 private func freshDefaults() -> UserDefaults {
     UserDefaults(suiteName: "st-timer-tests-\(UUID().uuidString)")!
 }
@@ -108,6 +120,34 @@ struct TimerStoreTests {
         second.refresh()
         #expect(app.document.record(Session.self, id: "timer-\(t0)")?.end == t0 + 25 * minute)
         #expect(second.state.status == .ready && second.state.phase == .work)
+    }
+
+    @Test("Blok pozastavený déle než limit (výchozí 2 h) se sám uloží do chvíle pozastavení a dá vědět")
+    func pauseLimitEndsBlock() async throws {
+        let defaults = freshDefaults()
+        let app = try await makeApp(defaults: defaults)
+        let clock = TestClock()
+        let effects = NotifyEffects()
+        let timer = TimerStore(app: app, effects: effects) { clock.t }
+        timer.configure(TimerSetup(subjectId: "anat"))
+        timer.start()
+        clock.t += 22 * minute
+        timer.pause()
+        clock.t += 16 * 60 * minute
+        timer.refresh()
+        let session = try #require(app.document.record(Session.self, id: "timer-\(t0)"))
+        #expect(session.start == t0 && session.end == t0 + 22 * minute && session.durationSec == 22 * 60)
+        #expect(timer.state.status == .idle)
+        #expect(effects.notes.first?.title == "Pozastavený blok je uložený")
+        #expect(effects.notes.first?.body.hasPrefix("Anatomie · 22 min") == true)
+
+        // Vypnuto (0): zůstane pozastavený.
+        MacPreferences(defaults: defaults).pauseLimitMinutes = 0
+        timer.start()
+        timer.pause()
+        clock.t += 10 * 60 * minute
+        timer.refresh()
+        #expect(timer.state.status == .paused)
     }
 
     @Test("Výchozí režim z nastavení, dokud uživatel nic nezměnil")

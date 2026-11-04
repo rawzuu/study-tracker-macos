@@ -37,6 +37,11 @@ public struct TimerState: Codable, Sendable, Equatable {
     public var workStartedAt: Int?
     /// Od kdy čeká na další blok (kvůli automatickému ukončení série).
     public var readyAt: Int?
+    /// Jen na Macu: úseky bloku učení, které už skončily pozastavením (kalendář kreslí pauzy jako mezery).
+    /// `nil` = stav ze starší verze – úseky se odhadnou z `accumulated`.
+    public var spans: [WorkSpan]?
+    /// Jen na Macu: kdy se blok pozastavil (konec uloženého záznamu, automatické ukončení dlouhé pauzy).
+    public var pausedAt: Int?
 
     public init(modeId: String) {
         self.modeId = modeId
@@ -63,6 +68,31 @@ public struct TimerState: Codable, Sendable, Equatable {
 
     /// Běží (nebo stojí pozastavený) blok učení.
     public var isStudying: Bool { phase == .work && (status == .running || status == .paused) }
+
+    /// Kdy se na bloku učení opravdu pracovalo – bez pauz. Běžící úsek končí v `now`.
+    public func workSpans(at now: Int) -> [WorkSpan] {
+        guard isStudying, let start = workStartedAt else { return [] }
+        var out = spans ?? (accumulated > 0 ? [WorkSpan(start: start, end: start + accumulated)] : [])
+        if status == .running, let segmentStart { out.append(WorkSpan(start: segmentStart, end: max(segmentStart, now))) }
+        return out
+    }
+
+    /// Poslední okamžik práce na bloku: teď, když běží; jinak chvíle pozastavení.
+    public func lastActivity(at now: Int) -> Int {
+        if status == .running { return now }
+        return pausedAt ?? workSpans(at: now).last?.end ?? now
+    }
+}
+
+/// Úsek, kdy časovač běžel (ms).
+public struct WorkSpan: Codable, Sendable, Equatable {
+    public var start: Int
+    public var end: Int
+
+    public init(start: Int, end: Int) {
+        self.start = start
+        self.end = end
+    }
 }
 
 /// Pravidla časovače ze synchronizovaného nastavení.
@@ -73,13 +103,17 @@ public struct TimerRules: Sendable, Equatable {
     public var flowtimeRatio: Double
     /// Po kolika minutách čekání se série ukončí (0 = nikdy).
     public var seriesTimeoutMin: Int
+    /// Jen na Macu: po kolika minutách pozastavení se blok učení sám uloží a ukončí (0 = nikdy).
+    public var pauseLimitMin: Int
 
-    public init(minSessionSec: Int = 60, autoStartBreaks: Bool = true, autoStartWork: Bool = false, flowtimeRatio: Double = 5, seriesTimeoutMin: Int = 20) {
+    public init(minSessionSec: Int = 60, autoStartBreaks: Bool = true, autoStartWork: Bool = false, flowtimeRatio: Double = 5, seriesTimeoutMin: Int = 20,
+                pauseLimitMin: Int = 0) {
         self.minSessionSec = minSessionSec
         self.autoStartBreaks = autoStartBreaks
         self.autoStartWork = autoStartWork
         self.flowtimeRatio = flowtimeRatio
         self.seriesTimeoutMin = seriesTimeoutMin
+        self.pauseLimitMin = pauseLimitMin
     }
 
     public init(settings s: Settings) {
@@ -110,6 +144,8 @@ public enum TimerEvent: Sendable, Equatable {
     case workEnded
     /// Pauza doběhla sama.
     case breakEnded
+    /// Blok stál pozastavený déle než limit: odpracovaná část se uložila (`saved`), série skončila.
+    case pauseExpired(minutes: Int, saved: Bool)
 }
 
 /// Úprava nastavení časovače (předmět, téma, režim, blok plánu).
@@ -159,6 +195,8 @@ extension TimerState {
             segmentStart = now
             accumulated = 0
             workStartedAt = phase == .work ? now : nil
+            spans = nil
+            pausedAt = nil
         case .idle:
             guard !subjectId.isEmpty else { return }
             status = .running
@@ -168,6 +206,8 @@ extension TimerState {
             phaseDurationMs = mode.workDurationMs
             interruptions = 0
             workStartedAt = now
+            spans = nil
+            pausedAt = nil
         case .running, .paused:
             return
         }
@@ -175,6 +215,10 @@ extension TimerState {
 
     public mutating func pause(now: Int) {
         guard status == .running else { return }
+        if phase == .work {
+            spans = workSpans(at: now)
+            pausedAt = now
+        }
         accumulated = elapsed(at: now)
         status = .paused
         segmentStart = nil
@@ -184,18 +228,20 @@ extension TimerState {
         guard status == .paused else { return }
         status = .running
         segmentStart = now
+        pausedAt = nil
     }
 
     /// „Hotovo“ / „Na pauzu“: uloží blok a přejde na pauzu.
     public mutating func finishWork(now: Int, mode: TimerMode, rules: TimerRules) -> [TimerEvent] {
         guard isStudying else { return [] }
-        return endWork(at: now, natural: false, mode: mode, rules: rules)
+        return endWork(at: now, natural: false, mode: mode, rules: rules, sessionEnd: lastActivity(at: now))
     }
 
     /// „Ukončit“: uloží rozpracovaný blok a ukončí sérii.
     public mutating func stop(now: Int, rules: TimerRules) -> [TimerEvent] {
         var events: [TimerEvent] = []
-        if isStudying { events = saved(endAt: now, elapsed: cappedElapsed(at: now), rules: rules) }
+        // Záznam končí poslední prací, ne kliknutím – pozastavený přes noc by jinak zabral celou noc.
+        if isStudying { events = saved(endAt: lastActivity(at: now), elapsed: cappedElapsed(at: now), rules: rules) }
         reset()
         return events
     }
@@ -228,6 +274,14 @@ extension TimerState {
                 ? endWork(at: endAt, natural: true, mode: mode, rules: rules)
                 : endBreak(at: endAt, natural: true, now: now, mode: mode, rules: rules)
         }
+        if status == .paused, phase == .work, rules.pauseLimitMin > 0 {
+            let since = lastActivity(at: now)
+            if now >= since + rules.pauseLimitMin * StudyClock.minute {
+                let saved = saved(endAt: since, elapsed: cappedElapsed(at: since), rules: rules).filter { $0 != .tooShort }
+                events += saved + [.pauseExpired(minutes: (now - since) / StudyClock.minute, saved: !saved.isEmpty)]
+                reset()
+            }
+        }
         if status == .ready, rules.seriesTimeoutMin > 0 {
             let since = readyAt ?? now
             readyAt = since
@@ -245,7 +299,10 @@ extension TimerState {
         case .ready:
             guard rules.seriesTimeoutMin > 0 else { return nil }
             return (readyAt ?? now) + rules.seriesTimeoutMin * StudyClock.minute
-        case .idle, .paused:
+        case .paused:
+            guard phase == .work, rules.pauseLimitMin > 0 else { return nil }
+            return lastActivity(at: now) + rules.pauseLimitMin * StudyClock.minute
+        case .idle:
             return nil
         }
     }
@@ -270,9 +327,11 @@ extension TimerState {
         ))]
     }
 
-    private mutating func endWork(at endAt: Int, natural: Bool, mode: TimerMode, rules: TimerRules) -> [TimerEvent] {
+    private mutating func endWork(at endAt: Int, natural: Bool, mode: TimerMode, rules: TimerRules, sessionEnd: Int? = nil) -> [TimerEvent] {
         let elapsed = cappedElapsed(at: endAt)
-        var events = saved(endAt: endAt, elapsed: elapsed, rules: rules)
+        var events = saved(endAt: sessionEnd ?? endAt, elapsed: elapsed, rules: rules)
+        spans = nil
+        pausedAt = nil
         // Krátký blok hlásí jen ruční ukončení (jako na webu); doběhnutý blok má délku režimu.
         if natural { events = events.filter { $0 != .tooShort } + [.workEnded] }
         if mode.kind == .stopwatch {
@@ -337,6 +396,8 @@ extension TimerState {
         workStartedAt = nil
         planBlockId = nil
         readyAt = nil
+        spans = nil
+        pausedAt = nil
     }
 }
 
