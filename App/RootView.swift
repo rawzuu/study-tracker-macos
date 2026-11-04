@@ -71,13 +71,9 @@ struct RootView: View {
         case .failed(let message):
             FailureView(message: message)
         case .ready:
-            // Nová stránka se jemně objeví; stará zmizí hned (nepřekrývají se ani pro UI testy).
-            ZStack {
-                page(navigator.page ?? .prehled)
-                    .id(navigator.page)
-                    .transition(.asymmetric(insertion: Motion.appear, removal: .identity))
-            }
-            .motion(Motion.standard, value: navigator.page)
+            // Stránky se přepínají okamžitě jako v aplikacích macOS – prolnutí celé stránky problikávalo
+            // pod nástrojovou lištou a překreslovalo celé okno snímek po snímku.
+            page(navigator.page ?? .prehled)
         }
     }
 

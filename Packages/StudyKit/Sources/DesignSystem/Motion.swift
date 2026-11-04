@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Pohyb v aplikaci: krátký, plynulý a bez zákmitu – jen tam, kde pomáhá pochopit změnu
-/// (stisk, zaškrtnutí, nový obsah). S „Omezit pohyb“ v Zpřístupnění se vše mění okamžitě.
+/// Pohyb v aplikaci: krátký, plynulý a bez zákmitu – jen u malých prvků, kde pomáhá pochopit změnu
+/// (stisk, zaškrtnutí, rozbalení). Nikdy celé stránky ani hodnoty, které se mění každou sekundu.
+/// S „Omezit pohyb“ v Zpřístupnění se vše mění okamžitě.
 public enum Motion {
     /// Hover, stisk, zaškrtnutí.
     public static let quick = Animation.smooth(duration: 0.16)
@@ -10,9 +11,6 @@ public enum Motion {
     public static let standard = Animation.smooth(duration: 0.24)
     /// Stisk tlačítka – pružina bez odrazu.
     public static let press = Animation.spring(duration: 0.2, bounce: 0)
-
-    /// Nový obsah se jen jemně objeví (mírný posun nahoru a průhlednost).
-    public static var appear: AnyTransition { .opacity.combined(with: .offset(y: 4)) }
 
     @MainActor public static var reduced: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 }

@@ -170,9 +170,6 @@ public struct TimerView: View {
         }
         .padding(.top, 12)
         .frame(maxWidth: .infinity)
-        // Start, pauza, konec bloku: tlačítka a řádky se prolnou (sekundy běžícího bloku se neanimují).
-        .motion(Motion.standard, value: state.status)
-        .motion(Motion.standard, value: state.phase)
     }
 
     // MARK: - Co se učíš
