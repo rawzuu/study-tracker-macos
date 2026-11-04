@@ -17,11 +17,14 @@ public struct RunningApp: Sendable, Equatable {
     public var pid: pid_t
     public var bundleId: String
     public var name: String
+    /// Schovaná (⌘H nebo Strážcem).
+    public var isHidden: Bool
 
-    public init(pid: pid_t, bundleId: String, name: String) {
+    public init(pid: pid_t, bundleId: String, name: String, isHidden: Bool = false) {
         self.pid = pid
         self.bundleId = bundleId
         self.name = name
+        self.isHidden = isHidden
     }
 }
 
@@ -156,7 +159,7 @@ public final class SystemApps: AppControl {
 
     nonisolated static func info(_ app: NSRunningApplication) -> RunningApp? {
         guard let id = app.bundleIdentifier else { return nil }
-        return RunningApp(pid: app.processIdentifier, bundleId: id, name: app.localizedName ?? id)
+        return RunningApp(pid: app.processIdentifier, bundleId: id, name: app.localizedName ?? id, isHidden: app.isHidden)
     }
 }
 

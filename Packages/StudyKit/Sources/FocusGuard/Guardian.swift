@@ -249,6 +249,15 @@ public final class Guardian {
         d.shield.close()
     }
 
+    /// Zakázaná aplikace se ukázala sama, aniž by přešla do popředí (dokončila spuštění, otevřela okno,
+    /// zobrazila se z Docku na pozadí): znovu ji schovat. Pokus se nepočítá, obrazovka se neukazuje.
+    private func hideReappeared(front: RunningApp?) {
+        for app in d.apps.running() where !app.isHidden && app.pid != front?.pid && !ActiveFocus.isAlwaysAllowed(app.bundleId) {
+            guard let hit = state.check(app: app.bundleId, name: app.name) else { continue }
+            if hit.appAction == .quit { d.apps.quit(app) } else { d.apps.hide(app) }
+        }
+    }
+
     /// Schovat nebo ukončit. Systémové aplikace (Finder při zmrazení) se neschovávají – macOS by Finder hned
     /// znovu aktivoval a schovávání by se točilo dokola; zakryje je blokovací obrazovka.
     private func block(_ app: RunningApp, _ hit: FocusHit) {
@@ -440,6 +449,7 @@ public final class Guardian {
             if state.isActive { await checkSafari(url) }
         }
         if t - lastSweep >= Self.sweepEveryMs, state.isActive { sweepSafari() }
+        if state.isActive { hideReappeared(front: front) }
         await measure(front: front, host: host, at: t)
         if t - lastReportAt >= 30_000 { writeReport() }
     }

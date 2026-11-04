@@ -20,8 +20,14 @@ private let safariApp = RunningApp(pid: 13, bundleId: "com.apple.Safari", name: 
     var hidden: [String] = []
     var quit: [String] = []
     func frontmost() -> RunningApp? { front }
-    func running() -> [RunningApp] { all }
-    func hide(_ app: RunningApp) { hidden.append(app.bundleId) }
+    func running() -> [RunningApp] { all.map { var a = $0; a.isHidden = hiddenNow.contains(a.bundleId); return a } }
+    /// Co je teď schované (aplikace se může sama ukázat – `unhide`).
+    var hiddenNow: Set<String> = []
+    func unhide(_ bundleId: String) { hiddenNow.remove(bundleId) }
+    func hide(_ app: RunningApp) {
+        hidden.append(app.bundleId)
+        hiddenNow.insert(app.bundleId)
+    }
     func quit(_ app: RunningApp) { quit.append(app.bundleId) }
     var opened: [String] = []
     func open(bundleId: String) { opened.append(bundleId) }
@@ -246,6 +252,26 @@ private func locked(_ list: FocusList = social, strictness: Strictness? = nil, a
         h.t += 6000
         await h.guardian.appActivated(safariApp)
         #expect(h.safari.blanked.map(\.index) == [1, 3, 4])
+    }
+
+    /// Zakázaná aplikace se po schování sama ukázala na pozadí (dokončila spuštění): Strážce ji při další
+    /// kontrole znovu schová – bez obrazovky a bez započítaného pokusu.
+    @Test func blockedAppThatReappearsIsHiddenAgain() async throws {
+        let h = try Harness(locked())
+        h.apps.all = [discord, notes]
+        h.apps.front = notes
+        await h.guardian.refresh()
+        #expect(h.apps.hidden == ["com.hnc.Discord"])
+        h.apps.unhide("com.hnc.Discord")
+        h.t += 5000
+        await h.guardian.tick()
+        #expect(h.apps.hidden == ["com.hnc.Discord", "com.hnc.Discord"])
+        #expect(!h.shield.isShown)
+        #expect(try await h.store.attemptCount(.app("com.hnc.Discord"), since: at(0)) == 0)
+        // Už schovanou ani povolenou aplikaci znovu neschovává.
+        h.t += 5000
+        await h.guardian.tick()
+        #expect(h.apps.hidden.count == 2)
     }
 
     /// Po schování zakázané aplikace macOS sám aktivuje jinou (třeba Finder) – to obrazovku nesmí zavřít.
