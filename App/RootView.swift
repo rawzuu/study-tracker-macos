@@ -28,7 +28,7 @@ struct RootView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.easeOut(duration: 0.15), value: toasts.current?.id)
+            .motion(Motion.standard, value: toasts.current?.id)
             .toolbar {
                 ToolbarItem(placement: .automatic) { SyncStatusButton() }
             }
@@ -71,20 +71,30 @@ struct RootView: View {
         case .failed(let message):
             FailureView(message: message)
         case .ready:
-            switch navigator.page ?? .prehled {
-            case .prehled: DashboardView(openPage: open)
-            case .casovac: TimerView()
-            case .planovac: CalendarView(openPage: open, focus: navigator.calendarFocus)
-            case .historie: HistoryView()
-            case .predmety: SubjectsView()
-            case .nastaveni: SettingsPage()
-            case .statistiky: StatsView()
-            case .report: ReportView()
-            case .reflexe: ReflectionView(openPage: open)
-            case .uspechy: AchievementsView()
-            case .soustredeni: FocusView()
-            case let other: PlaceholderPage(page: other)
+            // Nová stránka se jemně objeví; stará zmizí hned (nepřekrývají se ani pro UI testy).
+            ZStack {
+                page(navigator.page ?? .prehled)
+                    .id(navigator.page)
+                    .transition(.asymmetric(insertion: Motion.appear, removal: .identity))
             }
+            .motion(Motion.standard, value: navigator.page)
+        }
+    }
+
+    @ViewBuilder private func page(_ page: Page) -> some View {
+        switch page {
+        case .prehled: DashboardView(openPage: open)
+        case .casovac: TimerView()
+        case .planovac: CalendarView(openPage: open, focus: navigator.calendarFocus)
+        case .historie: HistoryView()
+        case .predmety: SubjectsView()
+        case .nastaveni: SettingsPage()
+        case .statistiky: StatsView()
+        case .report: ReportView()
+        case .reflexe: ReflectionView(openPage: open)
+        case .uspechy: AchievementsView()
+        case .soustredeni: FocusView()
+        case let other: PlaceholderPage(page: other)
         }
     }
 

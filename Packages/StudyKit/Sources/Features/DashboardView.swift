@@ -198,7 +198,7 @@ private struct TodayList: View {
 
     private var tomorrow: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button { withAnimation(.easeOut(duration: 0.18)) { showsTomorrow.toggle() } } label: {
+            Button { withMotion { showsTomorrow.toggle() } } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
                         .rotationEffect(.degrees(showsTomorrow ? 90 : 0))

@@ -336,6 +336,7 @@ public struct BlockCheck: View {
             case .done:
                 shape.fill(color)
                 Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
             case .running(let f):
                 shape.strokeBorder(color, lineWidth: 1.5)
                 ProgressPie(f, color: color, size: 9).opacity(1)
@@ -349,6 +350,18 @@ public struct BlockCheck: View {
             }
         }
         .frame(width: 16, height: 16)
+        // Jen při změně druhu (zaškrtnutí), ne s každou sekundou běžícího bloku.
+        .motion(Motion.quick, value: kind)
+    }
+
+    private var kind: Int {
+        switch state {
+        case .open: 0
+        case .done: 1
+        case .missed: 2
+        case .suggested: 3
+        case .running: 4
+        }
     }
 }
 
@@ -368,6 +381,8 @@ public struct ProgressLine: View {
                 Capsule().fill(Palette.panel2)
                 Capsule().fill(color).frame(width: geo.size.width * min(1, max(0, value)))
             }
+            // Plynule jen při znatelném skoku (uložený blok), ne s každou sekundou běžícího bloku.
+            .motion(Motion.standard, value: (min(1, max(0, value)) * 50).rounded())
         }
         .frame(height: 3)
         .accessibilityElement()

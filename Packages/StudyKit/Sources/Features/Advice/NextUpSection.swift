@@ -22,7 +22,7 @@ struct NextUpSection: View {
                 Text("Co teď?").font(Typo.heading).foregroundStyle(Palette.accent).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 12)
                 if !recs.isEmpty {
-                    Button { withAnimation(.easeOut(duration: 0.18)) { why.toggle() } } label: {
+                    Button { withMotion { why.toggle() } } label: {
                         Label("Proč", systemImage: "chevron.down").labelStyle(TrailingIcon(rotated: why))
                     }
                     .buttonStyle(.study(.ghost, size: .small))

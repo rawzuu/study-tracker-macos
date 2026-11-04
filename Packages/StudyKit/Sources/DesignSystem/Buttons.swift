@@ -39,6 +39,10 @@ public struct StudyButtonStyle: ButtonStyle {
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(border))
             .opacity(isEnabled ? 1 : 0.45)
             .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            // Stisk se tlačítko nepatrně zmenší; hover se prolne.
+            .scaleEffect(configuration.isPressed && isEnabled ? 0.97 : 1)
+            .motion(Motion.press, value: configuration.isPressed)
+            .motion(Motion.quick, value: hovering)
             .onHover { hovering = $0 }
     }
 

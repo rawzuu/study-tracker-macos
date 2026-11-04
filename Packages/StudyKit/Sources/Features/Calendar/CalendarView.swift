@@ -106,6 +106,8 @@ public struct CalendarView: View {
                     }
                     let blocking = focusing.map { FocusEngine.intervals($0.config, from: week, to: clock.addDays(week, 7), clock: clock) } ?? []
                     WeekGrid(state: state, now: now, clock: clock, actions: gridActions(now: now), scrolls: snapshotNow == nil, focus: blocking)
+                        // Jiný týden: bloky se prolnou (posouvání mřížky zůstane, kde bylo).
+                        .motion(Motion.standard, value: week)
                     WeekLegend(state: state, showsFocus: !blocking.isEmpty)
                 case .month:
                     let month = monthStart ?? clock.startOfMonth(now)

@@ -91,10 +91,13 @@ public final class FocusController {
 
     func reload() {
         guard let files, isAvailable else { return }
-        report = files.readReport()
-        registration = files.readRegistration()
+        // Jen při změně – přiřazení stejné hodnoty by zbytečně překreslilo stránku i lištu.
+        let report = files.readReport(), registration = files.readRegistration()
+        if report != self.report { self.report = report }
+        if registration != self.registration { self.registration = registration }
         guard status != .starting, status != .stopping else { return }
-        status = isGuardRunning ? .running : registration?.status == .requiresApproval ? .needsApproval : .off
+        let next: GuardStatus = isGuardRunning ? .running : registration?.status == .requiresApproval ? .needsApproval : .off
+        if next != status { status = next }
     }
 
     /// Stav pravidel teď (ze zprávy Strážce; bez Strážce nic neplatí).
