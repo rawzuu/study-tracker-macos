@@ -1,8 +1,21 @@
 # Study Tracker pro macOS
 
-Nativní aplikace pro macOS k webové aplikaci [Study Tracker](https://github.com/rawzuu/study-tracker). Používá **stejná data** – co zapíšeš na Macu, uvidíš na mobilu a naopak.
+Nativní aplikace pro Mac k webovému [Study Trackeru](https://github.com/rawzuu/study-tracker). Obě verze pracují se stejnými daty, takže co zapíšeš na Macu, uvidíš i na mobilu a naopak.
 
-Stav: **v0.9.0 – Anki přímo na Macu a milník M5: Statistiky, Měsíční report s kalibrací, Reflexe a Úspěchy.** Mac synchronizuje data s GitHubem oběma směry, ukazuje Dnes (den jako seznam bloků s volnými chvílemi a návrhy), Historii (s ručním zápisem a úpravami) a Předměty, má časovač (Pomodoro, Flowtime, stopky, vlastní režimy) se šumem, zvonky a notifikacemi a Kalendář: týden a měsíc, bloky plánu s přetahováním, zkoušky, rozvrh z .ics a export do Apple Kalendáře. Na stránce Dnes radí „Co teď?“ (jaký předmět) a ranní plán navrhne bloky na dnešek, zítřek, do neděle nebo na příští týden. Navíc oproti webu: plán přímo v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky a widgety; rozvržení využije celou šířku velkého monitoru. Anki čte Mac přímo přes AnkiConnect (karty na dnešek, čas z Anki jako sezení se stejnými id jako na webu). Opakování (FSRS) na Macu záměrně není – viz [docs/PLAN.md](docs/PLAN.md). Plán a seznam funkcí: [docs/PLAN.md](docs/PLAN.md), postup v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
+Vznikla kvůli věcem, které webová aplikace v prohlížeči udělat nemůže: widgety, ikona v horní liště, zápis plánu rovnou do Apple Kalendáře nebo blokování rozptylujících aplikací během učení. Zbytek funguje stejně jako na webu a výpočty jsou ověřené proti jeho kódu (viz [Paritní testy](#paritní-testy)).
+
+Aktuální verze je **v0.9.0**. Co umí:
+
+- **Dnes**: den jako seznam bloků s volnými chvílemi, doporučení „Co teď?“ a ranní plán na dnešek, zítřek nebo celý týden
+- **Časovač**: Pomodoro, Flowtime, stopky a vlastní režimy, k tomu šum, zvonky a oznámení
+- **Kalendář**: týden a měsíc, přetahování bloků, zkoušky, rozvrh importovaný z .ics a export
+- **Historie, Předměty, Statistiky**, měsíční report s kalibrací, reflexe a úspěchy
+- **Anki** přes AnkiConnect přímo na Macu
+- **Synchronizace** s GitHubem oběma směry
+
+Navíc oproti webu: plán v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky, widgety a rozvržení, které využije i velký monitor.
+
+Opakování podle FSRS na Macu záměrně není, proč je vysvětlené v [docs/PLAN.md](docs/PLAN.md). Tamtéž je plán dalších funkcí, rozpracované věci jsou v [issues](https://github.com/rawzuu/study-tracker-macos/issues).
 
 ## Architektura
 
@@ -57,7 +70,7 @@ Webová aplikace do dat průběžně přidává nová pole a kolekce. Pevné `Co
 
 ### Paritní testy
 
-`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. `generate-engine.ts` stejně ověří kalendář, formáty a souhrny (`src/lib/time.ts`, `stats.ts`) v pražském čase – včetně dnů změny času, kdy 2:30 buď neexistuje, nebo je dvakrát – do `EngineTests/Fixtures`. `generate-planner.ts` ověří kalendář (rozložení položek, dělení přes půlnoc, odškrtnutí, obnovení z koše), čtení .ics (pásma, opakování, výjimky, přesuny), rozvrh a export .ics včetně otisku odebíraného kalendáře. `generate-advice.ts` ověří „Co teď?“ (skóre, signály, důvody, délku bloku) a ranní plán (návrh, rozmístění, nové rozmístění po úpravách) na náhodných datech bez témat – tak, jak je počítá Mac bez opakování. `generate-anki.ts` ověří čas z Anki (`runAnkiSync` s podvrženou Anki) `generate-report.ts` měsíční report, postřehy, týdenní souhrn a návrhy kalibrace (`periodStats`, `highlights`, `calibrate`) a `generate-achievements.ts` všech 119 úspěchů (`evaluate`, `toPersist`, `describe`). Funkce, které web nemá exportované (jsou uvnitř komponent), se vyjmou ze zdrojového kódu komponenty a spustí beze změny. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
+`Tools/parity/generate.ts` prožene syntetické vstupy (pevný seed) skutečným kódem webové aplikace a výsledky uloží do `Packages/StudyKit/Tests/CoreTests/Fixtures`. Swift testy musí dát bajtově stejný výstup. `generate-engine.ts` stejně ověří kalendář, formáty a souhrny (`src/lib/time.ts`, `stats.ts`) v pražském čase – včetně dnů změny času, kdy 2:30 buď neexistuje, nebo je dvakrát – do `EngineTests/Fixtures`. `generate-planner.ts` ověří kalendář (rozložení položek, dělení přes půlnoc, odškrtnutí, obnovení z koše), čtení .ics (pásma, opakování, výjimky, přesuny), rozvrh a export .ics včetně otisku odebíraného kalendáře. `generate-advice.ts` ověří „Co teď?“ (skóre, signály, důvody, délku bloku) a ranní plán (návrh, rozmístění, nové rozmístění po úpravách) na náhodných datech bez témat – tak, jak je počítá Mac bez opakování. `generate-anki.ts` ověří čas z Anki (`runAnkiSync` s podvrženou Anki), `generate-report.ts` měsíční report, postřehy, týdenní souhrn a návrhy kalibrace (`periodStats`, `highlights`, `calibrate`) a `generate-achievements.ts` všech 119 úspěchů (`evaluate`, `toPersist`, `describe`). Funkce, které web nemá exportované (jsou uvnitř komponent), se vyjmou ze zdrojového kódu komponenty a spustí beze změny. Verze webu, proti které se testuje, je v `Tools/parity/WEB_REF`; CI každý týden zkouší i aktuální web, aby se hned ukázalo, když změní formát dat.
 
 ## Sestavení
 
@@ -129,7 +142,7 @@ V aplikaci **Nastavení → Synchronizace s GitHubem**: vytvoř fine-grained tok
 - **Apple Kalendář přímo (jen Mac):** Nastavení → Apple Kalendář. Mac zapisuje bloky (od dvou týdnů zpět) a zkoušky do vlastního kalendáře „Studijní plán“ – v iCloudu jsou hned v iPhonu, iPadu i hodinkách, bez čekání na obnovu odebíraného kalendáře. Kalendář je jen kopie `data.json`: po každé změně dat se srovná, úpravy v Kalendáři se přepíšou podle dat a ostatních kalendářů se zápis nikdy nedotkne (každá změna se ověřuje). Událost odkazuje zpátky do aplikace (`studytracker://planovac?blok=…`). Další Mac najde stejný kalendář podle názvu – převezme ho ale jen tehdy, když v něm jsou výhradně události Study Trackeru (cizí kalendář se stejným názvem nikdy nepřepíše). Když máš v Kalendáři i odebíraný plán z gistu, zruš jeho odběr, ať bloky nevidíš dvakrát.
 - **Obsazený čas:** události z vybraných kalendářů (ve výchozím stavu vlastní kalendáře, ne odebírané ani narozeniny; bez celodenních, volných a odmítnutých) ranní plán obchází a Kalendář je ukazuje v barvě jejich kalendáře. Události ve stejném čase jako hodina z importovaného rozvrhu se neukazují – výuku ukáže rozvrh (dá se v něm označit, že odpadla, a pak se čas uvolní).
 
-## Anki
+## Nastavení, záloha a koš
 
 Nastavení má stejné volby jako web (motiv, denní cíl, chování časovače, volitelné funkce, vlastní režimy časovače) – jsou synchronizované, změna na Macu platí i na webu. **Záloha** uloží data do souboru (JSON, bajtově stejný jako `data.json` na GitHubu) nebo sezení do CSV pro Excel/Numbers; import zálohu sloučí s aktuálními daty a nic nesmaže. **Koš** ukáže smazané položky za 30 dní a vrátí je jedním kliknutím. Koš a CSV jsou ověřené kontrolními daty z kódu webu (`Tools/parity/generate-backup.ts`).
 
@@ -138,6 +151,8 @@ Nastavení má stejné volby jako web (motiv, denní cíl, chování časovače,
 - **Zkratky při bloku** – volitelně spustí zkratku ze Zkratek na začátku a na konci bloku (třeba zapnout a vypnout Nerušit); pozastavení se nepočítá (`BlockAutomation`, `shortcuts://run-shortcut`).
 - **Klávesové zkratky odkudkoli** – spustit / pozastavit blok (výchozí ⌃⌥P) a otevřít okno; nahrávají se v Nastavení (`HotKeyCenter`, Carbon `RegisterEventHotKey` – bez oprávnění Zpřístupnění, i v sandboxu).
 - **Pondělní souhrn** – v pondělí od 8:00 jedno oznámení: čas proti týdennímu cíli, nejlepší den, změna proti týdnu předtím a blížící se zkouška (`WeeklySummary`); kliknutí otevře Statistiky.
+
+## Anki
 
 Nastavení → Anki: jednou do desktopové Anki doplněk AnkiConnect (kód 2055492159), pak zapnout „Načítat z Anki na tomto Macu“ (platí jen pro tento Mac, sdílené nastavení `anki.enabled` webu se nemění). Mac se každé 2 minuty a po návratu do aplikace zeptá Anki na `127.0.0.1:8765` (výjimka ATS jen pro místní adresy), zapíše dnešní stav balíčků (`anki` → `snapshot`) a opakování jako sezení `anki-<balíček>-<začátek>` – stejně jako web v2.6.7 (`runAnkiSync`), ověřeno kontrolními daty z jeho kódu (`Tools/parity/generate-anki.ts`). Přiřazení balíčků k předmětům, počítání času a délka historie jsou sdílené s webem. Testy a UI testy používají Anki v paměti, nikdy skutečnou Anki.
 
