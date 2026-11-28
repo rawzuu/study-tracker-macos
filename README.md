@@ -4,13 +4,14 @@ Nativní aplikace pro Mac k webovému [Study Trackeru](https://github.com/rawzuu
 
 Vznikla kvůli věcem, které webová aplikace v prohlížeči udělat nemůže: widgety, ikona v horní liště, zápis plánu rovnou do Apple Kalendáře nebo blokování rozptylujících aplikací během učení. Zbytek funguje stejně jako na webu a výpočty jsou ověřené proti jeho kódu (viz [Paritní testy](#paritní-testy)).
 
-Aktuální verze je **v0.9.0**. Co umí:
+Aktuální verze je **v0.15.2**. Co umí:
 
 - **Dnes**: den jako seznam bloků s volnými chvílemi, doporučení „Co teď?“ a ranní plán na dnešek, zítřek nebo celý týden
-- **Časovač**: Pomodoro, Flowtime, stopky a vlastní režimy, k tomu šum, zvonky a oznámení
+- **Časovač**: Pomodoro, Flowtime, stopky a vlastní režimy, k tomu šum, zvonky a oznámení; automatická pauza, když odejdeš od Macu
 - **Kalendář**: týden a měsíc, přetahování bloků, zkoušky, rozvrh importovaný z .ics a export
 - **Historie, Předměty, Statistiky**, měsíční report s kalibrací, reflexe a úspěchy
 - **Anki** přes AnkiConnect přímo na Macu
+- **Soustředění**: blokování aplikací a webů podle seznamů a plánů, zmrazení Macu a čas u obrazovky (Strážce na pozadí)
 - **Synchronizace** s GitHubem oběma směry
 
 Navíc oproti webu: plán v Apple Kalendáři a obsazený čas z ostatních kalendářů, horní lišta, oznámení s tlačítky, akce pro Zkratky, widgety a rozvržení, které využije i velký monitor.
@@ -22,6 +23,8 @@ Opakování podle FSRS na Macu záměrně není, proč je vysvětlené v [docs/P
 ```
 App/                    vstupní bod, okna, horní lišta, navigace, akce pro Zkratky (SwiftUI, App Intents)
 Widgets/                rozšíření widgetů – jen registrace widgetů a akce tlačítek (WidgetKit)
+Guard/                  Strážce Soustředění – pomocník na pozadí bez sandboxu (launchd), jen vstupní bod
+Safari/                 rozšíření Safari pro blokování webů (volitelné, declarativeNetRequest)
 UITests/                UI testy hlavních toků (XCUITest)
 Packages/StudyKit/      Swift Package s moduly aplikace
   Sources/Core/         datový model sdílený s webem – bez závislostí
@@ -39,13 +42,16 @@ Packages/StudyKit/      Swift Package s moduly aplikace
   Sources/Features/     obrazovky (SwiftUI) a jejich stavy (čisté funkce s testy)
   Sources/WidgetData/   souhrn pro widgety a příkazy z jejich tlačítek (jen Foundation)
   Sources/WidgetUI/     vzhled a časová osa widgetů (bez dat, sítě a databáze – malá paměť)
+  Sources/Focus/        Soustředění: seznamy, plány, přísnost a odemykání, měření (čisté funkce)
+  Sources/FocusStore/   databáze Soustředění ve sdíleném kontejneru (GRDB): měření, pokusy, žádosti
+  Sources/FocusGuard/   Strážce: hlídání aplikací a Safari, blokovací obrazovka, oznámení (AppKit)
   Tests/                testy každého modulu, */Fixtures = kontrolní data z webu
 Tools/parity/           generátor kontrolních dat ze skutečného kódu webové aplikace
 Config/                 xcconfig (podpis)
 project.yml             definice projektu pro XcodeGen
 ```
 
-Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persistence` → `Sync` → `AppModel` → `Features` (+ `DesignSystem`) → aplikace. 
+Závislosti jdou jedním směrem: `Core` → `Engine` · `Networking` · `Persistence` → `Sync` → `AppModel` → `Features` (+ `DesignSystem`) → aplikace. Soustředění: `Engine` → `Focus` → `FocusStore` → `FocusGuard` (Strážce) i `AppModel` (aplikace). 
 
 **Tok dat:** View ← stav obrazovky (čistá funkce z `AppDocument`) ← `AppStore` (`@Observable @MainActor`, drží neměnný `AppDocument`) ⇄ `SyncEngine` (actor) → `LocalStore` (SQLite na Macu) a GitHub Contents API → `data.json` v soukromém repu. Závislosti se předávají přes `AppEnvironment` a protokoly (`RemoteDataFile`, `SecretStore`, `BackupService`), testy je nahrazují podvrženými implementacemi.
 
@@ -74,7 +80,7 @@ Webová aplikace do dat průběžně přidává nová pole a kolekce. Pevné `Co
 
 ## Sestavení
 
-Potřeba: macOS 15+, Xcode 26+ (Swift 6.2+), [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+Potřeba: macOS 15+, Xcode 26+ (Swift 6.2+), [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). CI i vydané verze používají Xcode 27.2 (Swift 6.4).
 
 ```bash
 git clone https://github.com/rawzuu/study-tracker-macos && cd study-tracker-macos
@@ -97,10 +103,10 @@ ST_SNAPSHOT_DIR=/tmp/nahledy swift test --package-path Packages/StudyKit --filte
 
 Spotřeba v klidu (vývojové sestavení s ukázkovými daty v paměti, spuštěné skrytě): `Tools/dev/idle-cpu.sh` – CPU má být ≈ 0 %.
 
-Instalace sestavené verze do /Applications (předchozí verze se uloží jako ZIP do zálohy, nic se nemaže). `Tools/package-release.sh` připraví složku pro uživatele ve Stažených souborech: `StudyTracker.zip` + `Nainstalovat.command`. Aplikace je všude jen v ZIPu – rozbalenou kopii (Stažené soubory, zálohy) by si macOS zaregistroval i s widgety a galerie by ukazovala staré widgety vedle nových:
+Instalace sestavené verze do /Applications (předchozí verze se uloží jako ZIP do zálohy, nic se nemaže). `Tools/package-release.sh` připraví složku pro uživatele ve Stažených souborech: `StudyTracker.zip` + `Nainstalovat.command`. Aplikace je všude jen v ZIPu – rozbalenou kopii (Stažené soubory, zálohy) by si macOS zaregistroval i s widgety a galerie by ukazovala staré widgety vedle nových. Ze stejného důvodu se sestavuje do `build/DerivedData.noindex`: složku s příponou `.noindex` Spotlight neprochází, a tak si macOS sestavené kopie sám nezaregistruje (stalo se po aktualizaci systému – widgety pak běžely ze složky s buildem místo z /Applications):
 
 ```bash
-xcodebuild build -project StudyTracker.xcodeproj -scheme StudyTracker -configuration Release -derivedDataPath build/DerivedData
+xcodebuild build -project StudyTracker.xcodeproj -scheme StudyTracker -configuration Release -derivedDataPath build/DerivedData.noindex
 Tools/install-release.sh
 ```
 
