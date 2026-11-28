@@ -2,6 +2,7 @@ import AppKit
 import AppModel
 import Core
 import DesignSystem
+import Engine
 import SwiftUI
 import Sync
 
@@ -52,7 +53,7 @@ public struct SubjectDraft: Equatable, Sendable {
     }
 
     private static func key(_ s: String) -> String {
-        s.trimmingCharacters(in: .whitespaces).lowercased(with: Locale(identifier: "cs_CZ"))
+        s.trimmingCharacters(in: .whitespaces).lowercased(with: Format.locale)
     }
 }
 
@@ -107,7 +108,7 @@ struct SubjectEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Týdenní cíl (hodiny)").foregroundStyle(Palette.text2)
                 HStack {
-                    TextField("Týdenní cíl", value: $draft.goalHours, format: .number.precision(.fractionLength(0...1)).locale(Locale(identifier: "cs_CZ")))
+                    TextField("Týdenní cíl", value: $draft.goalHours, format: .number.precision(.fractionLength(0...1)).locale(Format.locale))
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 90)
                         .labelsHidden()

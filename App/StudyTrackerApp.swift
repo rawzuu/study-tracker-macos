@@ -30,6 +30,8 @@ struct StudyTrackerApp: App {
                 .environment(delegate.anki)
                 .environment(delegate.macPrefs)
                 .environment(delegate.focus)
+                // Čeština i pro výběr data, osy grafů a čísla – aplikace jinou lokalizaci nemá.
+                .environment(\.locale, Format.locale)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .defaultSize(width: 1440, height: 920)
@@ -59,6 +61,7 @@ struct StudyTrackerApp: App {
                 .environment(delegate.timer)
                 .environment(delegate.advisor)
                 .environment(delegate.focus)
+                .environment(\.locale, Format.locale)
                 .preferredColorScheme(delegate.colorScheme)
         } label: {
             MenuBarLabel(showsTime: menuBarTime).environment(delegate.menuBar)
@@ -71,6 +74,7 @@ struct StudyTrackerApp: App {
             }
             .frame(width: 780, height: 560)
             .environment(delegate.store)
+            .environment(\.locale, Format.locale)
         }
     }
 }

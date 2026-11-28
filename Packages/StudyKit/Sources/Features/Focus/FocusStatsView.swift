@@ -47,7 +47,7 @@ struct FocusStatsSection: View {
         VStack(alignment: .leading, spacing: 28) {
             HStack(spacing: 32) {
                 figure("Čas u obrazovky", Format.duration(s.screenMs / 1000), note: "průměr \(Format.duration(s.screenMs / 1000 / max(1, s.days.count))) denně")
-                figure("Pokusy", "\(s.attempts)", note: "průměr \(String(format: "%.1f", Double(s.attempts) / Double(max(1, s.days.count)))) denně")
+                figure("Pokusy", "\(s.attempts)", note: "průměr \(Format.decimal(Double(s.attempts) / Double(max(1, s.days.count)))) denně")
                 figure("Odemknutí", "\(s.unlocks)", note: s.tamper.isEmpty ? "bez porušení" : "porušení: \(s.tamper.count)")
             }
             ChartSection("Čas u obrazovky po dnech") { DayBars(days: s.days, value: { Double($0.screenMs) / 60_000 }, unit: .minutes) }
@@ -86,10 +86,8 @@ struct FocusStatsSection: View {
     }
 
     static func dateText(_ t: Int) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "cs_CZ")
-        f.dateFormat = "d. M. H:mm"
-        return f.string(from: Date(timeIntervalSince1970: Double(t) / 1000))
+        let clock = StudyClock.current
+        return Format.date(t, .dayNumericMonth, clock: clock) + " " + Format.time(t, clock: clock)
     }
 }
 
@@ -103,7 +101,8 @@ private struct DayBars: View {
     @State private var hover: String?
 
     var body: some View {
-        let labels = days.map(label)
+        let clock = StudyClock.current
+        let labels = days.map { label($0, clock: clock) }
         let values = days.map(value)
         let top = values.max() ?? 0
         Chart {
@@ -141,15 +140,15 @@ private struct DayBars: View {
         .frame(height: 180)
     }
 
-    private func label(_ d: FocusStats.Day) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "cs_CZ")
-        f.dateFormat = days.count <= 7 ? "EEEEEE d." : "d. M."
-        return f.string(from: Date(timeIntervalSince1970: Double(d.start) / 1000))
+    /// „Po 3.“ za týden, „3. 11.“ za měsíc. Bez DateFormatteru – popisky se počítají při každém najetí myší.
+    private func label(_ d: FocusStats.Day, clock: StudyClock) -> String {
+        guard days.count <= 7 else { return Format.date(d.start, .dayNumericMonth, clock: clock) }
+        return "\(Format.weekdaysShort[clock.weekdayIndex(d.start)]) \(clock.calendar.component(.day, from: clock.date(d.start)))."
     }
 
     private func text(_ v: Double) -> String {
-        unit == .minutes ? Format.duration(Int(v * 60)) : "\(Int(v)) \(Int(v) == 1 ? "pokus" : Int(v) < 5 && Int(v) > 0 ? "pokusy" : "pokusů")"
+        let n = Int(v)
+        return unit == .minutes ? Format.duration(Int(v * 60)) : "\(n) \(Format.plural(n, "pokus", "pokusy", "pokusů"))"
     }
 }
 

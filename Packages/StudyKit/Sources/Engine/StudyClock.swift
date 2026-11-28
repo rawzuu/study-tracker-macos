@@ -14,7 +14,7 @@ public struct StudyClock: Sendable {
         c.timeZone = timeZone
         c.firstWeekday = 2
         c.minimumDaysInFirstWeek = 4
-        c.locale = Locale(identifier: "cs_CZ")
+        c.locale = Format.locale
         calendar = c
     }
 

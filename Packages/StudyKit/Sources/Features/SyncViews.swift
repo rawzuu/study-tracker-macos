@@ -187,7 +187,6 @@ public struct SyncSettingsView: View {
                 set: { store.setTokenExpiry(store.clock.dayKey(store.clock.ms($0))) }
             ), displayedComponents: .date)
             .labelsHidden()
-            .environment(\.locale, Locale(identifier: "cs_CZ"))
             if let days {
                 Chip(days <= 0 ? "vypršel" : "zbývá \(days) \(Format.plural(days, "den", "dny", "dní"))", tone: days <= 14 ? .warn : .neutral)
                 Button("Nevím") { store.setTokenExpiry(nil) }.buttonStyle(.link)
@@ -218,7 +217,6 @@ public struct SyncSettingsView: View {
                         DatePicker("Platnost tokenu do", selection: $expiry, displayedComponents: .date)
                             .labelsHidden()
                             .disabled(!knowsExpiry)
-                            .environment(\.locale, Locale(identifier: "cs_CZ"))
                         Text("GitHub ho ukáže při vytvoření tokenu – aplikace pak včas připomene výměnu.")
                             .font(Typo.small).foregroundStyle(Palette.text3)
                     }

@@ -96,7 +96,7 @@ public enum Timetables {
             bySeries[e.series, default: []].append(e)
         }
         let hidden = Set(tt.hiddenSeries)
-        let cs = Locale(identifier: "cs_CZ")
+        let cs = Format.locale
         return order.map { series in
             let list = bySeries[series]!
             var slots: [(weekday: Int, time: String, count: Int)] = []

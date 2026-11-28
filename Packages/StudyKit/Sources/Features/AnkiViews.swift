@@ -239,6 +239,6 @@ struct AnkiSettingsSection: View {
     /// „algoritmizace“ → „Algoritmizace“
     static func prettyName(_ deck: String) -> String {
         guard let first = deck.first else { return deck }
-        return String(first).uppercased(with: Locale(identifier: "cs_CZ")) + deck.dropFirst()
+        return String(first).uppercased(with: Format.locale) + deck.dropFirst()
     }
 }

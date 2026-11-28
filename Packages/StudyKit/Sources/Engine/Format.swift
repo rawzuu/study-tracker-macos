@@ -2,7 +2,9 @@ import Foundation
 
 /// Texty pro zobrazení – stejné tvary jako na webu (`fmtDuration`, `fmtTime`, `fmtDayLabel`…).
 public enum Format {
-    private static let cs = Locale(identifier: "cs_CZ")
+    /// Čeština pro celou aplikaci (data, čísla, výběr data a osy grafů). Aplikace nemá jiné lokalizace,
+    /// a tak by se systémové prvky jinak řídily jazykem systému (třeba anglické měsíce ve výběru data).
+    public static let locale = Locale(identifier: "cs_CZ")
 
     /// „2 h 15 min“, „45 min“, „30 s“, „0 min“ – jediný tvar délky v celé aplikaci.
     public static func duration(_ sec: Int) -> String {
@@ -20,17 +22,17 @@ public enum Format {
 
     /// Desetinné číslo po česku s pevným počtem míst: „3,6“.
     public static func decimal(_ n: Double, digits: Int = 1) -> String {
-        n.formatted(.number.locale(cs).precision(.fractionLength(digits)).rounded(rule: .toNearestOrAwayFromZero))
+        n.formatted(.number.locale(locale).precision(.fractionLength(digits)).rounded(rule: .toNearestOrAwayFromZero))
     }
 
     /// Počet po česku s mezerami po tisících: „12 345“ (`toLocaleString('cs-CZ')`).
     public static func count(_ n: Int) -> String {
-        n.formatted(.number.locale(cs))
+        n.formatted(.number.locale(locale))
     }
 
     /// Hodiny nejvýš s jedním desetinným místem: „3,5 h“.
     public static func hours(_ sec: Int) -> String {
-        (Double(sec) / 3600).formatted(.number.locale(cs).precision(.fractionLength(0...1)).rounded(rule: .toNearestOrAwayFromZero)) + " h"
+        (Double(sec) / 3600).formatted(.number.locale(locale).precision(.fractionLength(0...1)).rounded(rule: .toNearestOrAwayFromZero)) + " h"
     }
 
     /// Čas „09:05“.

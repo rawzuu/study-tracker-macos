@@ -137,7 +137,7 @@ public enum ICal {
             }
         }
 
-        let cs = Locale(identifier: "cs_CZ")
+        let cs = Format.locale
         events.sort { a, b in a.start != b.start ? a.start < b.start : a.title.compare(b.title, locale: cs) == .orderedAscending }
         // Stejný termín uvedený dvakrát (některé exporty to dělají) jen jednou.
         let unique = events.enumerated().filter { i, ev in i == 0 || ev.key != events[i - 1].key }.map(\.element)
