@@ -47,6 +47,9 @@ pluginkit -r "$NEW/Contents/PlugIns/StudyTrackerWidgets.appex" 2>/dev/null || tr
 pluginkit -r "$NEW/Contents/PlugIns/StudyTrackerSafari.appex" 2>/dev/null || true
 [ -d "$NEW/Contents/Library/LoginItems/StudyTrackerGuard.app" ] && "$LS" -u "$NEW/Contents/Library/LoginItems/StudyTrackerGuard.app" 2>/dev/null || true
 "$LS" -f "$APP"
+# Widgety a rozšíření Safari výslovně z /Applications – kdyby si systém mezitím zaregistroval jinou kopii.
+pluginkit -a "$APP/Contents/PlugIns/StudyTrackerWidgets.appex" 2>/dev/null || true
+pluginkit -a "$APP/Contents/PlugIns/StudyTrackerSafari.appex" 2>/dev/null || true
 # Proces widgetů ze staré verze běží dál i po výměně aplikace a macOS jeho výstup odmítá
 # („Bundle version did not match“) – widgety pak zůstanou prázdné. Ukončit; systém spustí nový.
 pkill -x StudyTrackerWidgets 2>/dev/null || true

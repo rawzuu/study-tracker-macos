@@ -4,7 +4,7 @@
 # zaregistroval (widgety navíc v galerii, jiná ikona v Docku).
 set -eu
 cd "$(dirname "$0")/.."
-APP="build/DerivedData/Build/Products/Release/StudyTracker.app"
+APP="build/DerivedData.noindex/Build/Products/Release/StudyTracker.app"
 [ -d "$APP" ] || { echo "Chybí sestavená verze ($APP)."; exit 1; }
 codesign --verify --deep --strict "$APP"
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")

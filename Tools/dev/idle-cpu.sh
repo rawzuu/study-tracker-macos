@@ -5,8 +5,8 @@
 # na pozadí (bez aktivace), aby se opravdu vykreslovalo – měří se zátěž s běžícím časovačem.
 set -eu
 cd "$(dirname "$0")/../.."
-APP="$PWD/build/DerivedData/Build/Products/Debug/StudyTracker.app"
-[ -d "$APP" ] || { echo "Nejdřív sestav Debug (xcodebuild … -configuration Debug -derivedDataPath build/DerivedData)."; exit 1; }
+APP="$PWD/build/DerivedData.noindex/Build/Products/Debug/StudyTracker.app"
+[ -d "$APP" ] || { echo "Nejdřív sestav Debug (xcodebuild … -configuration Debug -derivedDataPath build/DerivedData.noindex)."; exit 1; }
 PATTERN="Debug/StudyTracker.app/Contents/MacOS/StudyTracker"
 BEFORE=$(pgrep -f "$PATTERN" || true)
 # Vždy po sobě ukončit všechny kopie spuštěné tímto skriptem (jinak zůstanou ikony v liště).
