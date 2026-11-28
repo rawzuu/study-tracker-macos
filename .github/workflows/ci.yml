@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Jen čtení repa – workflow nic nezapisuje (žádné vydání, komentáře ani push).
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -13,10 +17,11 @@ concurrency:
 jobs:
   test:
     name: Build a testy
-    runs-on: macos-26
+    # Stejný Xcode (27.x, nejnovější vydaný na stroji) jako při sestavení instalované verze na Macu.
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Xcode
         run: |
@@ -64,7 +69,7 @@ jobs:
       # Vždy – se snímky obrazovek z UI testů jde zkontrolovat vzhled skutečných oken.
       - name: Výsledky UI testů
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: UITests.xcresult
           path: build/UITests.xcresult
@@ -75,8 +80,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Webová aplikace

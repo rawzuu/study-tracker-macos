@@ -26,7 +26,7 @@ let package = Package(
         .library(name: "FocusGuard", targets: ["FocusGuard"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/groue/GRDB.swift", exact: "7.11.1"),
+        .package(url: "https://github.com/groue/GRDB.swift", exact: "7.12.0"),
     ],
     targets: [
         .target(name: "Core"),
